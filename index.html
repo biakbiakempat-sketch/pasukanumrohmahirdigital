@@ -814,7 +814,7 @@ function editAdminLead(mid,id){
 function deleteAdminLead(mid,id){const m=members.find(x=>x.id===mid);if(!m||!confirm("Hapus lead ini?"))return;m.leads=(m.leads||[]).filter(x=>x.id!==id);save();renderAllAdmin();renderAdminLeadReport();}
 function xlsEscape(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 function downloadExcel(filename,headers,rows){
- const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table>`;
+ const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table></body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
 function exportMyLeads(){const start=$("leadExportStart")?.value||"";const end=$("leadExportEnd")?.value||"";if(start&&end&&start>end){alert("Tanggal mulai tidak boleh lebih besar dari tanggal akhir.");return}const rows=(currentUser.leads||[]).filter(l=>(!start||l.date>=start)&&(!end||l.date<=end)).map(l=>[l.date,l.time,l.name,l.city,l.contact,l.source,l.response,l.plan,l.funnel,l.closing,l.closingDate,l.fu1,l.fu1Response||"",l.fu2,l.fu2Response||"",l.fu3,l.fu3Response||"",l.noClose,l.cs,l.note]);downloadExcel("leads-"+(currentUser.username||"member")+".xls",["Tanggal","Waktu","Nama","Kota","Kontak","Sumber Lead","Respon","Rencana Order","Funnel","Closing","Tanggal Closing","FU1","Respon FU1","FU2","Respon FU2","FU3","Respon FU3","Alasan Tidak Closing","CS","Keterangan"],rows)}
@@ -966,8 +966,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   });
 })();
 </script>
-
-
 <style id="closingMemberFeatureStyles">
 .closingGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.closingGrid .full{grid-column:1/-1}
 .closingSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.closingCard{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff}
@@ -1116,7 +1114,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   document.addEventListener('DOMContentLoaded',()=>setTimeout(enhance,50));
 })();
 </script>
-
 <style id="authInteractionFix">
 /* AUTH INTERACTION FIX */
 #auth{position:relative!important;z-index:1}
@@ -1141,85 +1138,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ready);else ready();
 })();
 </script>
-</body></html>`;
- const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
-}
-function exportMyLeads(){const start=$("leadExportStart")?.value||"";const end=$("leadExportEnd")?.value||"";if(start&&end&&start>end){alert("Tanggal mulai tidak boleh lebih besar dari tanggal akhir.");return}const rows=(currentUser.leads||[]).filter(l=>(!start||l.date>=start)&&(!end||l.date<=end)).map(l=>[l.date,l.time,l.name,l.city,l.contact,l.source,l.response,l.plan,l.funnel,l.closing,l.closingDate,l.fu1,l.fu1Response||"",l.fu2,l.fu2Response||"",l.fu3,l.fu3Response||"",l.noClose,l.cs,l.note]);downloadExcel("leads-"+(currentUser.username||"member")+".xls",["Tanggal","Waktu","Nama","Kota","Kontak","Sumber Lead","Respon","Rencana Order","Funnel","Closing","Tanggal Closing","FU1","Respon FU1","FU2","Respon FU2","FU3","Respon FU3","Alasan Tidak Closing","CS","Keterangan"],rows)}
-function exportAllLeads(){const rows=leadRecords().map(l=>[l.member,l.date,l.time,l.name,l.city,l.contact,l.source,l.response,l.plan,l.funnel,l.closing,l.closingDate,l.fu1,l.fu2,l.fu3,l.noClose,l.cs,l.note,l.score]);downloadExcel("semua-leads-pasukan-umroh.xls",["Member","Tanggal","Waktu","Nama","Kota","Kontak","Sumber Lead","Respon","Rencana Order","Funnel","Closing","Tanggal Closing","FU1","FU2","FU3","Alasan Tidak Closing","CS","Keterangan","Lead Score"],rows)}
-function exportAllActivities(){const rows=[];members.forEach(m=>activityRecords(m).forEach(r=>rows.push([r.member,r.date,r.day,r.japri,r.follow,r.conv,r.lead,r.offer,r.closing,r.referral,r.notes])));downloadExcel("aktivitas-sales-pasukan-umroh.xls",["Member","Tanggal","Hari","Japri","Follow-up","Percakapan","Lead","Offer","Closing","Referral","Catatan"],rows)}
-function renderMember(){
- if(!currentUser)return;
- currentUser.sales=currentUser.sales||{};currentUser.leads=currentUser.leads||[];currentUser.activityLog=currentUser.activityLog||[];
- $("mDay").textContent=(currentUser.day||0)+"/60";
- $("profileName").value=currentUser.name;$("profileUsername").value=currentUser.username;$("profileWa").value=currentUser.wa;
- const day=currentDay(),st=checkState(currentUser,day),tasks=tasksForDay(day),done=tasks.filter((_,i)=>st[i]).length,pct=Math.round(done/tasks.length*100);
- $("mCheck").textContent=pct+"%";$("mLead").textContent=currentUser.leads.length;$("mClose").textContent=(currentUser.leads||[]).filter(l=>l.closing==="Closing").length;
- $("mAct").textContent=totalActivities(currentUser);
- $("mMilestone").textContent=[15,30,45,60].filter(x=>(currentUser.day||0)>=x).length+"/4";
- $("memberChecks").innerHTML=tasks.map((t,i)=>`<label class="check"><input type="checkbox" ${st[i]?"checked":""} onchange="toggleCheck(${i},this.checked)"><div><b>${esc(t)}</b></div></label>`).join("");
- $("memberNotice").textContent=pct===100?(day<60?"Checklist 100%. Hari berikutnya siap dibuka.":"Program 60 hari selesai!"):"Checklist harus 100% untuk membuka hari berikutnya.";
- renderMemberDays();
- ensureReportDates();renderMemberReports();renderMemberLeadReport();renderMyLeadsTable();renderInfoBars();
-}
-function toggleCheck(i,val){const m=memberData(),day=currentDay();checkState(m,day)[i]=val;save();renderMember()}
-["sJapri","sFollow","sConv","sLead","sOffer","sClose","sReferral","sNotes"].forEach(id=>$(id).addEventListener("input",()=>{
- if(!currentUser)return;const day=currentDay();currentUser.sales=currentUser.sales||{};currentUser.sales[day]=currentUser.sales[day]||{};
- const map={sJapri:"japri",sFollow:"follow",sConv:"conv",sLead:"lead",sOffer:"offer",sClose:"closing",sReferral:"referral",sNotes:"notes"};currentUser.sales[day][map[id]]=$(id).value;save();renderMember()
-}));
-function finishMemberDay(){
- const m=memberData(),day=currentDay(),tasks=tasksForDay(day),st=checkState(m,day);
- if(!tasks.every((_,i)=>st[i])){alert("Semua perintah hari ini harus selesai 100% sebelum lanjut.");return}
- if(day<60){m.day=day+1;save();renderMember();showPage("memberDashboard");alert("Hari "+day+" selesai. Hari "+(day+1)+" terbuka.");}
- else{save();renderMember();alert("Program 60 hari selesai.");}
-}
 
-function activityTotals(m){
- const t={japri:0,follow:0,conv:0,lead:0,offer:0,closing:0,referral:0};
- Object.values(m.sales||{}).forEach(d=>Object.keys(t).forEach(k=>t[k]+=Number(d[k]||0)));
- return t;
-}
-function setFunnel(id,num,den){$(id).style.width=den?Math.min(100,Math.round(num/den*100))+"%":"0%"}
-function renderMemberActivity(){
- if(!currentUser)return;
- const t=activityTotals(currentUser);
- $("maJapri").textContent=t.japri;$("maFollow").textContent=t.follow;$("maConv").textContent=t.conv;$("maLead").textContent=t.lead;$("maOffer").textContent=t.offer;$("maClose").textContent=t.closing;
- const day=currentDay();$("activityDay").value=day;$("activityDayNotice").textContent="Hari program aktif: Hari "+day+". Aktivitas akan tercatat pada tanggal yang dipilih.";
- if(!$("activityDate").value)$("activityDate").value=isoToday();
- const d=currentUser.sales?.[day]||{};$("aJapri").value=d.japri||0;$("aFollow").value=d.follow||0;$("aConv").value=d.conv||0;$("aLead").value=d.lead||0;$("aOffer").value=d.offer||0;$("aClose").value=d.closing||0;$("aReferral").value=d.referral||0;$("aNotes").value=d.notes||"";
- const entries=(currentUser.activityLog||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
- $("memberActivityEmpty").classList.toggle("hidden",entries.length>0);$("memberActivityTableWrap").classList.toggle("hidden",entries.length===0);
- $("memberActivityRows").innerHTML=entries.map(x=>`<tr><td>${esc(x.date||"")}</td><td>${x.day||""}</td><td>${x.japri||0}</td><td>${x.follow||0}</td><td>${x.conv||0}</td><td>${x.lead||0}</td><td>${x.offer||0}</td><td>${x.closing||0}</td><td>${x.referral||0}</td><td>${esc(x.notes||"")}</td></tr>`).join("");
-}
-function saveActivity(){
- if(!currentUser)return;
- const day=currentDay(),date=$("activityDate").value||isoToday();
- const rec={id:Date.now(),date,day,japri:Number($("aJapri").value)||0,follow:Number($("aFollow").value)||0,conv:Number($("aConv").value)||0,lead:Number($("aLead").value)||0,offer:Number($("aOffer").value)||0,closing:Number($("aClose").value)||0,referral:Number($("aReferral").value)||0,notes:$("aNotes").value.trim()};
- currentUser.activityLog=currentUser.activityLog||[];
- const ix=currentUser.activityLog.findIndex(x=>x.date===date);
- if(ix>=0)currentUser.activityLog[ix]=rec;else currentUser.activityLog.push(rec);
- currentUser.sales=currentUser.sales||{};currentUser.sales[day]={...rec};
- save();renderMember();renderMemberActivity();alert("Aktivitas sales berhasil disimpan.");
-}
-function renderMyLeadsTable(){
- const rows=currentUser?.leads||[];const body=$("myLeadRows");if(!body)return;
- body.innerHTML=rows.length?rows.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(l=>`<tr><td>${esc(l.date)}</td><td><b>${esc(l.name)}</b></td><td>${esc(l.contact)}</td><td>${esc(l.source)}</td><td>${esc(l.response)}</td><td>${esc(l.plan)}</td><td>${esc(l.funnel)}</td><td>${esc(l.closing)}</td><td><button class="btnMini" onclick="editLead(${l.id})">Edit</button> <button class="btnMini" style="background:#fff0f0;color:#a33" onclick="deleteLead(${l.id})">Hapus</button></td></tr>`).join(""):`<tr><td colspan="9"><div class="empty">Belum ada lead. Klik "+ Lead Baru" untuk mulai.</div></td></tr>`;
-}
-function renderMemberDays(){
- const d=currentDay();$("memberDays").innerHTML=Array.from({length:60},(_,i)=>{const n=i+1,open=n<=d;return `<button class="dayBtn ${open?'has':''} ${n===d?'active':''}" ${open?`onclick="jumpMemberDay(${n})"`:"disabled"}>${n}</button>`}).join("");
-}
-function jumpMemberDay(day){if(day!==currentDay()){alert("Tampilan program mengikuti hari aktif. Selesaikan hari sebelumnya untuk membuka hari berikutnya.");return}showPage("memberDashboard")}
-
-function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
-
-(function migrateV5(){
- try{
-   if(members.length===0){
-     const old=JSON.parse(localStorage.getItem("pasukanUmrohMahirDigitalV5")||"[]");
-     if(old.length){members=old;members.forEach(m=>{m.leads=m.leads||[];m.activityLog=m.activityLog||[];Object.entries(m.sales||{}).forEach(([day,d])=>{if(d&&Object.values(d).some(v=>String(v||"").trim()!==""))m.activityLog.push({id:Date.now()+Number(day),date:d.date||"",day:Number(day),japri:Number(d.japri||0),follow:Number(d.follow||0),conv:Number(d.conv||0),lead:Number(d.lead||0),offer:Number(d.offer||0),closing:Number(d.closing||0),referral:Number(d.referral||0),notes:d.notes||""})})});save();}
-   }
- }catch(e){}
-})();
-</script>
 <script>
 /* V13 — Info Bar & Pop Up management based on V12 */
 (function(){
