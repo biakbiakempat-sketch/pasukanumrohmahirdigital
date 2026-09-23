@@ -818,7 +818,117 @@ function editAdminLead(mid,id){
 function deleteAdminLead(mid,id){const m=members.find(x=>x.id===mid);if(!m||!confirm("Hapus lead ini?"))return;m.leads=(m.leads||[]).filter(x=>x.id!==id);save();renderAllAdmin();renderAdminLeadReport();}
 function xlsEscape(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 function downloadExcel(filename,headers,rows){
- const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table></body></html>`;
+ const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table>
+<!-- PHASE A: MEMBER DATABASE AUTH. Super Admin stays on Supabase Auth; members use profiles + RPC. -->
+<script>
+(function(){
+  const sb=()=>window.supabaseClient||null;
+  const msg=(s,ok=false)=>{const e=$('authMsg');if(e)e.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+esc(String(s||''))+'</div>'};
+  const profileMap=p=>({id:p.id,name:p.name||'',username:p.username||'',wa:p.wa||'',role:p.role||'member',status:p.status||'pending',day:Number(p.day||0),checks:{},sales:{},activityLog:[],leads:[],registeredAt:p.registered_at||today(),approvedAt:p.approved_at||null});
+  async function loadDbMembers(){
+    const c=sb();if(!c)throw new Error('Supabase belum termuat.');
+    const {data,error}=await c.from('profiles').select('id,name,username,wa,role,status,day,registered_at,approved_at').eq('role','member').order('name',{ascending:true});
+    if(error)throw error;
+    members=(data||[]).map(profileMap);
+    return members;
+  }
+  async function adminRefresh(){if(currentRole!=='admin')return;try{await loadDbMembers();if(typeof renderAllAdmin==='function')renderAllAdmin()}catch(e){console.error('DB member refresh',e)}}
+
+  window.loginFormSubmit=async function(e){
+    e.preventDefault();
+    const u=$('loginUser').value.trim(),p=$('loginPass').value;
+    if(u===ADMIN_USER){
+      const c=sb();if(!c){msg('Modul login belum termuat. Refresh halaman 1x.');return}
+      try{
+        const {data,error}=await c.auth.signInWithPassword({email:'biakbiakempat@gmail.com',password:p});
+        if(error||!data?.user){msg('Username atau password salah.');return}
+        const {data:profile,error:pe}=await c.from('profiles').select('*').eq('id',data.user.id).single();
+        if(pe||!profile){await c.auth.signOut();msg('Profil Super Admin belum ditemukan.');return}
+        currentUser={id:profile.id,name:profile.name||'Super Admin',username:profile.username||ADMIN_USER,roleLabel:'Super Admin'};
+        currentRole='admin';saveAuthSession();enterApp();showPage('adminDashboard');setTimeout(adminRefresh,50);
+      }catch(err){console.error(err);msg('Koneksi ke Supabase gagal. Coba lagi.')}
+      return;
+    }
+    try{
+      msg('Sedang memverifikasi login...',true);
+      const {data,error}=await sb().rpc('member_login',{p_username:u,p_password:p});
+      if(error)throw error;
+      if(!data?.success){msg(data?.message||'Username atau password salah.');return}
+      currentUser=profileMap(data.profile);currentRole='member';members=[currentUser];
+      saveAuthSession();enterApp();showPage('memberDashboard');
+      setTimeout(()=>{try{showActivePopup(true)}catch(e){}},180);
+    }catch(err){console.error('Member DB login',err);msg('Login gagal: '+(err?.message||'koneksi database bermasalah'))}
+  };
+
+  const rf=$('regForm');
+  if(rf)rf.onsubmit=async function(e){
+    e.preventDefault();
+    const name=$('regName').value.trim(),username=$('regUsername').value.trim(),wa=$('regWa').value.trim(),password=$('regPassword').value;
+    if(!name||!username||!wa||!password){msg('Lengkapi semua data.');return}
+    if(password.length<8){msg('Password minimal 8 karakter.');return}
+    try{
+      const {data,error}=await sb().rpc('member_register',{p_name:name,p_username:username,p_wa:wa,p_password:password});
+      if(error)throw error;
+      if(!data?.success){msg(data?.message||'Pendaftaran gagal.');return}
+      rf.reset();authMode('login');msg('Pendaftaran berhasil. Tunggu approval Super Admin.',true);
+    }catch(err){console.error('Member DB register',err);msg('Pendaftaran gagal: '+(err?.message||'koneksi database bermasalah'))}
+  };
+
+  const oldEnter=window.enterApp;
+  window.enterApp=function(){oldEnter.apply(this,arguments);if(currentRole==='admin')setTimeout(adminRefresh,80)};
+
+  window.approveMember=async function(id){
+    try{const {data,error}=await sb().rpc('member_approve',{p_member_id:id});if(error)throw error;if(!data?.success){alert(data?.message||'Gagal approve.');return}await adminRefresh()}
+    catch(e){console.error(e);alert('Gagal approve member: '+(e?.message||e))}
+  };
+  window.rejectMember=async function(id){
+    if(!confirm('Hapus pendaftaran member ini?'))return;
+    try{const {data,error}=await sb().rpc('member_reject',{p_member_id:id});if(error)throw error;if(!data?.success){alert(data?.message||'Gagal menolak.');return}await adminRefresh()}
+    catch(e){console.error(e);alert('Gagal menolak member: '+(e?.message||e))}
+  };
+  window.saveMemberAdmin=async function(){
+    const id=$('editMemberId').value||'',name=$('newName').value.trim(),username=$('newUsername').value.trim(),wa=$('newWa').value.trim(),password=$('newPassword').value;
+    if(!name||!username||!wa||(!id&&!password)){alert('Lengkapi semua data.');return}
+    try{
+      let data,error;
+      if(id)({data,error}=await sb().rpc('member_admin_update',{p_member_id:id,p_name:name,p_wa:wa,p_password:password||null}));
+      else({data,error}=await sb().rpc('member_admin_create',{p_name:name,p_username:username,p_wa:wa,p_password:password}));
+      if(error)throw error;if(!data?.success){alert(data?.message||'Gagal menyimpan member.');return}
+      closeModal();['newName','newUsername','newWa','newPassword'].forEach(x=>$(x).value='');$('newUsername').disabled=false;
+      await adminRefresh();alert(id?'Data member berhasil diperbarui.':'Member berhasil ditambahkan.');
+    }catch(e){console.error(e);alert('Gagal menyimpan member: '+(e?.message||e))}
+  };
+  window.openModal=function(id){
+    const m=members.find(x=>String(x.id)===String(id));
+    $('editMemberId').value=m?.id||'';$('memberModalTitle').textContent=m?'Edit Member':'Tambah Member';
+    $('newName').value=m?.name||'';$('newUsername').value=m?.username||'';$('newWa').value=m?.wa||'';$('newPassword').value='';
+    $('newUsername').disabled=!!m;$('modalBack').classList.add('show');
+  };
+  window.deleteMember=async function(id){
+    const m=members.find(x=>String(x.id)===String(id));if(!m)return;
+    if(!confirm('Hapus member '+m.name+' beserta data membernya?'))return;
+    try{const {data,error}=await sb().rpc('member_admin_delete',{p_member_id:id});if(error)throw error;if(!data?.success){alert(data?.message||'Gagal menghapus.');return}await adminRefresh()}
+    catch(e){console.error(e);alert('Gagal menghapus member: '+(e?.message||e))}
+  };
+
+  const oldShow=window.showPage;
+  window.showPage=function(page){const r=oldShow.apply(this,arguments);if(currentRole==='admin'&&(page==='adminDashboard'||page==='members'))setTimeout(adminRefresh,100);return r};
+
+  // Force a fresh member login after Phase A. Super Admin session is preserved.
+  setTimeout(function(){
+    try{
+      const s=JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY)||'null');
+      if(s?.role==='member'){
+        clearAuthSession();currentUser=null;currentRole=null;
+        $('app')?.classList.add('hidden');$('auth')?.classList.remove('hidden');authMode('login');msg('Sistem member sudah diperbarui. Silakan login kembali.',true);
+      }
+    }catch(e){}
+  },200);
+
+  window.umrohMemberDbPhaseA={loadDbMembers};
+})();
+</script>
+</body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
 function exportMyLeads(){const start=$("leadExportStart")?.value||"";const end=$("leadExportEnd")?.value||"";if(start&&end&&start>end){alert("Tanggal mulai tidak boleh lebih besar dari tanggal akhir.");return}const rows=(currentUser.leads||[]).filter(l=>(!start||l.date>=start)&&(!end||l.date<=end)).map(l=>[l.date,l.time,l.name,l.city,l.contact,l.source,l.response,l.plan,l.funnel,l.closing,l.closingDate,l.fu1,l.fu1Response||"",l.fu2,l.fu2Response||"",l.fu3,l.fu3Response||"",l.noClose,l.cs,l.note]);downloadExcel("leads-"+(currentUser.username||"member")+".xls",["Tanggal","Waktu","Nama","Kota","Kontak","Sumber Lead","Respon","Rencana Order","Funnel","Closing","Tanggal Closing","FU1","Respon FU1","FU2","Respon FU2","FU3","Respon FU3","Alasan Tidak Closing","CS","Keterangan"],rows)}
