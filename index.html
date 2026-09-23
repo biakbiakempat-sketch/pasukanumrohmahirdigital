@@ -547,7 +547,11 @@ window.loginFormSubmit=async e=>{
  const supabaseLoginEmail = u==="mahirdigitalumroh"
    ? "biakbiakempat@gmail.com"
    : (u.includes("@") ? u : null);
- if(supabaseLoginEmail){
+ if(u===ADMIN_USER){
+     const stored=localStorage.getItem("superAdminPasswordV9")||"closing1000jamaah";
+     if(await verifyPassword(p,stored)){if(!stored.startsWith("pbkdf2$"))localStorage.setItem("superAdminPasswordV9",await createPasswordHash(p));currentRole="admin";currentUser={name:"Super Admin",username:ADMIN_USER,roleLabel:"Super Admin"};saveAuthSession();enterApp();showPage("adminDashboard");return}
+   }
+   if(supabaseLoginEmail){
    try{
      if(!supabaseClient){
        $("authMsg").innerHTML='<div class="msg err">Modul login belum termuat. Refresh halaman 1x lalu coba lagi.</div>';
