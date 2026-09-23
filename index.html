@@ -387,7 +387,10 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 <script>
 const SUPABASE_URL="https://insciufudobddaqxzil.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY="sb_publishable_hqJ2gxeoNcOt2srRCrS4cw_-tiFy2EP";
-const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+const supabaseClient=(window.supabase&&typeof window.supabase.createClient==="function")
+  ? window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})
+  : null;
+window.supabaseClient=supabaseClient;
 </script>
 <script>
 const ADMIN_USER="mahirdigitalumroh", ADMIN_PASS=localStorage.getItem("superAdminPasswordV9")||"omset10m";
@@ -527,6 +530,11 @@ $("loginForm").onsubmit=async e=>{
    : (u.includes("@") ? u : null);
  if(supabaseLoginEmail){
    try{
+     if(!supabaseClient){
+       $("authMsg").innerHTML='<div class="msg err">Modul login belum termuat. Refresh halaman 1x lalu coba lagi.</div>';
+       return;
+     }
+     $("authMsg").innerHTML='<div class="msg ok">Sedang memverifikasi login...</div>';
      const {data,error}=await supabaseClient.auth.signInWithPassword({email:supabaseLoginEmail,password:p});
      if(error||!data?.user){
        $("authMsg").innerHTML='<div class="msg err">Email atau password salah.</div>';
@@ -1024,6 +1032,18 @@ function downloadExcel(filename,headers,rows){
 #auth .authBox input:disabled,
 #auth .authBox button:disabled{pointer-events:auto}
 </style>
+<script id="loginSafetyPatch">
+(function(){
+  function ready(){
+    var f=document.getElementById('loginForm'), b=f&&f.querySelector('button[type="submit"]');
+    if(!f||!b)return;
+    b.type='submit';
+    b.style.pointerEvents='auto';
+    f.style.pointerEvents='auto';
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ready);else ready();
+})();
+</script>
 </body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
