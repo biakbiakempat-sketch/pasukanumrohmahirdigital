@@ -193,7 +193,7 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 
 <section class="page" id="page-settings">
 <div class="title"><div><h2>⚙ Pengaturan</h2><p>Pengaturan program dan akses Super Admin.</p></div></div>
-<div class="two"><div class="panel"><h3>Program</h3><div class="field"><label>Nama Program</label><input id="setProgramName" value="Pasukan Umroh Mahir Digital"/></div><div class="field"><label>Durasi</label><select id="setDuration"><option value="15">1–15 Hari</option><option value="30">1–30 Hari</option><option value="45">1–45 Hari</option><option selected="" value="60">1–60 Hari</option></select></div><div class="field"><label>Syarat Unlock</label><select id="setUnlock"><option value="50">50%</option><option value="75">75%</option><option selected="" value="100">100%</option></select></div><button class="btn" onclick="saveProgramSettings()">Simpan Pengaturan Program</button></div><div class="panel"><h3>Super Admin</h3><div class="field"><label>Username</label><input disabled="" value="mahirdigitalumroh"/></div><div class="field"><label>Password</label><input id="setAdminPassword" type="text"/></div><button class="btn" onclick="saveAdminPassword()">Ganti Password</button><p class="muted" style="margin-top:10px">Username tidak dapat diganti. Password dapat terlihat dan diubah.</p></div></div>
+<div class="two"><div class="panel"><h3>Program</h3><div class="field"><label>Nama Program</label><input id="setProgramName" value="Pasukan Umroh Mahir Digital"/></div><div class="field"><label>Durasi</label><select id="setDuration"><option value="15">1–15 Hari</option><option value="30">1–30 Hari</option><option value="45">1–45 Hari</option><option selected="" value="60">1–60 Hari</option></select></div><div class="field"><label>Syarat Unlock</label><select id="setUnlock"><option value="50">50%</option><option value="75">75%</option><option selected="" value="100">100%</option></select></div><button class="btn" onclick="saveProgramSettings()">Simpan Pengaturan Program</button></div><div class="panel"><h3>Super Admin</h3><div class="field"><label>Username</label><input disabled="" value="mahirdigitalumroh"/></div><div class="field"><label>Password</label><input id="setAdminPassword" type="text"/></div><button class="btn" onclick="saveAdminPassword()">Ganti Password</button><p class="muted" style="margin-top:10px">Username tidak dapat diganti. Password tersimpan dalam bentuk hash dan tidak ditampilkan.</p></div></div>
 </section>
 <!-- MEMBER -->
 <section class="page" id="page-memberDashboard">
@@ -384,6 +384,42 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 </div>
 <script>
 const ADMIN_USER="mahirdigitalumroh", ADMIN_PASS=localStorage.getItem("superAdminPasswordV9")||"omset10m";
+// ---------- AUTH V2 ----------
+const AUTH_SESSION_KEY="pasukanUmrohAuthSessionV2";
+const PBKDF2_ITERATIONS=120000;
+function bytesToB64(bytes){let bin="";for(const b of bytes)bin+=String.fromCharCode(b);return btoa(bin)}
+function b64ToBytes(b64){const bin=atob(b64);const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out}
+function randomSalt(){return crypto.getRandomValues(new Uint8Array(16))}
+async function hashPassword(password,salt,iterations=PBKDF2_ITERATIONS){
+  const enc=new TextEncoder(),key=await crypto.subtle.importKey("raw",enc.encode(password),"PBKDF2",false,["deriveBits"]);
+  const bits=await crypto.subtle.deriveBits({name:"PBKDF2",salt,iterations,hash:"SHA-256"},key,256);
+  return new Uint8Array(bits);
+}
+async function createPasswordHash(password){
+  const salt=randomSalt(),hash=await hashPassword(password,salt);
+  return "pbkdf2$"+PBKDF2_ITERATIONS+"$"+bytesToB64(salt)+"$"+bytesToB64(hash);
+}
+async function verifyPassword(password,stored){
+  if(typeof stored!=="string")return false;
+  if(!stored.startsWith("pbkdf2$"))return stored===password;
+  const parts=stored.split("$");if(parts.length!==4)return false;
+  const iterations=Number(parts[1]),salt=b64ToBytes(parts[2]),expected=b64ToBytes(parts[3]);
+  const actual=await hashPassword(password,salt,iterations);
+  if(actual.length!==expected.length)return false;
+  let diff=0;for(let i=0;i<actual.length;i++)diff|=actual[i]^expected[i];
+  return diff===0;
+}
+function saveAuthSession(){try{sessionStorage.setItem(AUTH_SESSION_KEY,JSON.stringify({role:currentRole,userId:currentUser?.id||null,username:currentUser?.username||"",at:Date.now()}))}catch(e){}}
+function clearAuthSession(){try{sessionStorage.removeItem(AUTH_SESSION_KEY)}catch(e){}}
+function restoreAuthSession(){
+  try{
+    const x=JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY)||"null");if(!x)return false;
+    if(x.role==="admin"){currentRole="admin";currentUser={name:"Super Admin",username:ADMIN_USER,roleLabel:"Super Admin"};enterApp();showPage("adminDashboard");return true}
+    if(x.role==="member"){const m=members.find(v=>v.id===x.userId||v.username===x.username);if(m&&m.status==="approved"){currentRole="member";currentUser=m;enterApp();showPage("memberDashboard");return true}}
+  }catch(e){}
+  clearAuthSession();return false;
+}
+
 const KEY="pasukanUmrohMahirDigitalV6"; // sengaja baru agar data dummy lama tidak ikut terbaca
 let members=JSON.parse(localStorage.getItem(KEY)||"[]");members.forEach(m=>{m.sales=m.sales||{};m.leads=m.leads||[];m.activityLog=m.activityLog||[]});
 let currentUser=null,currentRole=null;
@@ -473,26 +509,34 @@ function tasksForDay(day){
 function save(){localStorage.setItem(KEY,JSON.stringify(members))}
 function initials(n){return (n||"SA").split(/\s+/).map(x=>x[0]).join("").slice(0,2).toUpperCase()}
 function authMode(mode){$("tabLogin").classList.toggle("active",mode==="login");$("tabReg").classList.toggle("active",mode==="reg");$("loginForm").classList.toggle("hidden",mode!=="login");$("regForm").classList.toggle("hidden",mode!=="reg");$("authMsg").innerHTML=""}
-$("loginForm").onsubmit=e=>{
+$("loginForm").onsubmit=async e=>{
  e.preventDefault();const u=$("loginUser").value.trim(),p=$("loginPass").value;
- if(u===ADMIN_USER&&p===ADMIN_PASS){currentRole="admin";currentUser={name:"Super Admin",username:ADMIN_USER,roleLabel:"Super Admin"};enterApp();showPage("adminDashboard");return}
- const m=members.find(x=>x.username===u&&x.password===p);
- if(!m){$("authMsg").innerHTML='<div class="msg err">Username atau password salah.</div>';return}
- if(m.role==="admin" && m.status==="approved"){currentRole="admin";currentUser=m;enterApp();showPage("adminDashboard");return} if(m.status!=="approved"){$("authMsg").innerHTML='<div class="msg err">Akun masih menunggu approval Super Admin.</div>';return}
- currentRole="member";currentUser=m;enterApp();showPage("memberDashboard");setTimeout(()=>showActivePopup(true),180);
+ if(u===ADMIN_USER){
+   const stored=localStorage.getItem("superAdminPasswordV9")||"omset10m";
+   if(await verifyPassword(p,stored)){if(!stored.startsWith("pbkdf2$"))localStorage.setItem("superAdminPasswordV9",await createPasswordHash(p));currentRole="admin";currentUser={name:"Super Admin",username:ADMIN_USER,roleLabel:"Super Admin"};saveAuthSession();enterApp();showPage("adminDashboard");return}
+   $("authMsg").innerHTML='<div class="msg err">Username atau password salah.</div>';return;
+ }
+ const m=members.find(x=>x.username===u);
+ if(!m || !(await verifyPassword(p,m.password))){$("authMsg").innerHTML='<div class="msg err">Username atau password salah.</div>';return}
+ if(!String(m.password||"").startsWith("pbkdf2$")){m.password=await createPasswordHash(p);save()}
+ if(m.role==="admin" && m.status==="approved"){currentRole="admin";currentUser=m;saveAuthSession();enterApp();showPage("adminDashboard");return}
+ if(m.status!=="approved"){$("authMsg").innerHTML='<div class="msg err">Akun masih menunggu approval Super Admin.</div>';return}
+ currentRole="member";currentUser=m;saveAuthSession();enterApp();showPage("memberDashboard");setTimeout(()=>showActivePopup(true),180);
 };
-$("regForm").onsubmit=e=>{
+$("regForm").onsubmit=async e=>{
  e.preventDefault();const name=$("regName").value.trim(),username=$("regUsername").value.trim(),wa=$("regWa").value.trim(),password=$("regPassword").value;
  if(members.some(x=>x.username===username)){$("authMsg").innerHTML='<div class="msg err">Username sudah digunakan.</div>';return}
- members.push({id:Date.now(),name,username,wa,password,status:"pending",day:0,checks:{},sales:{},activityLog:[],leads:[]});save();e.target.reset();authMode("login");$("authMsg").innerHTML='<div class="msg ok">Pendaftaran berhasil. Tunggu approval Super Admin.</div>';
+ const passwordHash=await createPasswordHash(password);
+ members.push({id:Date.now(),name,username,wa,password:passwordHash,status:"pending",day:0,checks:{},sales:{},activityLog:[],leads:[],registeredAt:today()});save();e.target.reset();authMode("login");$("authMsg").innerHTML='<div class="msg ok">Pendaftaran berhasil. Tunggu approval Super Admin.</div>';
 };
 function enterApp(){
  $("auth").classList.add("hidden");$("app").classList.remove("hidden");
  $("memberNav").classList.toggle("hidden",currentRole!=="member");$("adminNav").classList.toggle("hidden",currentRole!=="admin");
  $("roleBadge").textContent=currentRole==="admin"?(currentUser.roleLabel||"SUPER ADMIN"):"MEMBER";$("topName").textContent=currentUser.name;$("topRole").textContent=currentRole==="admin"?(currentUser.roleLabel||"Super Admin"):"Member";$("topAvatar").textContent=initials(currentUser.name);
  if(currentRole==="admin")renderAllAdmin();else renderMember();
+ saveAuthSession();
 }
-function logout(){currentUser=null;currentRole=null;$("app").classList.add("hidden");$("auth").classList.remove("hidden");authMode("login");$("loginForm").reset()}
+function logout(){clearAuthSession();currentUser=null;currentRole=null;$("app").classList.add("hidden");$("auth").classList.remove("hidden");authMode("login");$("loginForm").reset()}
 function showPage(page){
  document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$("page-"+page).classList.add("active");
  document.querySelectorAll(".navItem[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===page));
@@ -975,12 +1019,12 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   window.openModal=function(id){
     const m=id?members.find(x=>x.id===id):null;$('editMemberId').value=m?m.id:'';$('memberModalTitle').textContent=m?'Edit Member':'Tambah Member';$('newName').value=m?.name||'';$('newUsername').value=m?.username||'';$('newWa').value=m?.wa||'';$('newPassword').value=m?.password||'';$('newUsername').disabled=!!m;$('modalBack').classList.add('show');
   };
-  window.saveMemberAdmin=function(){
+  window.saveMemberAdmin=async function(){
     const id=Number($('editMemberId').value)||0,name=$('newName').value.trim(),username=$('newUsername').value.trim(),wa=$('newWa').value.trim(),password=$('newPassword').value;
-    if(!name||!username||!wa||!password){alert('Lengkapi semua data.');return}
+    if(!name||!username||!wa||(!id&&!password)){alert('Lengkapi semua data.');return}
     if(members.some(x=>x.username===username&&x.id!==id)){alert('Username sudah digunakan.');return}
-    if(id){const m=members.find(x=>x.id===id);if(m){m.name=name;m.wa=wa;m.password=password}}
-    else members.push({id:Date.now(),name,username,wa,password,status:'approved',day:1,checks:{},sales:{},activityLog:[],leads:[],registeredAt:today()});
+    if(id){const m=members.find(x=>x.id===id);if(m){m.name=name;m.wa=wa;if(password)m.password=await createPasswordHash(password)}}
+    else members.push({id:Date.now(),name,username,wa,password:await createPasswordHash(password),status:'approved',day:1,checks:{},sales:{},activityLog:[],leads:[],registeredAt:today()});
     save();closeModal();renderAllAdmin();alert(id?'Data member berhasil diperbarui.':'Member berhasil ditambahkan.');
   };
   window.deleteMember=function(id){const m=members.find(x=>x.id===id);if(!m)return;if(!confirm('Hapus member '+m.name+' beserta data aktivitas dan leads-nya?'))return;members=members.filter(x=>x.id!==id);save();renderAllAdmin()};
