@@ -86,10 +86,10 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 <div class="muted" style="text-align:center">Tracking Pasukan Umroh • Program 60 Hari</div>
 <div class="tabs"><button class="active" id="tabLogin" onclick="authMode('login')">Login</button><button id="tabReg" onclick="authMode('reg')">Daftar Member</button></div>
 <div id="authMsg"></div>
-<form id="loginForm">
+<form id="loginForm" onsubmit="return window.loginFormSubmit(event)">
 <div class="field"><label>Username</label><input id="loginUser" required=""/></div>
 <div class="field"><label>Password</label><input id="loginPass" required="" type="password"/></div>
-<button class="btn" style="width:100%">Masuk</button>
+<button class="btn" type="submit" style="width:100%">Masuk</button>
 <p class="muted" style="margin-top:12px">Super Admin: <b>mahirdigitalumroh</b></p>
 </form>
 <form class="hidden" id="regForm">
@@ -519,7 +519,7 @@ function tasksForDay(day){
 function save(){localStorage.setItem(KEY,JSON.stringify(members))}
 function initials(n){return (n||"SA").split(/\s+/).map(x=>x[0]).join("").slice(0,2).toUpperCase()}
 function authMode(mode){$("tabLogin").classList.toggle("active",mode==="login");$("tabReg").classList.toggle("active",mode==="reg");$("loginForm").classList.toggle("hidden",mode!=="login");$("regForm").classList.toggle("hidden",mode!=="reg");$("authMsg").innerHTML=""}
-$("loginForm").onsubmit=async e=>{
+window.loginFormSubmit=async e=>{
  e.preventDefault();
  const u=$("loginUser").value.trim(),p=$("loginPass").value;
  // Supabase Auth migration:
