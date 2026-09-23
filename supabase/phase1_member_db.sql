@@ -9,7 +9,7 @@ on public.profiles (lower(username)) where username is not null;
 create or replace function public.member_register(p_name text,p_username text,p_wa text,p_password text)
 returns json language plpgsql security definer set search_path=''
 as $$
-declare v_id uuid := gen_random_uuid(); v_username text := lower(trim(p_username));
+declare v_id uuid := pg_catalog.gen_random_uuid(); v_username text := lower(trim(p_username));
 begin
   if length(trim(coalesce(p_name,''))) < 2 or length(v_username) < 3
      or length(trim(coalesce(p_wa,''))) < 6 or length(coalesce(p_password,'')) < 8 then
@@ -19,7 +19,7 @@ begin
     return json_build_object('success',false,'message','Username sudah digunakan.');
   end if;
   insert into public.profiles(id,name,username,wa,role,status,day,registered_at,password_hash)
-  values(v_id,trim(p_name),v_username,trim(p_wa),'member','pending',0,now(),crypt(p_password,gen_salt('bf',12)));
+  values(v_id,trim(p_name),v_username,trim(p_wa),'member','pending',0,now(),extensions.crypt(p_password,extensions.gen_salt('bf',12)));
   return json_build_object('success',true,'id',v_id,'username',v_username,'status','pending','message','Pendaftaran berhasil. Tunggu approval Super Admin.');
 exception when unique_violation then
   return json_build_object('success',false,'message','Username sudah digunakan.');
@@ -34,7 +34,7 @@ begin
   select * into v_profile from public.profiles
   where lower(username)=lower(trim(p_username)) and role='member' limit 1;
   if not found then return json_build_object('success',false,'message','Username atau password salah.'); end if;
-  if v_profile.password_hash is null or crypt(coalesce(p_password,''),v_profile.password_hash) <> v_profile.password_hash then
+  if v_profile.password_hash is null or extensions.crypt(coalesce(p_password,''),v_profile.password_hash) <> v_profile.password_hash then
     return json_build_object('success',false,'message','Username atau password salah.');
   end if;
   if coalesce(v_profile.status,'pending') <> 'approved' then
@@ -78,8 +78,12 @@ returns json language plpgsql security definer set search_path=''
 as $$
 begin
   if not public.is_super_admin() then return json_build_object('success',false,'message','Akses ditolak.'); end if;
+  if length(trim(coalesce(p_name,''))) < 2 or length(trim(coalesce(p_wa,''))) < 6
+     or (nullif(trim(coalesce(p_password,'')),'') is not null and length(p_password) < 8) then
+    return json_build_object('success',false,'message','Data member tidak lengkap atau password minimal 8 karakter.');
+  end if;
   update public.profiles set name=trim(p_name),wa=trim(p_wa),
-    password_hash=case when nullif(trim(coalesce(p_password,'')),'') is null then password_hash else crypt(p_password,gen_salt('bf',12)) end
+    password_hash=case when nullif(trim(coalesce(p_password,'')),'') is null then password_hash else extensions.crypt(p_password,extensions.gen_salt('bf',12)) end
   where id=p_member_id and role='member';
   if not found then return json_build_object('success',false,'message','Member tidak ditemukan.'); end if;
   return json_build_object('success',true,'message','Data member berhasil diperbarui.');
@@ -89,7 +93,7 @@ $$;
 create or replace function public.member_admin_create(p_name text,p_username text,p_wa text,p_password text)
 returns json language plpgsql security definer set search_path=''
 as $$
-declare v_id uuid := gen_random_uuid(); v_username text := lower(trim(p_username));
+declare v_id uuid := pg_catalog.gen_random_uuid(); v_username text := lower(trim(p_username));
 begin
   if not public.is_super_admin() then return json_build_object('success',false,'message','Akses ditolak.'); end if;
   if length(trim(coalesce(p_name,''))) < 2 or length(v_username) < 3 or length(trim(coalesce(p_wa,''))) < 6 or length(coalesce(p_password,'')) < 8 then
@@ -97,7 +101,7 @@ begin
   end if;
   if exists(select 1 from public.profiles where lower(username)=v_username) then return json_build_object('success',false,'message','Username sudah digunakan.'); end if;
   insert into public.profiles(id,name,username,wa,role,status,day,registered_at,approved_at,password_hash)
-  values(v_id,trim(p_name),v_username,trim(p_wa),'member','approved',1,now(),now(),crypt(p_password,gen_salt('bf',12)));
+  values(v_id,trim(p_name),v_username,trim(p_wa),'member','approved',1,now(),now(),extensions.crypt(p_password,extensions.gen_salt('bf',12)));
   return json_build_object('success',true,'id',v_id,'message','Member berhasil ditambahkan.');
 exception when unique_violation then return json_build_object('success',false,'message','Username sudah digunakan.');
 end;
