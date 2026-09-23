@@ -1663,10 +1663,10 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 </script>
 
 <script>
-/* V16 — sinkronisasi Super Admin <-> Member pada browser/origin yang sama */
+/* V16 / PHASE A.1 — sinkronisasi browser tetap aktif untuk setting non-member.
+   Data member sekarang berasal dari Supabase; localStorage tidak lagi menjadi sumber kebenaran member. */
 (function(){
-  const MEMBER_KEY='pasukanUmrohMahirDigitalV6';
-  const SYNC_KEYS=['pasukanUmrohInfoBarsV12','pasukanUmrohPopupsV12','pasukanUmrohScheduleV9','pasukanUmrohRewardsV9','pasukanUmrohMaterialsV9','pasukanUmrohChecklistV9','pasukanUmrohSettingsV9',MEMBER_KEY];
+  const SYNC_KEYS=['pasukanUmrohInfoBarsV12','pasukanUmrohPopupsV12','pasukanUmrohScheduleV9','pasukanUmrohRewardsV9','pasukanUmrohMaterialsV9','pasukanUmrohChecklistV9','pasukanUmrohSettingsV9'];
   let lastSignature='';
   function read(k){try{return localStorage.getItem(k)||''}catch(e){return ''}}
   function signature(){return SYNC_KEYS.map(read).join('||')}
@@ -1675,19 +1675,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     const sig=signature();
     if(!force && sig===lastSignature)return;
     lastSignature=sig;
-    try{
-      const fresh=JSON.parse(localStorage.getItem(MEMBER_KEY)||'[]');
-      if(Array.isArray(fresh)){
-        if(typeof members!=='undefined' && Array.isArray(members)){
-          members.length=0; fresh.forEach(m=>members.push(m));
-          members.forEach(m=>{m.sales=m.sales||{};m.leads=m.leads||[];m.activityLog=m.activityLog||[]});
-        }
-        if(typeof currentUser!=='undefined' && currentUser && currentUser.username){
-          const me=fresh.find(m=>m.username===currentUser.username);
-          if(me){currentUser=me;}
-        }
-      }
-    }catch(e){console.warn('Sync members:',e)}
     if(typeof currentRole!=='undefined' && currentRole==='member' && typeof currentUser!=='undefined' && currentUser){
       safe(function(){renderMember()});
       safe(function(){if(typeof renderInfoBars==='function')renderInfoBars()});
