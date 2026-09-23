@@ -1365,7 +1365,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   // ---------- DATA MEMBER ----------
   function progressOf(m){return Math.max(0,Math.min(100,Math.round(((Number(m.day||0))/60)*100)))}
   window.openModal=function(id){
-    const m=id?members.find(x=>x.id===id):null;$('editMemberId').value=m?m.id:'';$('memberModalTitle').textContent=m?'Edit Member':'Tambah Member';$('newName').value=m?.name||'';$('newUsername').value=m?.username||'';$('newWa').value=m?.wa||'';$('newPassword').value=m?.password||'';$('newUsername').disabled=!!m;$('modalBack').classList.add('show');
+    const m=id?members.find(x=>x.id===id):null;$('editMemberId').value=m?m.id:'';$('memberModalTitle').textContent=m?'Edit Member':'Tambah Member';$('newName').value=m?.name||'';$('newUsername').value=m?.username||'';$('newWa').value=m?.wa||'';$('newPassword').value='';$('newUsername').disabled=!!m;$('modalBack').classList.add('show');
   };
   window.saveMemberAdmin=async function(){
     const id=Number($('editMemberId').value)||0,name=$('newName').value.trim(),username=$('newUsername').value.trim(),wa=$('newWa').value.trim(),password=$('newPassword').value;
