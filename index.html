@@ -63,6 +63,7 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 <style>
 .infoBar{margin:0 22px 16px;border:1px solid #dfe4ef;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 5px 16px rgba(15,23,42,.05)}
 .infoTrack{display:flex;white-space:nowrap;animation:infoMove 28s linear infinite;width:max-content}
+.infoBarPanel{overflow:hidden}.infoBarPanel .infoBarBottom{margin:0;border:0;box-shadow:none;border-radius:10px}.infoBarBottom .infoTrack{animation-duration:24s}
 .infoItem{padding:11px 24px;border-right:1px solid #edf0f5;font-size:13px;color:#1d2842}.infoItem b{color:#0b5b44}.infoItem a{color:#174ea6;text-decoration:none;font-weight:700}
 @keyframes infoMove{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .adminProgressTable td,.adminProgressTable th{vertical-align:middle}.pctBar{height:8px;background:#edf0f5;border-radius:99px;overflow:hidden;min-width:100px}.pctBar>span{display:block;height:100%;background:#0b5b44;border-radius:99px}
@@ -126,11 +127,11 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 <button class="btn" onclick="logout()" style="background:#fff;color:#11185f;padding:9px 13px;margin-left:8px">Logout</button>
 </div></header>
 <div class="content">
-<section class="page active" id="page-adminDashboard"><div class="title"><div><h2>Dashboard Super Admin</h2><p>Satu pusat kendali seluruh sistem.</p></div><button class="btn" onclick="showPage('approval')">Lihat Approval</button></div><div class="infoBar"><div class="infoTrack" id="infoTrackAdmin"><div class="infoItem" id="infoAyatAdmin"></div><div class="infoItem" id="infoScheduleAdmin"></div><div class="infoItem" id="infoWebinarAdmin"></div><div class="infoItem" id="infoAyatAdmin2"></div><div class="infoItem" id="infoScheduleAdmin2"></div><div class="infoItem" id="infoWebinarAdmin2"></div></div></div>
-<div class="kpi"><div class="card stat"><div class="icon">👥</div><div><div class="label">MEMBER</div><div class="num" id="aTotal">0</div></div></div><div class="card stat"><div class="icon">⌛</div><div><div class="label">PENDING</div><div class="num" id="aPending">0</div></div></div><div class="card stat"><div class="icon">🟢</div><div><div class="label">AKTIF</div><div class="num" id="aActive">0</div></div></div><div class="card stat"><div class="icon">🎯</div><div><div class="label">LEAD</div><div class="num" id="aLead">0</div></div></div><div class="card stat"><div class="icon">🤝</div><div><div class="label">CLOSING</div><div class="num" id="aClosing">0</div></div></div><div class="card stat"><div class="icon">🏆</div><div><div class="label">HARI 60</div><div class="num" id="aDay60">0</div></div></div></div>
-<div class="two"><div class="panel"><div class="toolbar"><div><h3 style="margin:0">📊 Aktivitas Pasukan</h3><p class="muted" style="margin:4px 0">Semua member terlihat dari mulai mendaftar sampai Hari 60.</p></div><button class="btnMini" onclick="showPage('members')">DATA MEMBER</button></div><div class="tableWrap"><table class="adminProgressTable"><thead><tr><th>Nama</th><th>Daftar</th><th>Status</th><th>Hari</th><th>Progress</th></tr></thead><tbody id="dashActivityRows"></tbody></table></div></div><div class="panel"><div class="toolbar"><h3 style="margin:0">⌛ Approval</h3><span class="pill" id="dashPendingCount">0</span></div><div class="empty" id="dashApproval">Belum ada pendaftaran.</div></div></div>
+<section class="page active" id="page-adminDashboard"><div class="title"><div><h2>Dashboard Super Admin</h2><p>Satu pusat kendali seluruh sistem.</p></div></div><div class="kpi"><div class="card stat"><div class="icon">👥</div><div><div class="label">MEMBER</div><div class="num" id="aTotal">0</div></div></div><div class="card stat"><div class="icon">🟢</div><div><div class="label">AKTIF</div><div class="num" id="aActive">0</div></div></div><div class="card stat"><div class="icon">🎯</div><div><div class="label">LEAD</div><div class="num" id="aLead">0</div></div></div><div class="card stat"><div class="icon">🤝</div><div><div class="label">CLOSING</div><div class="num" id="aClosing">0</div></div></div><div class="card stat"><div class="icon">🏆</div><div><div class="label">HARI 60</div><div class="num" id="aDay60">0</div></div></div></div>
+<div class="two"><div class="panel"><div class="toolbar"><div><h3 style="margin:0">📊 Aktivitas Pasukan</h3><p class="muted" style="margin:4px 0">Semua member terlihat dari mulai mendaftar sampai Hari 60.</p></div><button class="btnMini" onclick="showPage('members')">DATA MEMBER</button></div><div class="tableWrap"><table class="adminProgressTable"><thead><tr><th>Nama</th><th>Daftar</th><th>Status</th><th>Hari</th><th>Progress</th></tr></thead><tbody id="dashActivityRows"></tbody></table></div></div></div>
 <div class="two"><div class="panel"><h3>🏆 Milestone</h3><div id="dashMilestones"></div></div><div class="panel"><h3>⚠ Perlu Perhatian</h3><p class="muted">Member dengan progress di bawah 10%.</p><div class="empty" id="dashAttention">Belum ada member di bawah 10%.</div></div></div>
 <div class="panel"><div class="toolbar"><div><h3 style="margin:0">📍 Progress Member</h3><p class="muted" style="margin:4px 0">Horizontal = persentase (5% per garis), vertikal = hari program.</p></div></div><div class="scatterWrap"><div class="scatter" id="adminScatter"></div></div></div>
+<div class="panel infoBarPanel"><div class="toolbar"><div><h3 style="margin:0">📢 Info Bar</h3><p class="muted" style="margin:4px 0">Informasi berjalan yang dikelola dari menu Info Bar &amp; Pop Up.</p></div></div><div class="infoBar infoBarBottom"><div class="infoTrack" id="infoTrackAdmin"></div></div></div>
 </section>
 <section class="page" id="page-members">
 <div class="title"><div><h2>👥 DATA MEMBER</h2><p>Kelola seluruh member yang mendaftar, akun, approval, dan progress.</p></div><button class="btn" onclick="openModal()">+ Tambah Member</button></div>
@@ -197,8 +198,7 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 </section>
 <!-- MEMBER -->
 <section class="page" id="page-memberDashboard">
-<div class="title"><div><h2>Dashboard Member</h2><p>Checklist, laporan aktivitas sales, dan laporan leads dalam satu halaman.</p></div></div><div class="infoBar"><div class="infoTrack" id="infoTrackMember"><div class="infoItem" id="infoAyatMember"></div><div class="infoItem" id="infoScheduleMember"></div><div class="infoItem" id="infoWebinarMember"></div><div class="infoItem" id="infoAyatMember2"></div><div class="infoItem" id="infoScheduleMember2"></div><div class="infoItem" id="infoWebinarMember2"></div></div></div>
-<div class="kpi">
+<div class="title"><div><h2>Dashboard Member</h2><p>Checklist, laporan aktivitas sales, dan laporan leads dalam satu halaman.</p></div></div><div class="kpi">
 <div class="card stat"><div class="icon">📅</div><div><div class="label">HARI BERJALAN</div><div class="num" id="mDay">0/60</div></div></div>
 <div class="card stat"><div class="icon">✓</div><div><div class="label">CHECKLIST</div><div class="num" id="mCheck">0%</div></div></div>
 <div class="card stat"><div class="icon">▥</div><div><div class="label">AKTIVITAS</div><div class="num" id="mAct">0</div></div></div>
@@ -256,6 +256,7 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 <div class="panel"><h3>✓ Perintah Hari Ini</h3><div id="memberChecks"></div><button class="btn" onclick="finishMemberDay()" style="width:100%;margin-top:12px">Selesaikan Hari Ini &amp; Buka Hari Berikutnya →</button><div class="notice" id="memberNotice">Checklist harus 100% untuk membuka hari berikutnya.</div></div>
 <div class="panel"><h3>🏆 Milestone</h3><div class="muted" id="memberMilestone">Belum ada milestone.</div></div>
 </div>
+<div class="panel infoBarPanel"><div class="toolbar"><div><h3 style="margin:0">📢 Info Bar</h3><p class="muted" style="margin:4px 0">Informasi berjalan untuk Pasukan Umroh.</p></div></div><div class="infoBar infoBarBottom"><div class="infoTrack" id="infoTrackMember"></div></div></div>
 </section>
 <section class="page" id="page-program">
 <div class="title"><div><h2>Program 60 Hari</h2><p>Hari berikutnya terbuka setelah checklist hari sebelumnya 100%.</p></div></div><div class="panel"><div class="dayGrid" id="memberDays"></div><div class="notice" id="memberProgramNotice">Hari berikutnya hanya terbuka jika checklist hari sebelumnya 100%.</div></div>
@@ -555,8 +556,8 @@ function renderMembers(){
 function renderApproval(){
  const pending=members.filter(m=>m.status==="pending");$("pendingLabel").textContent=pending.length+" pending";
  $("approvalList").innerHTML=pending.length?pending.map(m=>`<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px"><div><b>${esc(m.name)}</b><div class="muted">${esc(m.username)} • ${esc(m.wa)}</div></div><div><button class="btnMini" onclick="approveMember(${m.id})">✓ Approve</button> <button class="btnMini" style="background:#fff0f0;color:#a33" onclick="rejectMember(${m.id})">Tolak</button></div></div>`).join(""):'<div class="empty">Belum ada pendaftaran.</div>';
- $("dashApproval").innerHTML=pending.length?pending.map(m=>`<div style="padding:10px 0;border-bottom:1px solid var(--line)"><b>${esc(m.name)}</b><br><span class="muted">${esc(m.wa)}</span></div>`).join(""):'<div class="empty">Belum ada pendaftaran.</div>';
 }
+
 function approveMember(id){const m=members.find(x=>x.id===id);if(m){m.status="approved";m.day=1;save();renderAllAdmin()}}
 function rejectMember(id){members=members.filter(x=>x.id!==id);save();renderAllAdmin()}
 function totalLead(m){return (m.leads||[]).length || Object.values(m.sales||{}).reduce((n,d)=>n+Number(d.lead||0),0)}
@@ -567,7 +568,7 @@ function metrics(){
 }
 function renderAllAdmin(){
  const x=metrics(),pending=members.filter(m=>m.status==="pending").length,active=members.filter(m=>m.status==="approved").length;
- $("aTotal").textContent=x.members;$("aPending").textContent=pending;$("aActive").textContent=active;$("aLead").textContent=x.lead;$("aClosing").textContent=x.closing;$("aDay60").textContent=members.filter(m=>(m.day||0)>=60).length;
+ $("aTotal").textContent=x.members;$("aActive").textContent=active;$("aLead").textContent=x.lead;$("aClosing").textContent=x.closing;$("aDay60").textContent=members.filter(m=>(m.day||0)>=60).length;
  renderMembers();renderApproval();renderAdminDays();renderChecklistAdmin();renderActivities();renderAdminActivityReport();renderAdminLeadReport();renderRewards();renderReports();
 }
 function renderAdminDays(){
@@ -836,13 +837,8 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   const latestWebinar=()=>schedule().slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).find(x=>/webinar/i.test(x.name||''));
 
   function infoDisplayItems(){
-    const items=[];
-    activeInfoBars().forEach(x=>items.push('📢 <b>'+e2(x.title||'Info')+'</b> • '+e2(x.text||'')));
-    latestSchedules().forEach(x=>items.push('📅 <b>'+e2(x.name||'Jadwal')+'</b> • '+e2(x.date||'')+(x.mode?' • '+e2(x.mode):'')));
-    items.push('🕋 '+e2(todayVerse()));
-    const wb=latestWebinar();
-    items.push(wb?'🎥 <b>Webinar:</b> '+e2(wb.name)+' • '+e2(wb.date):'🎥 Belum ada webinar yang dijadwalkan.');
-    return items;
+    const items=activeInfoBars().map(x=>'📢 <b>'+e2(x.title||'Info')+'</b> • '+e2(x.text||''));
+    return items.length?items:['📢 Belum ada Info Bar aktif.'];
   }
 
   window.renderInfoBars=function(){
