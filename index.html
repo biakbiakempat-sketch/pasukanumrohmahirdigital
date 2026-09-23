@@ -383,6 +383,12 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 <div class="modalBack" id="modalBack">
 <div class="modal"><button class="close" onclick="closeModal()">×</button><h3 id="memberModalTitle">Tambah Member</h3><input id="editMemberId" type="hidden"/><div class="field"><label>Nama</label><input id="newName"/></div><div class="field"><label>Username</label><input id="newUsername"/></div><div class="field"><label>WhatsApp</label><input id="newWa" placeholder="628xxxxxxxxxx"/></div><div class="field"><label>Password</label><input id="newPassword" type="text"/></div><button class="btn" onclick="saveMemberAdmin()">Simpan Member</button></div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL="https://insciufudobddaqxzil.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_hqJ2gxeoNcOt2srRCrS4cw_-tiFy2EP";
+const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+</script>
 <script>
 const ADMIN_USER="mahirdigitalumroh", ADMIN_PASS=localStorage.getItem("superAdminPasswordV9")||"omset10m";
 // ---------- AUTH V2 ----------
@@ -511,7 +517,42 @@ function save(){localStorage.setItem(KEY,JSON.stringify(members))}
 function initials(n){return (n||"SA").split(/\s+/).map(x=>x[0]).join("").slice(0,2).toUpperCase()}
 function authMode(mode){$("tabLogin").classList.toggle("active",mode==="login");$("tabReg").classList.toggle("active",mode==="reg");$("loginForm").classList.toggle("hidden",mode!=="login");$("regForm").classList.toggle("hidden",mode!=="reg");$("authMsg").innerHTML=""}
 $("loginForm").onsubmit=async e=>{
- e.preventDefault();const u=$("loginUser").value.trim(),p=$("loginPass").value;
+ e.preventDefault();
+ const u=$("loginUser").value.trim(),p=$("loginPass").value;
+ // Supabase Auth migration: if the login identifier looks like an email,
+ // authenticate against Supabase. The existing username/localStorage flow
+ // remains temporarily available for legacy members during migration.
+ if(u.includes("@")){
+   try{
+     const {data,error}=await supabaseClient.auth.signInWithPassword({email:u,password:p});
+     if(error||!data?.user){
+       $("authMsg").innerHTML='<div class="msg err">Email atau password salah.</div>';
+       return;
+     }
+     const {data:profile,error:profileError}=await supabaseClient.from("profiles").select("*").eq("id",data.user.id).single();
+     if(profileError||!profile){
+       await supabaseClient.auth.signOut();
+       $("authMsg").innerHTML='<div class="msg err">Akun Auth sudah ada, tetapi profil aplikasi belum ditemukan.</div>';
+       return;
+     }
+     if(profile.status!=="approved"){
+       await supabaseClient.auth.signOut();
+       $("authMsg").innerHTML='<div class="msg err">Akun masih menunggu approval Super Admin.</div>';
+       return;
+     }
+     currentUser={id:profile.id,name:profile.name,username:profile.username,wa:profile.wa||"",role:profile.role,status:profile.status,day:Number(profile.day||0),checks:{},sales:{},activityLog:[],leads:[]};
+     currentRole=profile.role==="super_admin"?"admin":"member";
+     saveAuthSession();
+     enterApp();
+     showPage(currentRole==="admin"?"adminDashboard":"memberDashboard");
+     if(currentRole==="member")setTimeout(()=>showActivePopup(true),180);
+     return;
+   }catch(err){
+     console.error("Supabase Auth:",err);
+     $("authMsg").innerHTML='<div class="msg err">Koneksi ke Supabase gagal. Coba lagi.</div>';
+     return;
+   }
+ }
  if(u===ADMIN_USER){
    const stored=localStorage.getItem("superAdminPasswordV9")||"omset10m";
    if(await verifyPassword(p,stored)){if(!stored.startsWith("pbkdf2$"))localStorage.setItem("superAdminPasswordV9",await createPasswordHash(p));currentRole="admin";currentUser={name:"Super Admin",username:ADMIN_USER,roleLabel:"Super Admin"};saveAuthSession();enterApp();showPage("adminDashboard");return}
@@ -537,7 +578,7 @@ function enterApp(){
  if(currentRole==="admin")renderAllAdmin();else renderMember();
  saveAuthSession();
 }
-function logout(){clearAuthSession();currentUser=null;currentRole=null;$("app").classList.add("hidden");$("auth").classList.remove("hidden");authMode("login");$("loginForm").reset()}
+async function logout(){try{await supabaseClient.auth.signOut()}catch(e){console.warn("Supabase signout:",e)}clearAuthSession();currentUser=null;currentRole=null;$("app").classList.add("hidden");$("auth").classList.remove("hidden");authMode("login");$("loginForm").reset()}
 function showPage(page){
  document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$("page-"+page).classList.add("active");
  document.querySelectorAll(".navItem[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===page));
