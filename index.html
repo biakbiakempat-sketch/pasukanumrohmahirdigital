@@ -919,40 +919,76 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   </div>
 </div>
 <script>
-/* Supabase password recovery UI */
+/* Supabase password recovery UI — robust hash session bootstrap */
 (function(){
   const screen=document.getElementById('supabaseRecoveryScreen');
   const form=document.getElementById('supabaseRecoveryForm');
   const msg=document.getElementById('supabaseRecoveryMsg');
   const btn=document.getElementById('supabaseRecoveryBtn');
+
+  function recoveryParams(){
+    const h=(location.hash||'').replace(/^#/,'');
+    return new URLSearchParams(h);
+  }
   function recoveryInUrl(){
     const h=location.hash||'', q=location.search||'';
     return /type=recovery/i.test(h+q) || /access_token=/i.test(h);
   }
   function showRecovery(){ if(screen) screen.classList.add('show'); }
+
+  async function bootstrapRecoverySession(){
+    if(!window.supabaseClient) return false;
+    const p=recoveryParams();
+    const accessToken=p.get('access_token');
+    const refreshToken=p.get('refresh_token');
+    if(accessToken && refreshToken){
+      const {data,error}=await window.supabaseClient.auth.setSession({
+        access_token:accessToken,
+        refresh_token:refreshToken
+      });
+      if(error) throw error;
+      return !!(data&&data.session);
+    }
+    const {data}=await window.supabaseClient.auth.getSession();
+    return !!(data&&data.session);
+  }
+
   async function initRecovery(){
     if(!window.supabaseClient) return;
-    if(recoveryInUrl()) showRecovery();
     try{
-      window.supabaseClient.auth.onAuthStateChange(function(event){
-        if(event==='PASSWORD_RECOVERY') showRecovery();
+      window.supabaseClient.auth.onAuthStateChange(function(event,session){
+        if(event==='PASSWORD_RECOVERY' && session) showRecovery();
       });
       if(recoveryInUrl()){
-        const {data}=await window.supabaseClient.auth.getSession();
-        if(data && data.session) showRecovery();
+        const ok=await bootstrapRecoverySession();
+        if(ok) showRecovery();
+        else if(msg){
+          msg.style.color='#a52c2c';
+          msg.textContent='Link recovery tidak memiliki session yang valid. Silakan minta link reset password baru.';
+        }
       }
-    }catch(e){ console.warn('Recovery init:',e); }
+    }catch(e){
+      console.warn('Recovery init:',e);
+      if(msg){
+        msg.style.color='#a52c2c';
+        msg.textContent='Link recovery tidak valid atau sudah kedaluwarsa. Silakan minta link reset password baru.';
+      }
+    }
   }
+
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',initRecovery);
   else initRecovery();
+
   form?.addEventListener('submit',async function(e){
     e.preventDefault();
     const p=document.getElementById('supabaseNewPassword').value;
     const c=document.getElementById('supabaseConfirmPassword').value;
     if(p.length<8){msg.style.color='#a52c2c';msg.textContent='Password minimal 8 karakter.';return;}
     if(p!==c){msg.style.color='#a52c2c';msg.textContent='Konfirmasi password belum sama.';return;}
-    btn.disabled=true; btn.textContent='Menyimpan...'; msg.textContent='';
+    btn.disabled=true;btn.textContent='Menyimpan...';msg.textContent='';
     try{
+      const {data:sessionData}=await window.supabaseClient.auth.getSession();
+      if(!sessionData?.session) throw new Error('Auth session missing!');
       const {error}=await window.supabaseClient.auth.updateUser({password:p});
       if(error) throw error;
       msg.style.color='#16734d';msg.textContent='Password berhasil diubah. Mengarahkan ke halaman login...';
