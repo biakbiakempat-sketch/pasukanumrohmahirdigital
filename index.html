@@ -519,12 +519,15 @@ function authMode(mode){$("tabLogin").classList.toggle("active",mode==="login");
 $("loginForm").onsubmit=async e=>{
  e.preventDefault();
  const u=$("loginUser").value.trim(),p=$("loginPass").value;
- // Supabase Auth migration: if the login identifier looks like an email,
- // authenticate against Supabase. The existing username/localStorage flow
- // remains temporarily available for legacy members during migration.
- if(u.includes("@")){
+ // Supabase Auth migration:
+ // Super Admin can keep using the existing username in the UI.
+ // The username is mapped to the Supabase Auth email behind the scenes.
+ const supabaseLoginEmail = u==="mahirdigitalumroh"
+   ? "biakbiakempat@gmail.com"
+   : (u.includes("@") ? u : null);
+ if(supabaseLoginEmail){
    try{
-     const {data,error}=await supabaseClient.auth.signInWithPassword({email:u,password:p});
+     const {data,error}=await supabaseClient.auth.signInWithPassword({email:supabaseLoginEmail,password:p});
      if(error||!data?.user){
        $("authMsg").innerHTML='<div class="msg err">Email atau password salah.</div>';
        return;
