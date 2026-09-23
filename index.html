@@ -862,6 +862,156 @@ function downloadExcel(filename,headers,rows){
 })();
 </script>
 
+
+<style id="closingMemberFeatureStyles">
+.closingGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.closingGrid .full{grid-column:1/-1}
+.closingSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.closingCard{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff}
+.incomeTableWrap{overflow:auto}.incomeTop{display:grid;grid-template-columns:1fr 1fr;gap:16px}.barChart{display:flex;align-items:flex-end;gap:12px;height:300px;padding:20px 10px;border:1px solid var(--line);border-radius:12px;background:#fafbfd;overflow-x:auto}.barItem{min-width:72px;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:7px}.bar{width:42px;background:var(--green);border-radius:7px 7px 0 0;min-height:3px}.barLabel{font-size:10px;text-align:center;max-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.barValue{font-size:10px;font-weight:900;color:var(--navy)}
+.activityMemberSearch{max-width:280px}
+@media(max-width:900px){.closingGrid,.closingSummary,.incomeTop{grid-template-columns:1fr 1fr}}@media(max-width:600px){.closingGrid,.closingSummary,.incomeTop{grid-template-columns:1fr}}
+</style>
+<script id="closingMemberFeatureScript">
+/* CLOSING MEMBER V1 */
+(function(){
+  const money=n=>Number(n||0).toLocaleString('id-ID');
+  const readClosing=m=>Array.isArray(m?.closingData)?m.closingData:[];
+  const saveMembers=()=>{try{if(typeof save==='function')save();else localStorage.setItem('pasukanUmrohMahirDigitalV6',JSON.stringify(members))}catch(e){}};
+  function addNav(containerId,pageId,label){
+    const nav=document.getElementById(containerId); if(!nav||nav.querySelector('[data-page="'+pageId+'"]'))return;
+    const d=document.createElement('div');d.className='navItem';d.dataset.page=pageId;d.textContent=label;
+    d.addEventListener('click',()=>showPage(pageId));nav.appendChild(d);
+  }
+  function addPage(id,html){
+    if(document.getElementById(id))return;
+    const content=document.querySelector('.content'); if(!content)return;
+    const s=document.createElement('section');s.className='page';s.id=id;s.innerHTML=html;content.appendChild(s);
+  }
+  function initUI(){
+    addNav('memberNav','memberClosing','💰 Closing');
+    addNav('adminNav','adminIncome','💰 Income Member');
+    addNav('adminNav','adminLeads','🎯 DATA LEADS');
+    addPage('page-memberClosing',
+      '<div class="title"><div><h2>💰 Closing</h2><p>Input data closing jamaah yang berhasil didapatkan.</p></div></div>'+
+      '<div class="panel"><h3>DATA CLOSING</h3><input id="closingEditId" type="hidden"/><div class="closingGrid">'+
+      '<div class="field"><label>Closing Atas Nama *</label><input id="cName" placeholder="Nama jamaah / pemesan"/></div>'+
+      '<div class="field"><label>Jumlah Invoice *</label><input id="cInvoice" type="number" min="1" value="1"/></div>'+
+      '<div class="field"><label>Jumlah Pax *</label><input id="cPax" type="number" min="1" value="1"/></div>'+
+      '<div class="field"><label>Nama Travel Umroh *</label><input id="cTravel" placeholder="Nama travel"/></div>'+
+      '<div class="field"><label>Nama Paket Umroh *</label><input id="cPackage" placeholder="Nama paket"/></div>'+
+      '<div class="field"><label>Jumlah Omset (Rp) *</label><input id="cOmset" type="number" min="0" placeholder="30000000"/></div>'+
+      '<div class="field"><label>Tanggal Closing *</label><input id="cDate" type="date"/></div></div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="saveClosing()">Simpan Closing</button><button class="btn gray" onclick="resetClosingForm()">Reset</button></div></div>'+
+      '<div class="panel"><div class="toolbar"><div><h3 style="margin:0">RINGKASAN CLOSING</h3><span class="small">Semua closing yang sudah disimpan.</span></div></div>'+
+      '<div class="closingSummary"><div class="closingCard"><div class="label">TOTAL INVOICE</div><div class="num" id="myClosingInvoices">0</div></div>'+
+      '<div class="closingCard"><div class="label">TOTAL PAX</div><div class="num" id="myClosingPax">0</div></div>'+
+      '<div class="closingCard"><div class="label">TOTAL OMSET</div><div class="num" id="myClosingOmset">Rp 0</div></div>'+
+      '<div class="closingCard"><div class="label">JUMLAH CLOSING</div><div class="num" id="myClosingCount">0</div></div></div></div>'+
+      '<div class="panel"><div class="tableWrap"><table><thead><tr><th>Tanggal</th><th>Atas Nama</th><th>Invoice</th><th>Pax</th><th>Travel</th><th>Paket</th><th>Omset</th><th>Aksi</th></tr></thead><tbody id="myClosingRows"></tbody></table></div></div>');
+    addPage('page-adminIncome',
+      '<div class="title"><div><h2>💰 INCOME MEMBER</h2><p>Semua data closing dari dashboard member.</p></div></div>'+
+      '<div class="panel"><div class="adminFilters">'+
+      '<div class="field"><label>Cari Nama Member</label><input id="incomeMemberSearch" class="activityMemberSearch" oninput="renderIncomeMember()" placeholder="Ketik nama member..."/></div>'+
+      '<div class="field"><label>Tanggal Mulai</label><input id="incomeStart" type="date" onchange="renderIncomeMember()"/></div>'+
+      '<div class="field"><label>Tanggal Akhir</label><input id="incomeEnd" type="date" onchange="renderIncomeMember()"/></div>'+
+      '<div class="field"><label>Urutan</label><select id="incomeSort" onchange="renderIncomeMember()"><option value="date_desc">Closing Terbaru</option><option value="date_asc">Closing Terlama</option><option value="member_az">Member A-Z</option></select></div></div></div>'+
+      '<div class="closingSummary"><div class="closingCard"><div class="label">TOTAL INVOICE</div><div class="num" id="incomeInvoiceTotal">0</div></div>'+
+      '<div class="closingCard"><div class="label">TOTAL PAX</div><div class="num" id="incomePaxTotal">0</div></div>'+
+      '<div class="closingCard"><div class="label">TOTAL OMSET</div><div class="num" id="incomeOmsetTotal">Rp 0</div></div>'+
+      '<div class="closingCard"><div class="label">JUMLAH MEMBER CLOSING</div><div class="num" id="incomeMemberTotal">0</div></div></div>'+
+      '<div class="incomeTop"><div class="panel"><h3>📊 Grafik Income Member — 10 Terbanyak</h3><div id="incomeBarChart" class="barChart"></div></div>'+
+      '<div class="panel"><h3>📋 Rekap Member</h3><div class="incomeTableWrap"><table><thead><tr><th>Member</th><th>Invoice</th><th>Pax</th><th>Omset</th></tr></thead><tbody id="incomeMemberSummaryRows"></tbody></table></div></div></div>'+
+      '<div class="panel"><div class="toolbar"><div><h3 style="margin:0">DATA CLOSING MEMBER</h3><span class="small">Data detail berasal dari input Closing member.</span></div></div><div class="incomeTableWrap"><table><thead><tr><th>Member</th><th>Tanggal</th><th>Invoice</th><th>Atas Nama</th><th>Pax</th><th>Travel Umroh</th><th>Paket Umroh</th><th>Omset</th></tr></thead><tbody id="incomeRows"></tbody></table></div></div>');
+  }
+  function resetClosingForm(){
+    if(!document.getElementById('cDate'))return;
+    $('closingEditId').value='';$('cName').value='';$('cInvoice').value=1;$('cPax').value=1;$('cTravel').value='';$('cPackage').value='';$('cOmset').value='';$('cDate').value=(typeof isoToday==='function'?isoToday():new Date().toISOString().slice(0,10));
+  }
+  function renderMemberClosing(){
+    const m=currentUser;if(!m||!document.getElementById('myClosingRows'))return;
+    const rows=readClosing(m).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+    const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0),pax=rows.reduce((n,x)=>n+Number(x.pax||0),0),om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
+    $('myClosingInvoices').textContent=inv;$('myClosingPax').textContent=pax;$('myClosingOmset').textContent='Rp '+money(om);$('myClosingCount').textContent=rows.length;
+    $('myClosingRows').innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc2(x.date)+'</td><td><b>'+esc2(x.name)+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc2(x.travel)+'</td><td>'+esc2(x.package)+'</td><td>Rp '+money(x.omset)+'</td><td><button class="btnMini" onclick="editClosing('+x.id+')">Edit</button> <button class="btnMini danger" onclick="deleteClosing('+x.id+')">Hapus</button></td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+  }
+  window.resetClosingForm=resetClosingForm;
+  window.saveClosing=function(){
+    if(!currentUser)return;
+    const name=$('cName').value.trim(),travel=$('cTravel').value.trim(),pkg=$('cPackage').value.trim(),date=$('cDate').value;
+    const invoice=Number($('cInvoice').value)||0,pax=Number($('cPax').value)||0,omset=Number($('cOmset').value)||0;
+    if(!name||!travel||!pkg||!date||invoice<1||pax<1||omset<0){alert('Lengkapi data closing dengan benar.');return}
+    currentUser.closingData=readClosing(currentUser);
+    const id=Number($('closingEditId').value)||Date.now();
+    const rec={id,name,invoice,pax,travel,package:pkg,omset,date,createdAt:Date.now()};
+    const ix=currentUser.closingData.findIndex(x=>x.id===id);
+    if(ix>=0)currentUser.closingData[ix]={...currentUser.closingData[ix],...rec};else currentUser.closingData.push(rec);
+    saveMembers();renderMemberClosing();try{renderAllAdmin()}catch(e){};resetClosingForm();alert('Data closing berhasil disimpan.');
+  };
+  window.editClosing=function(id){
+    const x=readClosing(currentUser).find(v=>Number(v.id)===Number(id));if(!x)return;
+    $('closingEditId').value=x.id;$('cName').value=x.name||'';$('cInvoice').value=x.invoice||1;$('cPax').value=x.pax||1;$('cTravel').value=x.travel||'';$('cPackage').value=x.package||'';$('cOmset').value=x.omset||0;$('cDate').value=x.date||isoToday();
+  };
+  window.deleteClosing=function(id){
+    if(!currentUser||!confirm('Hapus data closing ini?'))return;
+    currentUser.closingData=readClosing(currentUser).filter(x=>Number(x.id)!==Number(id));saveMembers();renderMemberClosing();try{renderAllAdmin()}catch(e){}
+  };
+  function incomeRows(){const a=[];memberRows().forEach(m=>readClosing(m).forEach(x=>a.push({...x,memberId:m.id,member:m.name})));return a}
+  window.renderIncomeMember=function(){
+    if(!document.getElementById('incomeRows'))return;
+    let rows=incomeRows();const q=($('incomeMemberSearch').value||'').toLowerCase().trim(),start=$('incomeStart').value,end=$('incomeEnd').value;
+    if(q)rows=rows.filter(x=>String(x.member||'').toLowerCase().includes(q));if(start)rows=rows.filter(x=>x.date>=start);if(end)rows=rows.filter(x=>x.date<=end);
+    const sort=$('incomeSort').value;rows.sort((a,b)=>sort==='member_az'?String(a.member).localeCompare(String(b.member)):sort==='date_asc'?String(a.date).localeCompare(String(b.date)):String(b.date).localeCompare(String(a.date)));
+    const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0),pax=rows.reduce((n,x)=>n+Number(x.pax||0),0),om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
+    $('incomeInvoiceTotal').textContent=inv;$('incomePaxTotal').textContent=pax;$('incomeOmsetTotal').textContent='Rp '+money(om);$('incomeMemberTotal').textContent=new Set(rows.map(x=>x.memberId)).size;
+    $('incomeRows').innerHTML=rows.length?rows.map(x=>'<tr><td><b>'+esc2(x.member)+'</b></td><td>'+esc2(x.date)+'</td><td>'+Number(x.invoice||0)+'</td><td>'+esc2(x.name)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc2(x.travel)+'</td><td>'+esc2(x.package)+'</td><td>Rp '+money(x.omset)+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+    const grouped={};rows.forEach(x=>{grouped[x.member]=grouped[x.member]||{member:x.member,invoice:0,pax:0,omset:0};grouped[x.member].invoice+=Number(x.invoice||0);grouped[x.member].pax+=Number(x.pax||0);grouped[x.member].omset+=Number(x.omset||0)});
+    const summary=Object.values(grouped).sort((a,b)=>String(a.member).localeCompare(String(b.member)));
+    $('incomeMemberSummaryRows').innerHTML=summary.length?summary.map(x=>'<tr><td><b>'+esc2(x.member)+'</b></td><td>'+x.invoice+'</td><td>'+x.pax+'</td><td>Rp '+money(x.omset)+'</td></tr>').join(''):'<tr><td colspan="4"><div class="empty">Belum ada closing.</div></td></tr>';
+    const top=summary.slice().sort((a,b)=>b.omset-a.omset).slice(0,10),max=Math.max(1,...top.map(x=>x.omset));
+    $('incomeBarChart').innerHTML=top.length?top.map(x=>'<div class="barItem"><div class="barValue">Rp '+money(x.omset)+'</div><div class="bar" style="height:'+Math.max(4,Math.round(x.omset/max*220))+'px" title="'+esc2(x.member)+'"></div><div class="barLabel">'+esc2(x.member)+'</div></div>').join(''):'<div class="empty" style="margin:auto">Belum ada data.</div>';
+  };
+  const oldShowPage=window.showPage;
+  window.showPage=function(page){const r=oldShowPage.apply(this,arguments);setTimeout(()=>{if(page==='memberClosing')renderMemberClosing();if(page==='adminIncome')renderIncomeMember();if(page==='adminLeads')renderAdminLeadReport()},30);return r};
+  const oldRenderMember=window.renderMember;
+  window.renderMember=function(){try{oldRenderMember.apply(this,arguments)}catch(e){}try{renderMemberClosing();const k=document.getElementById('mClose');if(k)k.textContent=readClosing(currentUser).length}catch(e){}};
+  const oldRenderAllAdmin=window.renderAllAdmin;
+  window.renderAllAdmin=function(){try{oldRenderAllAdmin.apply(this,arguments)}catch(e){}try{renderIncomeMember();renderAdminLeadReport()}catch(e){}};
+  window.addEventListener('storage',e=>{if(e.key==='pasukanUmrohMahirDigitalV6'){try{renderIncomeMember();renderMemberClosing()}catch(err){}}});
+  document.addEventListener('DOMContentLoaded',()=>{initUI();resetClosingForm();setTimeout(()=>{try{renderIncomeMember()}catch(e){}},100)});
+  if(document.readyState!=='loading'){initUI();resetClosingForm();setTimeout(()=>{try{renderIncomeMember()}catch(e){}},100)}
+})();
+</script>
+<script id="adminLeadSearchAndMemberAZ">
+/* Leads & activity visibility/search/A-Z fixes */
+(function(){
+  function enhance(){
+    const activityPanel=document.querySelector('#page-activities .adminFilters');
+    if(activityPanel&&!document.getElementById('adminActivityMemberSearch')){
+      const wrap=document.createElement('div');wrap.className='field';wrap.innerHTML='<label>Cari Nama Member</label><input id="adminActivityMemberSearch" class="activityMemberSearch" placeholder="Ketik nama member..."/>';
+      activityPanel.insertBefore(wrap,activityPanel.firstChild);
+      $('adminActivityMemberSearch').addEventListener('input',function(){
+        const q=this.value.toLowerCase().trim(),sel=$('adminActivityMember');if(!sel)return;const cur=sel.value;
+        sel.innerHTML='<option value="all">SEMUA MEMBER</option>'+memberRows().filter(m=>m.name.toLowerCase().includes(q)).map(m=>'<option value="'+m.id+'">'+esc2(m.name)+'</option>').join('');
+        if([...sel.options].some(o=>o.value===cur))sel.value=cur;renderAdminActivityReport();
+      });
+    }
+    const leadPanel=document.querySelector('#page-adminLeads .adminFilters');
+    if(leadPanel&&!document.getElementById('adminLeadMemberSearch')){
+      const wrap=document.createElement('div');wrap.className='field';wrap.innerHTML='<label>Cari Nama Member</label><input id="adminLeadMemberSearch" class="activityMemberSearch" placeholder="Ketik nama member..."/>';
+      leadPanel.insertBefore(wrap,leadPanel.firstChild);
+      $('adminLeadMemberSearch').addEventListener('input',function(){
+        const q=this.value.toLowerCase().trim(),sel=$('adminLeadMemberFilter');if(!sel)return;const cur=sel.value;
+        sel.innerHTML='<option value="all">SEMUA MEMBER</option>'+memberRows().filter(m=>m.name.toLowerCase().includes(q)).map(m=>'<option value="'+m.id+'">'+esc2(m.name)+'</option>').join('');
+        if([...sel.options].some(o=>o.value===cur))sel.value=cur;renderAdminLeadReport();
+      });
+    }
+    const membersTitle=document.querySelector('#page-members .title p');if(membersTitle)membersTitle.textContent='Kelola seluruh member yang mendaftar, akun, approval, dan progress. Data diurutkan A-Z.';
+  }
+  const oldRenderMembers=window.renderMembers;
+  window.renderMembers=function(){try{oldRenderMembers.apply(this,arguments)}catch(e){}try{enhance()}catch(e){}};
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(enhance,50));
+})();
+</script>
+
 </body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
