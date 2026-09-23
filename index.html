@@ -99,6 +99,25 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 <div class="field"><label>Password</label><input id="regPassword" required="" type="password"/></div>
 <button class="btn" style="width:100%">Daftar Member</button>
 </form>
+<script id="authEmergencyFix">
+(function(){
+  function $(id){return document.getElementById(id)}
+  window.authMode=function(mode){
+    var login=$("loginForm"), reg=$("regForm"), tl=$("tabLogin"), tr=$("tabReg"), msg=$("authMsg");
+    if(!login||!reg)return;
+    login.classList.toggle("hidden",mode!=="login");
+    reg.classList.toggle("hidden",mode!=="reg");
+    if(tl)tl.classList.toggle("active",mode==="login");
+    if(tr)tr.classList.toggle("active",mode==="reg");
+    if(msg)msg.innerHTML="";
+  };
+  document.addEventListener("DOMContentLoaded",function(){
+    var tl=$("tabLogin"),tr=$("tabReg");
+    if(tl)tl.onclick=function(e){e.preventDefault();window.authMode("login");};
+    if(tr)tr.onclick=function(e){e.preventDefault();window.authMode("reg");};
+  });
+})();
+</script>
 </div>
 </div>
 <div class="app hidden" id="app">
