@@ -412,7 +412,7 @@ const supabaseClient=(window.supabase&&typeof window.supabase.createClient==="fu
 window.supabaseClient=supabaseClient;
 </script>
 <script>
-const ADMIN_USER="mahirdigitalumroh", ADMIN_PASS=localStorage.getItem("superAdminPasswordV9")||"omset10m";
+const ADMIN_USER="mahirdigitalumroh", ADMIN_PASS=localStorage.getItem("superAdminPasswordV9")||"closing1000jamaah";
 // ---------- AUTH V2 ----------
 const AUTH_SESSION_KEY="pasukanUmrohAuthSessionV2";
 const PBKDF2_ITERATIONS=120000;
@@ -584,7 +584,7 @@ window.loginFormSubmit=async e=>{
    }
  }
  if(u===ADMIN_USER){
-   const stored=localStorage.getItem("superAdminPasswordV9")||"omset10m";
+   const stored=localStorage.getItem("superAdminPasswordV9")||"closing1000jamaah";
    if(await verifyPassword(p,stored)){if(!stored.startsWith("pbkdf2$"))localStorage.setItem("superAdminPasswordV9",await createPasswordHash(p));currentRole="admin";currentUser={name:"Super Admin",username:ADMIN_USER,roleLabel:"Super Admin"};saveAuthSession();enterApp();showPage("adminDashboard");return}
    $("authMsg").innerHTML='<div class="msg err">Username atau password salah.</div>';return;
  }
