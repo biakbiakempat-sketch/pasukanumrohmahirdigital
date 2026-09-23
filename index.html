@@ -1012,6 +1012,18 @@ function downloadExcel(filename,headers,rows){
 })();
 </script>
 
+<style id="authInteractionFix">
+/* AUTH INTERACTION FIX */
+#auth{position:relative!important;z-index:1}
+#auth .loginScene{z-index:0!important;pointer-events:none!important}
+#auth .authBox{position:relative!important;z-index:100000!important;pointer-events:auto!important}
+#auth .authBox input,
+#auth .authBox textarea,
+#auth .authBox select,
+#auth .authBox button{position:relative!important;z-index:100001!important;pointer-events:auto!important}
+#auth .authBox input:disabled,
+#auth .authBox button:disabled{pointer-events:auto}
+</style>
 </body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
