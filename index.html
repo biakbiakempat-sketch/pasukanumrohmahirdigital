@@ -1358,9 +1358,9 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   }
 
   // ---------- SETTINGS / PASSWORD ----------
-  function renderSettings(){const c=cfg(); if($('setProgramName'))$('setProgramName').value=c.programName||'Pasukan Umroh Mahir Digital';if($('setDuration'))$('setDuration').value=String(c.duration||60);if($('setUnlock'))$('setUnlock').value=String(c.unlock||100);if($('setAdminPassword'))$('setAdminPassword').value=localStorage.getItem('superAdminPasswordV9')||'omset10m'}
+  function renderSettings(){const c=cfg(); if($('setProgramName'))$('setProgramName').value=c.programName||'Pasukan Umroh Mahir Digital';if($('setDuration'))$('setDuration').value=String(c.duration||60);if($('setUnlock'))$('setUnlock').value=String(c.unlock||100);if($('setAdminPassword'))$('setAdminPassword').value=''}
   window.saveProgramSettings=function(){const c={programName:$('setProgramName').value.trim()||'Pasukan Umroh Mahir Digital',duration:Number($('setDuration').value)||60,unlock:Number($('setUnlock').value)||100};put(CFG.settingsKey,c);renderSettings();renderAllAdmin();if(currentRole==='member')renderMember();alert('Pengaturan program disimpan.')};
-  window.saveAdminPassword=function(){const p=$('setAdminPassword').value;if(!p){alert('Password tidak boleh kosong.');return}localStorage.setItem('superAdminPasswordV9',p);alert('Password Super Admin disimpan. Halaman akan dimuat ulang.');location.reload()};
+  window.saveAdminPassword=function(){alert('Password Super Admin sekarang dikelola oleh Supabase Auth. Silakan ubah password melalui Supabase Auth, bukan melalui pengaturan aplikasi ini.');};
 
   // ---------- DATA MEMBER ----------
   function progressOf(m){return Math.max(0,Math.min(100,Math.round(((Number(m.day||0))/60)*100)))}
