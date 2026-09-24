@@ -132,3 +132,11 @@ revoke execute on function public.member_admin_create(text,text,text,text) from 
 grant execute on function public.member_admin_create(text,text,text,text) to authenticated;
 revoke execute on function public.member_admin_delete(uuid) from public,anon,authenticated;
 grant execute on function public.member_admin_delete(uuid) to authenticated;
+
+
+-- Defense-in-depth: members authenticate only through RPCs, so the anonymous role
+-- must not have direct table access to identity or sales data.
+revoke all on table public.profiles from anon;
+revoke all on table public.leads from anon;
+revoke all on table public.sales_activities from anon;
+revoke all on table public.closings from anon;
