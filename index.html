@@ -854,7 +854,7 @@ function downloadExcel(filename,headers,rows){
       btn.innerHTML="☰ &nbsp; BUKA MENU";
     }
     function toggleMenu(){
-      const nav=(window.currentRole==="admin" || !admin.classList.contains("hidden"))?admin:member;
+      const nav=admin.classList.contains("hidden")?member:admin;
       const open=nav.classList.contains("mobile-menu-open");
       closeMenu();
       if(!open){
@@ -865,13 +865,8 @@ function downloadExcel(filename,headers,rows){
     }
     btn.addEventListener("click",toggleMenu);
     document.querySelectorAll(".navItem[data-page]").forEach(function(item){
-      item.addEventListener("click",function(){closeMenu();});
+      item.addEventListener("click",closeMenu);
     });
-    const obs=new MutationObserver(function(){
-      closeMenu();
-    });
-    obs.observe(member,{attributes:true,attributeFilter:["class"]});
-    obs.observe(admin,{attributes:true,attributeFilter:["class"]});
     window.addEventListener("resize",function(){
       if(window.innerWidth>720)closeMenu();
     });
