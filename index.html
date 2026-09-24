@@ -96,6 +96,66 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
   .content{padding:15px 12px 40px}
 }
 </style>
+
+<style id="mobileHeaderPrecisionFix">
+@media(max-width:720px){
+  .top{
+    min-height:118px;
+    height:auto;
+    padding:14px 16px;
+    gap:14px;
+    align-items:center;
+  }
+  .top>div:first-child{
+    min-width:0;
+    flex:1 1 auto;
+  }
+  .top h1{
+    font-size:16px;
+    line-height:1.18;
+    letter-spacing:0;
+    margin:0;
+  }
+  .top small{
+    font-size:11px;
+    line-height:1.45;
+  }
+  .top .user{
+    flex:0 0 auto;
+    min-width:0;
+    gap:8px;
+  }
+  .top .avatar{
+    width:44px!important;
+    min-width:44px!important;
+    max-width:44px!important;
+    height:44px!important;
+    min-height:44px!important;
+    max-height:44px!important;
+    flex:0 0 44px!important;
+    border-radius:50%!important;
+    padding:0!important;
+    aspect-ratio:1/1;
+    display:grid;
+    place-items:center;
+  }
+  .top .user>div:nth-child(2){
+    min-width:0;
+    max-width:72px;
+  }
+  .top .user b,
+  .top .user small{
+    display:block;
+    overflow-wrap:anywhere;
+  }
+  .top .user .btn{
+    flex:0 0 auto;
+    white-space:nowrap;
+    margin-left:2px!important;
+    padding:9px 12px!important;
+  }
+}
+</style>
 </head>
 <body>
 <div class="auth" id="auth" style="position:relative;overflow:hidden">
