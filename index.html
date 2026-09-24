@@ -813,6 +813,83 @@ function deleteAdminLead(mid,id){const m=members.find(x=>x.id===mid);if(!m||!con
 function xlsEscape(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 function downloadExcel(filename,headers,rows){
  const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table>
+
+<script>
+<!-- PHASE B1: MEMBER ACTIVITY DB SYNC -->
+(function(){
+  const ACT_TOKEN_KEY='pasukanUmrohMemberSessionTokenV1';
+  function actToken(){try{return sessionStorage.getItem(ACT_TOKEN_KEY)||''}catch(e){return ''}}
+  function setActToken(v){try{if(v)sessionStorage.setItem(ACT_TOKEN_KEY,v);else sessionStorage.removeItem(ACT_TOKEN_KEY)}catch(e){}}
+  function activityFromDbRows(rows){
+    return (Array.isArray(rows)?rows:[]).map(x=>({
+      id:Number(x.id),date:x.activity_date||'',day:Number(x.program_day||0),
+      japri:Number(x.japri||0),follow:Number(x.follow_up||0),conv:Number(x.conversation||0),
+      lead:Number(x.lead||0),offer:Number(x.offer||0),closing:Number(x.closing||0),
+      referral:Number(x.referral||0),notes:x.notes||''
+    }));
+  }
+  async function loadMemberActivityDb(){
+    if(currentRole!=='member'||!currentUser)return;
+    const token=actToken();if(!token)return;
+    try{
+      const {data,error}=await supabaseClient.rpc('member_activity_list',{p_token:token});
+      if(error||!data?.success)throw error||new Error(data?.message||'Gagal membaca aktivitas.');
+      currentUser.activityLog=activityFromDbRows(data.rows);
+      currentUser.sales={};
+      currentUser.activityLog.forEach(x=>{if(x.day)currentUser.sales[x.day]={...x}});
+      if(typeof renderMember==='function')renderMember();
+      if(typeof renderMemberActivity==='function')renderMemberActivity();
+    }catch(e){console.warn('Member activity load:',e)}
+  }
+  const oldLogin=window.loginFormSubmit;
+  window.loginFormSubmit=async function(e){
+    await oldLogin.apply(this,arguments);
+    if(currentRole==='member')setTimeout(loadMemberActivityDb,120);
+  };
+  window.saveActivity=async function(){
+    if(!currentUser||currentRole!=='member'){return;}
+    const token=actToken();
+    if(!token){alert('Sesi member belum siap. Silakan logout lalu login kembali.');return;}
+    const day=currentDay(),date=$('activityDate').value||isoToday();
+    const payload={
+      p_token:token,p_activity_date:date,p_program_day:day,
+      p_japri:Number($('aJapri').value)||0,p_follow_up:Number($('aFollow').value)||0,
+      p_conversation:Number($('aConv').value)||0,p_lead:Number($('aLead').value)||0,
+      p_offer:Number($('aOffer').value)||0,p_closing:Number($('aClose').value)||0,
+      p_referral:Number($('aReferral').value)||0,p_notes:$('aNotes').value.trim()
+    };
+    try{
+      const {data,error}=await supabaseClient.rpc('member_activity_upsert',payload);
+      if(error||!data?.success)throw error||new Error(data?.message||'Gagal menyimpan aktivitas.');
+      await loadMemberActivityDb();
+      alert('Aktivitas sales berhasil disimpan ke database.');
+    }catch(err){console.error('Member activity save:',err);alert('Gagal menyimpan aktivitas: '+(err?.message||err));}
+  };
+  const oldLogout=window.logout;
+  window.logout=async function(){
+    const token=actToken();
+    try{if(token&&supabaseClient)await supabaseClient.rpc('member_session_logout',{p_token:token})}catch(e){console.warn('Member session logout:',e)}
+    setActToken('');
+    return oldLogout.apply(this,arguments);
+  };
+  const oldPhaseLogin=window.loginFormSubmit;
+  window.loginFormSubmit=async function(e){
+    e.preventDefault();
+    const u=$('loginUser').value.trim(),p=$('loginPass').value;
+    if(u===ADMIN_USER){return oldPhaseLogin.apply(this,arguments)}
+    try{
+      const {data,error}=await supabaseClient.rpc('member_login',{p_username:u,p_password:p});
+      if(error)throw error;
+      if(!data?.success){msg(data?.message||'Username atau password salah.');return}
+      setActToken(data.token||'');
+      currentUser=profileMap(data.profile);currentRole='member';members=[currentUser];
+      saveAuthSession();enterApp();showPage('memberDashboard');
+      setTimeout(()=>{try{showActivePopup(true)}catch(e){};loadMemberActivityDb()},180);
+    }catch(err){console.error('Member DB login B1',err);msg('Login gagal: '+(err?.message||'koneksi database bermasalah'))}
+  };
+  window.umrohMemberActivityDb={load:loadMemberActivityDb};
+})();
+</script>
 </body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
