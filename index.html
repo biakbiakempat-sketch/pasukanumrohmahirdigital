@@ -215,6 +215,78 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
   #page-adminIncome .incomeTableWrap th,#page-adminIncome .incomeTableWrap td{padding:8px 7px;font-size:12px}
 }
 </style>
+<style id="superAdminMemberScale">
+/* SUPER ADMIN MASTER SCALE — same visual density as Member dashboard */
+#page-adminDashboard,#page-members,#page-adminProgram,#page-checklists,#page-activities,#page-adminLeads,#page-rewards,#page-adminMaterials,#page-schedule,#page-infoPopup,#page-settings{font-size:13px}
+
+/* Page title */
+#page-adminDashboard .title h2,#page-members .title h2,#page-adminProgram .title h2,#page-checklists .title h2,#page-activities .title h2,#page-adminLeads .title h2,#page-rewards .title h2,#page-adminMaterials .title h2,#page-schedule .title h2,#page-infoPopup .title h2,#page-settings .title h2{font-size:22px;line-height:1.2;margin-bottom:6px}
+#page-adminDashboard .title p,#page-members .title p,#page-adminProgram .title p,#page-checklists .title p,#page-activities .title p,#page-adminLeads .title p,#page-rewards .title p,#page-adminMaterials .title p,#page-schedule .title p,#page-infoPopup .title p,#page-settings .title p{font-size:12px;line-height:1.35}
+
+/* Panels/cards */
+#page-adminDashboard .panel,#page-members .panel,#page-adminProgram .panel,#page-checklists .panel,#page-activities .panel,#page-adminLeads .panel,#page-rewards .panel,#page-adminMaterials .panel,#page-schedule .panel,#page-infoPopup .panel,#page-settings .panel{padding:12px;border-radius:10px;margin-bottom:12px}
+#page-adminDashboard .card,#page-members .card,#page-adminProgram .card,#page-checklists .card,#page-activities .card,#page-adminLeads .card,#page-rewards .card,#page-adminMaterials .card,#page-schedule .card,#page-infoPopup .card,#page-settings .card{padding:12px;border-radius:10px}
+#page-adminDashboard .panel h3,#page-members .panel h3,#page-adminProgram .panel h3,#page-checklists .panel h3,#page-activities .panel h3,#page-adminLeads .panel h3,#page-rewards .panel h3,#page-adminMaterials .panel h3,#page-schedule .panel h3,#page-infoPopup .panel h3,#page-settings .panel h3{font-size:16px;line-height:1.3}
+
+/* KPI / icons — match Member */
+#page-adminDashboard .kpi,#page-activities .kpi,#page-adminLeads .kpi{gap:8px}
+#page-adminDashboard .kpi .card.stat,#page-activities .kpi .card,#page-adminLeads .kpi .card{padding:9px}
+#page-adminDashboard .kpi .icon{width:30px;height:30px;font-size:13px;border-radius:10px}
+#page-adminDashboard .kpi .label,#page-activities .kpi .label,#page-adminLeads .kpi .label{font-size:11px}
+#page-adminDashboard .kpi .num,#page-activities .kpi .num,#page-adminLeads .kpi .num{font-size:18px}
+
+/* Toolbar / filters / buttons */
+#page-adminDashboard .toolbar,#page-members .toolbar,#page-checklists .toolbar,#page-activities .toolbar,#page-adminLeads .toolbar,#page-rewards .toolbar,#page-adminMaterials .toolbar,#page-schedule .toolbar,#page-infoPopup .toolbar{gap:8px}
+#page-adminDashboard .btn,#page-members .btn,#page-adminProgram .btn,#page-checklists .btn,#page-activities .btn,#page-adminLeads .btn,#page-rewards .btn,#page-adminMaterials .btn,#page-schedule .btn,#page-infoPopup .btn,#page-settings .btn{padding:10px 13px;font-size:13px;border-radius:10px}
+#page-adminDashboard .btnMini,#page-members .btnMini,#page-checklists .btnMini{padding:8px 10px;font-size:11px;border-radius:9px}
+#page-members .search,#page-activities input,#page-activities select,#page-adminLeads input,#page-adminLeads select,#page-infoPopup input,#page-infoPopup select,#page-infoPopup textarea,#page-settings input,#page-settings select,#page-settings textarea{padding:10px 11px;font-size:13px;border-radius:10px}
+#page-activities .field label,#page-adminLeads .field label,#page-infoPopup .field label,#page-settings .field label{font-size:11px;margin-bottom:5px}
+
+/* All admin tables use Member scale */
+#page-adminDashboard table,#page-members table,#page-activities table,#page-adminLeads table,#page-schedule table,#page-infoPopup table{width:100%;font-size:13px}
+#page-adminDashboard th,#page-adminDashboard td,#page-members th,#page-members td,#page-activities th,#page-activities td,#page-adminLeads th,#page-adminLeads td,#page-schedule th,#page-schedule td,#page-infoPopup th,#page-infoPopup td{padding:10px 8px;font-size:13px;line-height:1.3}
+#page-adminDashboard th,#page-members th,#page-activities th,#page-adminLeads th,#page-schedule th,#page-infoPopup th{font-size:10px}
+
+/* Admin program / checklist controls */
+#page-adminProgram .dayGrid{gap:5px}
+#page-adminProgram .dayBtn{font-size:11px;padding:9px 3px;border-radius:10px}
+#page-checklists .sopToolbar{gap:7px}
+#page-checklists .sopToolbar button{padding:9px 12px;font-size:12px;border-radius:9px}
+#page-checklists .daySopList{font-size:13px}
+#page-checklists input,#page-checklists textarea,#page-checklists select{padding:9px 10px;font-size:13px;border-radius:9px}
+#page-checklists button{font-size:12px}
+
+/* Cards generated for rewards/materials */
+#page-rewards .three,#page-adminMaterials .three{gap:8px}
+#page-rewards .three .card,#page-adminMaterials .three .card{padding:12px}
+#page-rewards .three .card h3,#page-adminMaterials .three .card h3{font-size:15px}
+
+/* Charts / attention / info */
+#page-adminDashboard .scatterWrap{overflow-x:auto}
+#page-adminDashboard .scatter{font-size:10px}
+#page-adminDashboard .empty{font-size:13px}
+#page-adminDashboard .muted,#page-members .muted,#page-adminProgram .muted,#page-checklists .muted,#page-activities .muted,#page-adminLeads .muted,#page-rewards .muted,#page-adminMaterials .muted,#page-schedule .muted,#page-infoPopup .muted,#page-settings .muted{font-size:12px}
+
+/* Mobile: exactly the same compact density used by Member */
+@media(max-width:720px){
+  #page-adminDashboard .title,#page-members .title,#page-adminProgram .title,#page-checklists .title,#page-activities .title,#page-adminLeads .title,#page-rewards .title,#page-adminMaterials .title,#page-schedule .title,#page-infoPopup .title,#page-settings .title{gap:10px}
+  #page-adminDashboard .title h2,#page-members .title h2,#page-adminProgram .title h2,#page-checklists .title h2,#page-activities .title h2,#page-adminLeads .title h2,#page-rewards .title h2,#page-adminMaterials .title h2,#page-schedule .title h2,#page-infoPopup .title h2,#page-settings .title h2{font-size:22px}
+  #page-adminDashboard .title p,#page-members .title p,#page-adminProgram .title p,#page-checklists .title p,#page-activities .title p,#page-adminLeads .title p,#page-rewards .title p,#page-adminMaterials .title p,#page-schedule .title p,#page-infoPopup .title p,#page-settings .title p{font-size:12px}
+  #page-adminDashboard .panel,#page-members .panel,#page-adminProgram .panel,#page-checklists .panel,#page-activities .panel,#page-adminLeads .panel,#page-rewards .panel,#page-adminMaterials .panel,#page-schedule .panel,#page-infoPopup .panel,#page-settings .panel{padding:12px;margin-bottom:12px}
+  #page-adminDashboard .kpi,#page-activities .kpi,#page-adminLeads .kpi{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  #page-adminDashboard .kpi .card.stat,#page-activities .kpi .card,#page-adminLeads .kpi .card{padding:9px}
+  #page-adminDashboard .kpi .icon{width:30px;height:30px;font-size:13px}
+  #page-adminDashboard .kpi .num,#page-activities .kpi .num,#page-adminLeads .kpi .num{font-size:18px}
+  #page-members .tableWrap,#page-adminDashboard .tableWrap,#page-activities .tableWrap,#page-adminLeads .tableWrap,#page-schedule .tableWrap,#page-infoPopup .tableWrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #page-adminDashboard th,#page-adminDashboard td,#page-members th,#page-members td,#page-activities th,#page-activities td,#page-adminLeads th,#page-adminLeads td,#page-schedule th,#page-schedule td,#page-infoPopup th,#page-infoPopup td{padding:10px 8px;font-size:13px;white-space:nowrap}
+  #page-adminDashboard th,#page-members th,#page-activities th,#page-adminLeads th,#page-schedule th,#page-infoPopup th{font-size:10px}
+  #page-checklists .sopToolbar{gap:6px}
+  #page-checklists .sopToolbar button{padding:9px 10px;font-size:12px}
+  #page-adminProgram .dayGrid{gap:5px}
+  #page-adminProgram .dayBtn{font-size:11px;padding:9px 3px}
+  #page-rewards .three,#page-adminMaterials .three{grid-template-columns:1fr;gap:8px}
+}
+</style>
 </head>
 <body>
 <div class="auth" id="auth" style="position:relative;overflow:hidden">
