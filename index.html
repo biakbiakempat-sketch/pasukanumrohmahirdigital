@@ -899,42 +899,7 @@ function deleteAdminLead(mid,id){const m=members.find(x=>x.id===mid);if(!m||!con
 function xlsEscape(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 function downloadExcel(filename,headers,rows){
  const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table>
-<script id="mobileDropdownMenuScript">
-(function(){
-  function initMobileDropdown(){
-    const btn=document.getElementById("mobileMenuToggle");
-    const member=document.getElementById("memberNav");
-    const admin=document.getElementById("adminNav");
-    if(!btn||!member||!admin||btn.dataset.ready==="1")return;
-    btn.dataset.ready="1";
-    function closeMenu(){
-      member.classList.remove("mobile-menu-open");
-      admin.classList.remove("mobile-menu-open");
-      btn.setAttribute("aria-expanded","false");
-      btn.innerHTML="☰ &nbsp; BUKA MENU";
-    }
-    function toggleMenu(){
-      const nav=admin.classList.contains("hidden")?member:admin;
-      const open=nav.classList.contains("mobile-menu-open");
-      closeMenu();
-      if(!open){
-        nav.classList.add("mobile-menu-open");
-        btn.setAttribute("aria-expanded","true");
-        btn.innerHTML="✕ &nbsp; TUTUP MENU";
-      }
-    }
-    btn.addEventListener("click",toggleMenu);
-    document.querySelectorAll(".navItem[data-page]").forEach(function(item){
-      item.addEventListener("click",closeMenu);
-    });
-    window.addEventListener("resize",function(){
-      if(window.innerWidth>720)closeMenu();
-    });
-  }
-  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",initMobileDropdown);
-  else initMobileDropdown();
-})();
-</script>
+
 </body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
@@ -1714,5 +1679,40 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   window.umrohForceSync=function(){syncNow(true)};
 })();
 </script>
-</body>
+<script id="mobileDropdownMenuScript">
+(function(){
+  function initMobileDropdown(){
+    const btn=document.getElementById("mobileMenuToggle");
+    const member=document.getElementById("memberNav");
+    const admin=document.getElementById("adminNav");
+    if(!btn||!member||!admin||btn.dataset.ready==="1")return;
+    btn.dataset.ready="1";
+    function closeMenu(){
+      member.classList.remove("mobile-menu-open");
+      admin.classList.remove("mobile-menu-open");
+      btn.setAttribute("aria-expanded","false");
+      btn.innerHTML="☰ &nbsp; BUKA MENU";
+    }
+    function toggleMenu(){
+      const nav=admin.classList.contains("hidden")?member:admin;
+      const open=nav.classList.contains("mobile-menu-open");
+      closeMenu();
+      if(!open){
+        nav.classList.add("mobile-menu-open");
+        btn.setAttribute("aria-expanded","true");
+        btn.innerHTML="✕ &nbsp; TUTUP MENU";
+      }
+    }
+    btn.addEventListener("click",toggleMenu);
+    document.querySelectorAll(".navItem[data-page]").forEach(function(item){
+      item.addEventListener("click",closeMenu);
+    });
+    window.addEventListener("resize",function(){
+      if(window.innerWidth>720)closeMenu();
+    });
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",initMobileDropdown);
+  else initMobileDropdown();
+})();
+</script></body>
 </html>
