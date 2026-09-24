@@ -898,7 +898,66 @@ function editAdminLead(mid,id){
 function deleteAdminLead(mid,id){const m=members.find(x=>x.id===mid);if(!m||!confirm("Hapus lead ini?"))return;m.leads=(m.leads||[]).filter(x=>x.id!==id);save();renderAllAdmin();renderAdminLeadReport();}
 function xlsEscape(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 function downloadExcel(filename,headers,rows){
- const html=`<html><head><meta charset="UTF-8"><style id="memberCompactUI">@media(max-width:720px){#page-memberDashboard .kpi,#page-activity .kpi{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}#page-memberDashboard .kpi .card.stat,#page-activity .kpi .card{padding:9px}#page-memberDashboard .kpi .icon{width:30px;height:30px;font-size:13px}#page-memberDashboard .kpi .num,#page-activity .kpi .num{font-size:18px}#page-memberDashboard .reportMini{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}#page-memberDashboard .reportMini .card{padding:9px 10px}#page-memberDashboard .reportMini .num{font-size:19px}#page-memberDashboard .filterBar{display:grid;grid-template-columns:1fr 1fr;gap:8px}#page-memberDashboard .filterBar .field{min-width:0}#page-memberDashboard .filterBar .field:nth-child(3),#page-memberDashboard .filterBar .btn{grid-column:1/-1}#page-memberDashboard .tableWrap th,#page-memberDashboard .tableWrap td,#page-leads .tableWrap th,#page-leads .tableWrap td{padding:6px 5px;font-size:9px}#page-memberDashboard .tableWrap th,#page-leads .tableWrap th{font-size:8px}#page-memberDashboard .check{padding:9px 10px}#page-memberDashboard .check b{font-size:12px}#page-memberDashboard .panel,#page-program .panel,#page-activity .panel,#page-leads .panel,#page-reward .panel,#page-materials .panel,#page-profile .panel{padding:12px;margin-bottom:12px}#page-memberDashboard .title h2,#page-program .title h2,#page-activity .title h2,#page-leads .title h2,#page-reward .title h2,#page-materials .title h2,#page-profile .title h2{font-size:20px}}@media(min-width:721px){#page-memberDashboard .reportMini .card{padding:10px}#page-memberDashboard .reportMini .num{font-size:21px}#page-memberDashboard .tableWrap th,#page-memberDashboard .tableWrap td,#page-leads .tableWrap th,#page-leads .tableWrap td{font-size:10px;padding:7px 6px}}</style></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table>
+ const html=`<html><head><meta charset="UTF-8"><style id="memberCompactUI">@media(max-width:720px){#page-memberDashboard .kpi,#page-activity .kpi{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}#page-memberDashboard .kpi .card.stat,#page-activity .kpi .card{padding:9px}#page-memberDashboard .kpi .icon{width:30px;height:30px;font-size:13px}#page-memberDashboard .kpi .num,#page-activity .kpi .num{font-size:18px}#page-memberDashboard .reportMini{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}#page-memberDashboard .reportMini .card{padding:9px 10px}#page-memberDashboard .reportMini .num{font-size:19px}#page-memberDashboard .filterBar{display:grid;grid-template-columns:1fr 1fr;gap:8px}#page-memberDashboard .filterBar .field{min-width:0}#page-memberDashboard .filterBar .field:nth-child(3),#page-memberDashboard .filterBar .btn{grid-column:1/-1}#page-memberDashboard .tableWrap th,#page-memberDashboard .tableWrap td,#page-leads .tableWrap th,#page-leads .tableWrap td{padding:6px 5px;font-size:9px}#page-memberDashboard .tableWrap th,#page-leads .tableWrap th{font-size:8px}#page-memberDashboard .check{padding:9px 10px}#page-memberDashboard .check b{font-size:12px}#page-memberDashboard .panel,#page-program .panel,#page-activity .panel,#page-leads .panel,#page-reward .panel,#page-materials .panel,#page-profile .panel{padding:12px;margin-bottom:12px}#page-memberDashboard .title h2,#page-program .title h2,#page-activity .title h2,#page-leads .title h2,#page-reward .title h2,#page-materials .title h2,#page-profile .title h2{font-size:20px}}@media(min-width:721px){#page-memberDashboard .reportMini .card{padding:10px}#page-memberDashboard .reportMini .num{font-size:21px}#page-memberDashboard .tableWrap th,#page-memberDashboard .tableWrap td,#page-leads .tableWrap th,#page-leads .tableWrap td{font-size:10px;padding:7px 6px}}</style><style id="memberChecklistScale">
+/* Samakan seluruh UI Member dengan skala checklist */
+#page-memberDashboard,#page-program,#page-activity,#page-leads,#page-reward,#page-materials,#page-profile{
+  font-size:13px;
+}
+#page-memberDashboard .panel,#page-program .panel,#page-activity .panel,#page-leads .panel,#page-reward .panel,#page-materials .panel,#page-profile .panel{
+  padding:12px;border-radius:10px;margin-bottom:12px;
+}
+#page-memberDashboard .panel h3,#page-program .panel h3,#page-activity .panel h3,#page-leads .panel h3,#page-reward .panel h3,#page-materials .panel h3,#page-profile .panel h3{
+  font-size:16px;margin-bottom:10px;
+}
+#page-memberDashboard .title h2,#page-program .title h2,#page-activity .title h2,#page-leads .title h2,#page-reward .title h2,#page-materials .title h2,#page-profile .title h2{
+  font-size:22px;
+}
+#page-memberDashboard .title p,#page-program .title p,#page-activity .title p,#page-leads .title p,#page-reward .title p,#page-materials .title p,#page-profile .title p{
+  font-size:12px;
+}
+#page-memberDashboard .card,#page-activity .card,#page-leads .card,#page-reward .card,#page-materials .card{
+  padding:12px;border-radius:10px;
+}
+#page-memberDashboard .reportMini .card{padding:10px 12px}
+#page-memberDashboard .reportMini .label,#page-activity .label,#page-leads .label,#page-reward .label,#page-materials .label{font-size:10px}
+#page-memberDashboard .reportMini .num,#page-activity .num,#page-leads .num{font-size:20px}
+#page-memberDashboard .reportTabs .reportTab{font-size:12px;padding:8px 12px;border-radius:9px}
+#page-memberDashboard .filterBar{gap:8px}
+#page-memberDashboard .filterBar .field label,#page-activity .field label,#page-leads .field label,#page-profile .field label{font-size:11px;margin-bottom:5px}
+#page-memberDashboard input,#page-activity input,#page-activity textarea,#page-leads input,#page-leads select,#page-leads textarea,#page-profile input{
+  padding:10px 11px;font-size:13px;border-radius:10px;
+}
+#page-memberDashboard .btn,#page-activity .btn,#page-leads .btn,#page-reward .btn,#page-materials .btn{
+  padding:10px 13px;font-size:13px;border-radius:10px;
+}
+#page-memberDashboard table,#page-leads table{font-size:11px}
+#page-memberDashboard th,#page-memberDashboard td,#page-leads th,#page-leads td{
+  padding:8px 7px;font-size:11px;
+}
+#page-memberDashboard th,#page-leads th{font-size:9px}
+#page-memberDashboard .checkList{gap:3px}
+#page-memberDashboard .check{
+  padding:12px;border-radius:10px;gap:10px;
+}
+#page-memberDashboard .check b{font-size:13px;line-height:1.35}
+#page-memberDashboard .check input{width:18px;height:18px}
+#page-program .dayBtn{font-size:12px;padding:10px 5px;border-radius:10px}
+@media(max-width:720px){
+  #page-memberDashboard .kpi,#page-activity .kpi{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  #page-memberDashboard .kpi .card.stat,#page-activity .kpi .card{padding:9px}
+  #page-memberDashboard .kpi .icon{width:30px;height:30px;font-size:13px}
+  #page-memberDashboard .kpi .num,#page-activity .kpi .num{font-size:18px}
+  #page-memberDashboard .reportMini{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  #page-memberDashboard .filterBar{display:grid;grid-template-columns:1fr 1fr}
+  #page-memberDashboard .filterBar .field{min-width:0}
+  #page-memberDashboard .filterBar .field:nth-child(3),#page-memberDashboard .filterBar .btn{grid-column:1/-1}
+  #page-memberDashboard .tableWrap,#page-leads .tableWrap{overflow-x:auto}
+  #page-memberDashboard th,#page-memberDashboard td,#page-leads th,#page-leads td{padding:7px 6px;font-size:10px}
+  #page-memberDashboard .check b{font-size:13px}
+  #page-program .dayGrid{gap:5px}
+  #page-program .dayBtn{font-size:11px;padding:9px 3px}
+}
+</style></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table>
 
 </body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
