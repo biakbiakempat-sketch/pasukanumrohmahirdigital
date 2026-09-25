@@ -1625,16 +1625,17 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   async function syncCentralConfig(key,value){
     try{
       const c=window.supabaseClient;
-      if(!c)return;
-      const {error}=await c.from('program_configs').upsert({
-        config_key:key,
-        config_value:value,
-        updated_at:new Date().toISOString()
-      },{onConflict:'config_key'});
-      if(error)throw error;
+      if(!c)throw new Error('Koneksi Supabase belum siap.');
+      if(currentRole==='admin'){
+        const {data,error}=await c.rpc('admin_config_save',{p_config_key:key,p_config_value:value});
+        if(error)throw error;
+        if(!data?.success)throw new Error(data?.message||'Gagal menyimpan konfigurasi.');
+      }else{
+        throw new Error('Hanya Super Admin yang dapat menyimpan konfigurasi.');
+      }
     }catch(e){
       console.error('Central config save '+key+':',e);
-      notify('Gagal menyimpan '+key+' ke Supabase.');
+      notify('Gagal menyimpan '+key+' ke Supabase: '+(e?.message||e));
     }
   }
   const put=(k,v)=>{
@@ -3390,5 +3391,104 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     if(currentRole==='admin'){renderMembersV3();renderApprovalV3()}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
+
+<!-- CENTRAL MEMBER DELIVERY + CHECKLIST FIX V8 -->
+<style id="centralMemberDeliveryFixV8">
+#memberChecks{position:relative!important;z-index:20!important;pointer-events:auto!important}
+#memberChecks .check{position:relative!important;z-index:21!important;pointer-events:auto!important;cursor:pointer!important}
+#memberChecks .check input{position:relative!important;z-index:22!important;pointer-events:auto!important;cursor:pointer!important}
+#memberPopupOverlay{z-index:50000!important}
+#memberPopupOverlay.show{pointer-events:auto!important}
+</style>
+<script id="centralMemberDeliveryFixV8">
+(function(){
+  const S=()=>window.supabaseClient||null;
+  const T=()=>window.umrohMemberSession?.get?.()||'';
+  const cfg=()=>window.__umrohCentralConfig||{};
+  const clone=v=>{try{return JSON.parse(JSON.stringify(v))}catch(e){return v}};
+  const tasksFor=day=>{
+    const c=cfg().checklist;
+    if(c&&c[day]&&Array.isArray(c[day].tasks))return c[day].tasks;
+    if(typeof window.tasksForDay==='function')return window.tasksForDay(day)||[];
+    return [];
+  };
+  const stateFor=(day)=>{
+    currentUser.checks=currentUser.checks||{};
+    currentUser.checks[day]=currentUser.checks[day]||{};
+    const st=currentUser.checks[day];
+    tasksFor(day).forEach((_,i)=>{if(typeof st[i]!=='boolean')st[i]=false});
+    return st;
+  };
+
+  window.renderInfoBars=function(){
+    const arr=Array.isArray(cfg().info_bars)?cfg().info_bars:[];
+    const active=arr.filter(x=>x&&x.active!==false);
+    const items=active.length?active.map(x=>'📢 <b>'+String(x.title||'Info').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))+'</b> • '+String(x.text||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))):['📢 Belum ada Info Bar aktif.'];
+    document.querySelectorAll('.infoTrack').forEach(t=>{const html=items.map(x=>'<div class="infoItem">'+x+'</div>').join('');t.innerHTML=html+html});
+  };
+
+  window.forceMemberPopup=function(){
+    if(currentRole!=='member'||!currentUser)return false;
+    const arr=Array.isArray(cfg().popups)?cfg().popups:[];
+    const x=arr.filter(v=>v&&v.active!==false).sort((a,b)=>Number(b.updatedAt||b.createdAt||b.id||0)-Number(a.updatedAt||a.createdAt||a.id||0))[0];
+    if(!x)return false;
+    const ov=$('memberPopupOverlay');if(!ov)return false;
+    const img=$('memberPopupImage'),title=$('memberPopupTitle'),txt=$('memberPopupText'),btn=$('memberPopupButton');
+    if(x.image){img.src=x.image;img.style.display='block'}else{img.removeAttribute('src');img.style.display='none'}
+    title.textContent=x.title||'';title.style.display=x.title?'block':'none';
+    txt.textContent=x.text||'';txt.style.display=x.text?'block':'none';
+    if(x.button&&x.link){btn.textContent=x.button;btn.href=x.link;btn.style.display='inline-flex'}else btn.style.display='none';
+    ov.classList.add('show');
+    return true;
+  };
+
+  window.toggleCheck=async function(i,val){
+    if(currentRole!=='member'||!currentUser)return;
+    const day=currentDay(),st=stateFor(day);
+    st[i]=!!val;
+    try{
+      const sb=S();if(!sb||!T())throw new Error('Sesi member belum siap.');
+      const {data,error}=await sb.rpc('member_checklist_upsert',{p_token:T(),p_program_day:day,p_checks:st});
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Checklist gagal disimpan.');
+      currentUser.checks[day]=clone(st);
+      if(typeof renderMember==='function')renderMember();
+    }catch(e){
+      st[i]=!val;
+      const input=document.querySelector('#memberChecks input[data-check-index="'+i+'"]');
+      if(input)input.checked=st[i];
+      alert('Checklist gagal disimpan ke database: '+(e?.message||e));
+    }
+  };
+
+  function bindChecks(){
+    const wrap=$('memberChecks');if(!wrap)return;
+    wrap.querySelectorAll('input[type="checkbox"]').forEach((input,i)=>{
+      input.dataset.checkIndex=String(i);
+      input.disabled=false;
+      input.style.pointerEvents='auto';
+      input.onclick=function(e){e.stopPropagation()};
+      input.onchange=function(){window.toggleCheck(i,input.checked)};
+    });
+  }
+
+  const baseRender=window.renderMember;
+  window.renderMember=function(){
+    try{if(typeof baseRender==='function')baseRender.apply(this,arguments)}catch(e){console.warn('member render base',e)}
+    try{renderInfoBars();bindChecks()}catch(e){}
+    setTimeout(()=>{try{bindChecks();if(!document.hidden)window.forceMemberPopup()}catch(e){}},150);
+  };
+
+  async function loadAgain(){
+    try{
+      if(typeof window.loadMemberCentral==='function')await window.loadMemberCentral();
+      if(typeof window.renderMember==='function')window.renderMember();
+    }catch(e){console.warn('central member refresh',e)}
+  }
+
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&currentRole==='member')setTimeout(loadAgain,100)});
+  setTimeout(()=>{if(currentRole==='member')loadAgain()},900);
 })();
 </script>
