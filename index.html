@@ -2274,5 +2274,161 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     };
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
-})();</script></body>
+})();</script>
+<script id="supabaseMemberDataFinalFix">
+/* FINAL MEMBER DATA SYNC — Supabase is the source of truth for member activity. */
+(function(){
+  const S=()=>window.supabaseClient||null;
+  const T=()=>window.umrohMemberSession?.get?.()||'';
+  const safeReload=async()=>{try{if(typeof loadMemberCentral==='function')await loadMemberCentral();}catch(e){console.error('Member reload:',e)}};
+
+  function leadPayload(){
+    const src=$('lSource')?.value||'';
+    const plan=$('lPlan')?.value||'';
+    return {
+      p_token:T(),
+      p_id:$('editLeadId')?.value||null,
+      p_lead_date:$('lDate')?.value||isoToday(),
+      p_lead_time:$('lTime')?.value||null,
+      p_name:$('lName')?.value.trim()||'',
+      p_city:$('lCity')?.value.trim()||'',
+      p_contact:$('lContact')?.value.trim()||'',
+      p_source:src==='Lainnya'?($('lSourceOther')?.value.trim()||'Lainnya'):src,
+      p_response:$('lResponse')?.value||'',
+      p_plan:plan==='Lainnya'?($('lPlanOther')?.value.trim()||'Lainnya'):plan,
+      p_funnel:$('lFunnel')?.value||'',
+      p_closing:$('lClosing')?.value||'Belum Closing',
+      p_closing_date:$('lClosingDate')?.value||null,
+      p_fu1:$('lFu1')?.value||null,p_fu1_response:$('lFu1Response')?.value||'',
+      p_fu2:$('lFu2')?.value||null,p_fu2_response:$('lFu2Response')?.value||'',
+      p_fu3:$('lFu3')?.value||null,p_fu3_response:$('lFu3Response')?.value||'',
+      p_no_close:$('lNoClose')?.value.trim()||'',
+      p_cs:$('lCs')?.value.trim()||currentUser?.name||'',
+      p_note:$('lNote')?.value.trim()||'',
+      p_score:0
+    };
+  }
+
+  window.saveLead=async function(){
+    if(currentRole!=='member'||!currentUser)return;
+    const p=leadPayload();
+    if(!p.p_name||!p.p_contact){alert('Nama dan kontak wajib diisi.');return}
+    if(!S()||!T()){alert('Sesi member belum siap. Silakan login kembali.');return}
+    try{
+      const {data,error}=await S().rpc('member_lead_upsert',p);
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Gagal menyimpan lead.');
+      resetLeadForm();await safeReload();alert('Lead berhasil disimpan ke database.');
+    }catch(e){console.error('Lead save:',e);alert('Gagal menyimpan lead: '+(e?.message||e))}
+  };
+
+  window.deleteLead=async function(id){
+    if(!currentUser||!confirm('Hapus lead ini?'))return;
+    try{
+      const {data,error}=await S().rpc('member_lead_delete',{p_token:T(),p_id:String(id)});
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Gagal menghapus lead.');
+      await safeReload();renderMemberLeadReport();alert('Lead berhasil dihapus.');
+    }catch(e){console.error('Lead delete:',e);alert('Gagal menghapus lead: '+(e?.message||e))}
+  };
+
+  window.renderMyLeadsTable=function(){
+    const rows=currentUser?.leads||[],body=$('myLeadRows');if(!body)return;
+    body.innerHTML=rows.length?rows.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(l=>{
+      const id=JSON.stringify(String(l.id));
+      return '<tr><td>'+esc(l.date)+'</td><td><b>'+esc(l.name)+'</b></td><td>'+esc(l.contact)+'</td><td>'+esc(l.source)+'</td><td>'+esc(l.response)+'</td><td>'+esc(l.plan)+'</td><td>'+esc(l.funnel)+'</td><td>'+esc(l.closing)+'</td><td><button class="btnMini" onclick="editLead('+id+')">Edit</button> <button class="btnMini" style="background:#fff0f0;color:#a33" onclick="deleteLead('+id+')">Hapus</button></td></tr>'
+    }).join(''):'<tr><td colspan="9"><div class="empty">Belum ada lead. Klik "+ Lead Baru" untuk mulai.</div></td></tr>';
+  };
+
+  const oldEditLead=window.editLead;
+  window.editLead=function(id){
+    const l=(currentUser?.leads||[]).find(x=>String(x.id)===String(id));
+    if(!l){if(typeof oldEditLead==='function')return oldEditLead(id);return}
+    $('editLeadId').value=l.id;$('lDate').value=l.date||isoToday();$('lTime').value=l.time||'';
+    $('lName').value=l.name||'';$('lCity').value=l.city||'';$('lContact').value=l.contact||'';
+    $('lSource').value=['WhatsApp Organik','Instagram Organik','Facebook Organik','TikTok Organik','Referral','Website','Event'].includes(l.source)?l.source:'Lainnya';
+    $('lSourceOther').value=$('lSource').value==='Lainnya'?(l.source||''):'';
+    $('lResponse').value=l.response||'Hot';
+    $('lPlan').value=['Oktober 2026','November 2026','Desember 2026','Januari 2027','Awal Ramadhan 1448 H','Umrah Ramadhan 1448 H','Itikaf 1448 H','Syawal 1448 H','Maret 2027','Daftar Haji'].includes(l.plan)?l.plan:'Lainnya';
+    $('lPlanOther').value=$('lPlan').value==='Lainnya'?(l.plan||''):'';
+    $('lFunnel').value=l.funnel||'Greeting';$('lClosing').value=l.closing||'Belum Closing';$('lClosingDate').value=l.closingDate||'';
+    $('lFu1').value=l.fu1||'';$('lFu1Response').value=l.fu1Response||'Respon';$('lFu2').value=l.fu2||'';$('lFu2Response').value=l.fu2Response||'Respon';
+    $('lFu3').value=l.fu3||'';$('lFu3Response').value=l.fu3Response||'Respon';$('lNoClose').value=l.noClose||'';
+    $('lCs').value=currentUser.name||'';$('lNote').value=l.note||'';$('leadFormTitle').textContent='Edit Lead';
+    try{toggleLeadOtherFields()}catch(e){} showPage('leads');
+  };
+
+  window.saveClosing=async function(){
+    if(currentRole!=='member'||!currentUser)return;
+    const p={
+      p_token:T(),p_id:$('closingEditId')?.value||null,p_closing_name:$('cName')?.value.trim()||'',
+      p_invoice:Number($('cInvoice')?.value)||0,p_pax:Number($('cPax')?.value)||0,
+      p_travel:$('cTravel')?.value.trim()||'',p_package:$('cPackage')?.value.trim()||'',
+      p_omset:Number($('cOmset')?.value)||0,p_closing_date:$('cDate')?.value||isoToday()
+    };
+    if(!p.p_closing_name||!p.p_travel||!p.p_package||p.p_invoice<1||p.p_pax<1){alert('Lengkapi data closing dengan benar.');return}
+    try{
+      const {data,error}=await S().rpc('member_closing_upsert',p);
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Gagal menyimpan closing.');
+      resetClosingForm();await safeReload();renderMemberClosing();alert('Closing berhasil disimpan ke database.');
+    }catch(e){console.error('Closing save:',e);alert('Gagal menyimpan closing: '+(e?.message||e))}
+  };
+
+  window.editClosing=function(id){
+    const x=(currentUser?.closingData||[]).find(v=>String(v.id)===String(id));if(!x)return;
+    $('closingEditId').value=x.id;$('cName').value=x.name||'';$('cInvoice').value=x.invoice||1;$('cPax').value=x.pax||1;
+    $('cTravel').value=x.travel||'';$('cPackage').value=x.package||'';$('cOmset').value=x.omset||0;$('cDate').value=x.date||isoToday();
+  };
+  window.deleteClosing=async function(id){
+    if(!currentUser||!confirm('Hapus data closing ini?'))return;
+    try{
+      const {data,error}=await S().rpc('member_closing_delete',{p_token:T(),p_id:String(id)});
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Gagal menghapus closing.');
+      await safeReload();renderMemberClosing();alert('Closing berhasil dihapus.');
+    }catch(e){console.error('Closing delete:',e);alert('Gagal menghapus closing: '+(e?.message||e))}
+  };
+
+  const oldRenderClosing=window.renderMemberClosing;
+  window.renderMemberClosing=function(){
+    if(typeof oldRenderClosing==='function')oldRenderClosing.apply(this,arguments);
+    const rows=currentUser?.closingData||[],body=$('myClosingRows');if(!body)return;
+    body.innerHTML=rows.length?rows.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(x=>{
+      const id=JSON.stringify(String(x.id));
+      return '<tr><td>'+esc(x.date)+'</td><td><b>'+esc(x.name)+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel)+'</td><td>'+esc(x.package)+'</td><td>Rp '+money(x.omset)+'</td><td><button class="btnMini" onclick="editClosing('+id+')">Edit</button> <button class="btnMini danger" onclick="deleteClosing('+id+')">Hapus</button></td></tr>'
+    }).join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+  };
+
+  window.toggleCheck=async function(i,val){
+    if(!currentUser||currentRole!=='member')return;
+    const day=currentDay(),st=checkState(currentUser,day);st[i]=!!val;
+    try{
+      const {data,error}=await S().rpc('member_checklist_upsert',{p_token:T(),p_program_day:day,p_checks:st});
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Gagal menyimpan checklist.');
+      currentUser.checks=currentUser.checks||{};currentUser.checks[day]=st;renderMember();
+    }catch(e){console.error('Checklist save:',e);alert('Checklist gagal disimpan ke database: '+(e?.message||e))}
+  };
+
+  window.finishMemberDay=async function(){
+    if(!currentUser||currentRole!=='member')return;
+    const day=currentDay(),tasks=tasksForDay(day),st=checkState(currentUser,day),dur=Number(cfg().duration||60),req=unlockRequirement(day);
+    const donePct=tasks.length?Math.round(tasks.filter((_,i)=>st[i]).length/tasks.length*100):100;
+    if(donePct<req){alert('Checklist Hari '+day+' baru '+donePct+'%. Minimal '+req+'% untuk membuka hari berikutnya.');return}
+    const next=Math.min(dur,day+1);
+    try{
+      if(day<dur){
+        const {data,error}=await S().rpc('member_day_update',{p_token:T(),p_day:next});
+        if(error)throw error;if(!data?.success)throw new Error(data?.message||'Gagal memperbarui hari member.');
+        currentUser.day=next;await safeReload();showPage('memberDashboard');alert('Hari '+day+' selesai. Hari '+next+' terbuka.');
+      }else{
+        alert('Program '+dur+' hari selesai.');
+      }
+    }catch(e){console.error('Member day update:',e);alert('Gagal menyimpan progress hari: '+(e?.message||e))}
+  };
+
+  // Re-check server state whenever the app becomes visible.
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&currentRole==='member')setTimeout(safeReload,150)});
+  // Super Admin sees new member/lead/closing changes without manually refreshing the page.
+  setInterval(function(){if(currentRole==='admin'&&typeof adminRefresh==='function')adminRefresh()},5000);
+})();
+</script>
+</body>
 </html>
