@@ -1191,6 +1191,7 @@ function jumpMemberDay(day){if(day!==currentDay()){alert("Tampilan program mengi
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 
 /* Clean start: legacy member migration intentionally disabled. Supabase is the only member data source. */
+</script>
 <style>
 #supabaseRecoveryScreen{position:fixed;inset:0;z-index:100000;background:linear-gradient(135deg,#080d55,#172477);display:none;place-items:center;padding:20px}
 #supabaseRecoveryScreen.show{display:grid}
@@ -1216,6 +1217,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     </form>
   </div>
 </div>
+<script>
 /* Supabase password recovery UI — robust hash session bootstrap */
 (function(){
   const screen=document.getElementById('supabaseRecoveryScreen');
@@ -1298,6 +1300,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     }
   });
 })();
+</script>
 <style id="closingMemberFeatureStyles">
 .closingGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.closingGrid .full{grid-column:1/-1}
 .closingSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.closingCard{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff}
@@ -1305,6 +1308,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 .activityMemberSearch{max-width:280px}
 @media(max-width:900px){.closingGrid,.closingSummary,.incomeTop{grid-template-columns:1fr 1fr}}@media(max-width:600px){.closingGrid,.closingSummary,.incomeTop{grid-template-columns:1fr}}
 </style>
+<script>
 /* CLOSING MEMBER V1 */
 (function(){
   const money=n=>Number(n||0).toLocaleString('id-ID');
@@ -1442,6 +1446,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   window.renderMembers=function(){try{typeof oldRenderMembers==='function'&&oldRenderMembers.apply(this,arguments)}catch(e){}try{enhance()}catch(e){}};
   document.addEventListener('DOMContentLoaded',()=>setTimeout(enhance,50));
 })();
+</script>
 <style id="authInteractionFix">
 /* AUTH INTERACTION FIX */
 #auth{position:relative!important;z-index:1}
@@ -1454,6 +1459,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 #auth .authBox input:disabled,
 #auth .authBox button:disabled{pointer-events:auto}
 </style>
+<script>
 (function(){
   function ready(){
     var f=document.getElementById('loginForm'), b=f&&f.querySelector('button[type="submit"]');
