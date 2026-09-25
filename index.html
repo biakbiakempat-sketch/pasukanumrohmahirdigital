@@ -966,7 +966,6 @@ function downloadExcel(filename,headers,rows){
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
 
-<script id="phase3CentralClient">
 /* PHASE 3 — CENTRAL DATA CLIENT
    Member identity: profiles + short-lived custom session token.
    Shared data: leads, activities, closings, checklist state, program config.
@@ -1192,7 +1191,6 @@ function jumpMemberDay(day){if(day!==currentDay()){alert("Tampilan program mengi
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 
 /* Clean start: legacy member migration intentionally disabled. Supabase is the only member data source. */
-</script>
 <style>
 #supabaseRecoveryScreen{position:fixed;inset:0;z-index:100000;background:linear-gradient(135deg,#080d55,#172477);display:none;place-items:center;padding:20px}
 #supabaseRecoveryScreen.show{display:grid}
@@ -1218,7 +1216,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     </form>
   </div>
 </div>
-<script>
 /* Supabase password recovery UI — robust hash session bootstrap */
 (function(){
   const screen=document.getElementById('supabaseRecoveryScreen');
@@ -1301,7 +1298,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     }
   });
 })();
-</script>
 <style id="closingMemberFeatureStyles">
 .closingGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.closingGrid .full{grid-column:1/-1}
 .closingSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.closingCard{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff}
@@ -1309,7 +1305,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 .activityMemberSearch{max-width:280px}
 @media(max-width:900px){.closingGrid,.closingSummary,.incomeTop{grid-template-columns:1fr 1fr}}@media(max-width:600px){.closingGrid,.closingSummary,.incomeTop{grid-template-columns:1fr}}
 </style>
-<script id="closingMemberFeatureScript">
 /* CLOSING MEMBER V1 */
 (function(){
   const money=n=>Number(n||0).toLocaleString('id-ID');
@@ -1418,8 +1413,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   document.addEventListener('DOMContentLoaded',()=>{initUI();resetClosingForm();setTimeout(()=>{try{renderIncomeMember()}catch(e){}},100)});
   if(document.readyState!=='loading'){initUI();resetClosingForm();setTimeout(()=>{try{renderIncomeMember()}catch(e){}},100)}
 })();
-</script>
-<script id="adminLeadSearchAndMemberAZ">
 /* Leads & activity visibility/search/A-Z fixes */
 (function(){
   function enhance(){
@@ -1449,7 +1442,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   window.renderMembers=function(){try{typeof oldRenderMembers==='function'&&oldRenderMembers.apply(this,arguments)}catch(e){}try{enhance()}catch(e){}};
   document.addEventListener('DOMContentLoaded',()=>setTimeout(enhance,50));
 })();
-</script>
 <style id="authInteractionFix">
 /* AUTH INTERACTION FIX */
 #auth{position:relative!important;z-index:1}
@@ -1462,7 +1454,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 #auth .authBox input:disabled,
 #auth .authBox button:disabled{pointer-events:auto}
 </style>
-<script id="loginSafetyPatch">
 (function(){
   function ready(){
     var f=document.getElementById('loginForm'), b=f&&f.querySelector('button[type="submit"]');
@@ -1473,9 +1464,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ready);else ready();
 })();
-</script>
 
-<script>
 /* V13 — Info Bar & Pop Up management based on V12 */
 (function(){
   const INFO_KEY='pasukanUmrohInfoBarsV12';
@@ -1598,8 +1587,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   window.deleteScheduleItem=function(id){oldDeleteSchedule(id);renderInfoBars();};
   setTimeout(()=>{renderInfoBarAdmin();renderPopupAdmin();renderInfoBars();},0);
 })();
-</script>
-<script>
 /* V9 — Super Admin detail revision based on V7. Existing V7 data/model is preserved. */
 (function(){
   const CFG={
@@ -1917,16 +1904,12 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   }
   setTimeout(function(){if(typeof window.forceMemberPopup==='function')window.forceMemberPopup()},1200);
 })();
-</script>
-<script>
 (function(){
   const K='pasukanUmrohPopupShownThisLogin';
   const oldLogout=window.logout;
   if(typeof oldLogout==='function'){window.logout=function(){try{sessionStorage.removeItem(K)}catch(e){} return typeof oldLogout==='function'?oldLogout.apply(this,arguments):undefined;};}
 })();
-</script>
 
-<script>
 /* V16 / PHASE A.1 — sinkronisasi browser tetap aktif untuk setting non-member.
    Data member sekarang berasal dari Supabase; localStorage tidak lagi menjadi sumber kebenaran member. */
 (function(){
@@ -1957,10 +1940,8 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   setInterval(function(){syncNow(false)},1000);
   window.umrohForceSync=function(){syncNow(true)};
 })();
-</script>
 
 <!-- PHASE A: MEMBER DATABASE AUTH. Super Admin stays on Supabase Auth; members use profiles + RPC. -->
-<script>
 (function(){
   const sb=()=>window.supabaseClient||null;
   const msg=(s,ok=false)=>{const e=$('authMsg');if(e)e.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+esc(String(s||''))+'</div>'};
@@ -2549,11 +2530,35 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 
   const rf=document.getElementById('regForm');
   if(rf){
-    const oldReg=rf.onsubmit;
-    rf.onsubmit=function(e){
-      const u=(document.getElementById('regUsername')?.value||'').trim().toLowerCase();
-      if(u)pendingSet(u);
-      return typeof oldReg==='function'?oldReg.apply(this,arguments):true;
+    rf.onsubmit=async function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      const name=(document.getElementById('regName')?.value||'').trim();
+      const username=(document.getElementById('regUsername')?.value||'').trim().toLowerCase();
+      const wa=(document.getElementById('regWa')?.value||'').trim();
+      const password=document.getElementById('regPassword')?.value||'';
+      const m=document.getElementById('authMsg');
+      const msgLocal=(t,ok)=>{if(m)m.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+escHtml(t)+'</div>'};
+      if(!name||!username||!wa||!password){msgLocal('Lengkapi semua data.');return false}
+      if(password.length<8){msgLocal('Password minimal 8 karakter.');return false}
+      const c=client();
+      if(!c){msgLocal('Koneksi database belum siap. Silakan refresh halaman.');return false}
+      try{
+        msgLocal('Mendaftarkan akun ke database...',true);
+        const {data,error}=await c.rpc('member_register',{p_name:name,p_username:username,p_wa:wa,p_password:password});
+        if(error)throw error;
+        if(!data?.success){msgLocal(data?.message||'Pendaftaran gagal.');return false}
+        pendingSet(username);
+        rf.reset();
+        authMode('login');
+        msgLocal('Pendaftaran berhasil. Akun kamu sedang menunggu persetujuan Super Admin.',true);
+        showNotice('⏳ Pendaftaran Berhasil','Akun @'+username+' sudah terdaftar dan sedang menunggu persetujuan Super Admin. Setelah disetujui, pemberitahuan akan muncul di halaman ini.');
+        return false;
+      }catch(err){
+        console.error('Final member register:',err);
+        msgLocal('Pendaftaran gagal: '+(err?.message||'koneksi database bermasalah'));
+        return false;
+      }
     };
   }
 
