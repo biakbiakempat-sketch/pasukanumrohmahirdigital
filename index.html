@@ -1033,7 +1033,7 @@ function downloadExcel(filename,headers,rows){
   const oldLogin=window.loginFormSubmit;
   window.loginFormSubmit=async function(e){
     const u=(document.getElementById('loginUser')?.value||'').trim();
-    if(u===ADMIN_USER && typeof oldLogin==='function')return oldLogin.apply(this,arguments);
+    if(u==='mahirdigitalumroh' && typeof oldLogin==='function')return oldLogin.apply(this,arguments);
 
     e?.preventDefault?.();
     const p=document.getElementById('loginPass')?.value||'';
@@ -1060,7 +1060,8 @@ function downloadExcel(filename,headers,rows){
       }
       pendingSet('');
       if(window.umrohMemberSession)window.umrohMemberSession.set(data.token||'');
-      currentUser=profileMap(data.profile);
+      const pr=data.profile||{};
+      currentUser={id:pr.id,name:pr.name||'',username:pr.username||u,wa:pr.wa||'',role:pr.role||'member',status:pr.status||'approved',day:Number(pr.day||1),checks:{},sales:{},activityLog:[],leads:[],registeredAt:pr.registered_at||today(),approvedAt:pr.approved_at||null};
       currentRole='member';
       members=[currentUser];
       saveAuthSession();
