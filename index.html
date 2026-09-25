@@ -2812,5 +2812,127 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   },5000);
 })();
 </script>
+<script id="superAdminFullRightsFixV1">
+(function(){
+  const S=()=>window.supabaseClient||null;
+  const escA=v=>typeof esc2==='function'?esc2(v):String(v??'');
+  async function requireAdmin(){
+    if(currentRole!=='admin'||!S())throw new Error('Super Admin belum login.');
+  }
+
+  window.saveAdminLead=async function(){
+    try{
+      await requireAdmin();
+      const memberId=String($('adminLeadMember')?.value||'');
+      const name=$('alName')?.value.trim()||'';
+      const contact=$('alContact')?.value.trim()||'';
+      if(!memberId||!name||!contact){alert('Member, nama lead, dan kontak wajib diisi.');return}
+      const id=String($('adminLeadEditId')?.value||'').trim();
+      const payload={
+        member_id:memberId,
+        lead_date:$('alDate')?.value||isoToday(),
+        lead_time:$('alTime')?.value||null,
+        name,city:$('alCity')?.value.trim()||'',contact,
+        source:$('alSource')?.value||'',response:$('alResponse')?.value||'',
+        plan:$('alPlan')?.value||'',funnel:$('alFunnel')?.value||'',
+        closing:$('alClosing')?.value||'Belum Closing',
+        closing_date:$('alClosingDate')?.value||null,
+        fu1:$('alFu1')?.value||null,fu1_response:$('alFu1Response')?.value||null,
+        fu2:$('alFu2')?.value||null,fu2_response:$('alFu2Response')?.value||null,
+        fu3:$('alFu3')?.value||null,fu3_response:$('alFu3Response')?.value||null,
+        no_close:$('alNoClose')?.value.trim()||null,cs:$('alCs')?.value.trim()||null,
+        note:$('alNote')?.value.trim()||null,score:Number($('alScore')?.value)||0
+      };
+      if(id)payload.id=id;
+      const {error}=await S().from('member_leads').upsert(payload,{onConflict:'id'});
+      if(error)throw error;
+      closeAdminLeadForm();
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();else if(typeof window.umrohAdminRefreshBridge==='function')await window.umrohAdminRefreshBridge();
+      alert('Lead berhasil disimpan ke database.');
+    }catch(e){console.error('Admin lead save:',e);alert('Gagal menyimpan lead: '+(e?.message||e))}
+  };
+
+  window.deleteAdminLead=async function(mid,id){
+    if(!confirm('Hapus lead ini dari database?'))return;
+    try{
+      await requireAdmin();
+      const {error}=await S().from('member_leads').delete().eq('id',String(id));
+      if(error)throw error;
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      alert('Lead berhasil dihapus dari database.');
+    }catch(e){console.error('Admin lead delete:',e);alert('Gagal menghapus lead: '+(e?.message||e))}
+  };
+
+  const baseLeadReport=window.renderAdminLeadReport;
+  window.renderAdminLeadReport=function(){
+    if(!$('adminLeadMemberFilter'))return;
+    try{
+      fillMemberSelect('adminLeadMemberFilter');ensureAdminDateFilters();
+      const rows=allLeadRows($('adminLeadMemberFilter').value,$('adminLeadStart').value,$('adminLeadEnd').value);
+      $('leadTotal').textContent=rows.length;
+      $('leadHot').textContent=rows.filter(l=>String(l.response||'').toLowerCase()==='hot').length;
+      $('leadWarm').textContent=rows.filter(l=>String(l.response||'').toLowerCase()==='warm').length;
+      $('leadCold').textContent=rows.filter(l=>String(l.response||'').toLowerCase()==='cold').length;
+      $('leadNoResp').textContent=rows.filter(l=>String(l.response||'').toLowerCase().includes('no respon')).length;
+      $('leadClosing').textContent=rows.filter(l=>l.closing==='Closing').length;
+      $('adminLeadRows').innerHTML=rows.length?rows.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(l=>{
+        const id=JSON.stringify(String(l.id)),mid=JSON.stringify(String(l.memberId));
+        return '<tr><td>'+escA(l.member)+'</td><td>'+escA(l.date)+'</td><td><b>'+escA(l.name)+'</b></td><td>'+escA(l.contact)+'</td><td>'+escA(l.source)+'</td><td>'+escA(l.response)+'</td><td>'+escA(l.plan)+'</td><td>'+escA(l.funnel)+'</td><td>'+escA(l.closing)+'</td><td>'+Number(l.score||0)+'</td><td><button class="btnMini" onclick="editAdminLead('+mid+','+id+')">Edit</button> <button class="btnMini" style="background:#fff0f0;color:#a33" onclick="deleteAdminLead('+mid+','+id+')">Hapus</button></td></tr>';
+      }).join(''):'<tr><td colspan="11"><div class="empty">Belum ada lead pada periode ini.</div></td></tr>';
+    }catch(e){console.warn('Admin lead report:',e);if(typeof baseLeadReport==='function')baseLeadReport()}
+  };
+
+  window.adminDeleteClosing=async function(id){
+    if(!confirm('Hapus closing ini dari database?'))return;
+    try{
+      await requireAdmin();
+      const {error}=await S().from('member_closings').delete().eq('id',String(id));
+      if(error)throw error;
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      alert('Closing berhasil dihapus dari database.');
+    }catch(e){console.error('Admin closing delete:',e);alert('Gagal menghapus closing: '+(e?.message||e))}
+  };
+
+  window.adminEditClosing=async function(id){
+    try{
+      await requireAdmin();
+      const row=(members||[]).flatMap(m=>(m.closingData||[]).map(x=>({...x,memberId:m.id,member:m.name}))).find(x=>String(x.id)===String(id));
+      if(!row){alert('Closing tidak ditemukan.');return}
+      const name=prompt('Atas nama:',row.name||'');if(name===null)return;
+      const invoice=prompt('Jumlah invoice:',String(row.invoice||1));if(invoice===null)return;
+      const pax=prompt('Jumlah pax:',String(row.pax||1));if(pax===null)return;
+      const travel=prompt('Nama travel:',row.travel||'');if(travel===null)return;
+      const pkg=prompt('Nama paket:',row.package||'');if(pkg===null)return;
+      const omset=prompt('Omset:',String(row.omset||0));if(omset===null)return;
+      const date=prompt('Tanggal closing (YYYY-MM-DD):',row.date||isoToday());if(date===null)return;
+      const {error}=await S().from('member_closings').update({
+        closing_name:name,invoice:Number(invoice)||0,pax:Number(pax)||0,travel,package:pkg,omset:Number(omset)||0,closing_date:date,updated_at:new Date().toISOString()
+      }).eq('id',String(id));
+      if(error)throw error;
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      alert('Closing berhasil diperbarui.');
+    }catch(e){console.error('Admin closing edit:',e);alert('Gagal memperbarui closing: '+(e?.message||e))}
+  };
+
+  const baseIncome=window.renderIncomeMember;
+  window.renderIncomeMember=function(){
+    if(typeof baseIncome==='function')baseIncome.apply(this,arguments);
+    const body=$('incomeRows');if(!body)return;
+    body.querySelectorAll('tr').forEach(tr=>{
+      const cells=tr.querySelectorAll('td');if(!cells.length)return;
+      const member=members.find(m=>m.name===cells[0]?.textContent?.trim());
+      const date=cells[1]?.textContent?.trim(),name=cells[3]?.textContent?.trim();
+      const row=(member?.closingData||[]).find(x=>String(x.date)===String(date)&&String(x.name)===String(name));
+      if(row){
+        const td=document.createElement('td');
+        td.innerHTML='<button class="btnMini" onclick="adminEditClosing('+JSON.stringify(String(row.id))+')">Edit</button> <button class="btnMini" style="background:#fff0f0;color:#a33" onclick="adminDeleteClosing('+JSON.stringify(String(row.id))+')">Hapus</button>';
+        tr.appendChild(td);
+      }
+    });
+    const head=body.closest('table')?.querySelector('thead tr');
+    if(head&&!head.querySelector('.adminIncomeActionHead')){const th=document.createElement('th');th.className='adminIncomeActionHead';th.textContent='Aksi';head.appendChild(th)}
+  };
+})();
+</script>
 </body>
 </html>
