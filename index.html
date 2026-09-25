@@ -2587,5 +2587,151 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 .approvalNoticeBtn{width:100%;margin-top:18px}
 .approvalNoticeClose{position:absolute;right:12px;top:8px;border:0;background:transparent;color:#73809c;font-size:28px;line-height:1}
 </style>
+
+<script id="finalAdminCrossDeviceFix">
+(function(){
+  const C=()=>window.supabaseClient||null;
+  const escA=v=>String(v==null?'':v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  const moneyA=n=>Number(n||0).toLocaleString('id-ID');
+
+  function ensureIncomePage(){
+    const content=document.querySelector('.content');
+    if(!content)return;
+    if(!document.getElementById('page-adminIncome')){
+      const sec=document.createElement('section');
+      sec.className='page';
+      sec.id='page-adminIncome';
+      sec.innerHTML=
+        '<div class="title"><div><h2>💰 INCOME MEMBER</h2><p>Semua data closing dari dashboard member — tersimpan di Supabase.</p></div></div>'+
+        '<div class="panel"><div class="adminFilters">'+
+        '<div class="field"><label>Cari Nama Member</label><input id="incomeMemberSearch" class="activityMemberSearch" placeholder="Ketik nama member..."/></div>'+
+        '<div class="field"><label>Tanggal Mulai</label><input id="incomeStart" type="date"/></div>'+
+        '<div class="field"><label>Tanggal Akhir</label><input id="incomeEnd" type="date"/></div>'+
+        '</div></div>'+
+        '<div class="closingSummary">'+
+        '<div class="closingCard"><div class="label">TOTAL INVOICE</div><div class="num" id="incomeInvoiceTotal">0</div></div>'+
+        '<div class="closingCard"><div class="label">TOTAL PAX</div><div class="num" id="incomePaxTotal">0</div></div>'+
+        '<div class="closingCard"><div class="label">TOTAL OMSET</div><div class="num" id="incomeOmsetTotal">Rp 0</div></div>'+
+        '<div class="closingCard"><div class="label">JUMLAH MEMBER CLOSING</div><div class="num" id="incomeMemberTotal">0</div></div></div>'+
+        '<div class="panel"><div class="tableWrap"><table><thead><tr><th>Member</th><th>Tanggal</th><th>Invoice</th><th>Atas Nama</th><th>Pax</th><th>Travel</th><th>Paket</th><th>Omset</th></tr></thead><tbody id="incomeRows"></tbody></table></div></div>';
+      content.appendChild(sec);
+    }
+    const nav=document.getElementById('adminNav');
+    if(nav && !nav.querySelector('[data-page="adminIncome"]')){
+      const d=document.createElement('div');
+      d.className='navItem';
+      d.dataset.page='adminIncome';
+      d.innerHTML='💰 <span>Income Member</span>';
+      nav.appendChild(d);
+    }
+    ['incomeMemberSearch','incomeStart','incomeEnd'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el && !el.dataset.boundFinal){
+        el.dataset.boundFinal='1';
+        el.addEventListener('input',renderIncome);
+        el.addEventListener('change',renderIncome);
+      }
+    });
+  }
+
+  function renderIncome(){
+    const body=document.getElementById('incomeRows');
+    if(!body)return;
+    let rows=[];
+    (window.members||[]).forEach(m=>{
+      (Array.isArray(m.closingData)?m.closingData:[]).forEach(x=>rows.push({...x,member:m.name||m.username||'',memberId:m.id}));
+    });
+    const q=(document.getElementById('incomeMemberSearch')?.value||'').toLowerCase().trim();
+    const st=document.getElementById('incomeStart')?.value||'',en=document.getElementById('incomeEnd')?.value||'';
+    if(q)rows=rows.filter(x=>String(x.member).toLowerCase().includes(q));
+    if(st)rows=rows.filter(x=>String(x.date||'')>=st);
+    if(en)rows=rows.filter(x=>String(x.date||'')<=en);
+    rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+    const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0);
+    const pax=rows.reduce((n,x)=>n+Number(x.pax||0),0);
+    const om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
+    const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+    set('incomeInvoiceTotal',inv);set('incomePaxTotal',pax);set('incomeOmsetTotal','Rp '+moneyA(om));
+    set('incomeMemberTotal',new Set(rows.map(x=>x.memberId)).size);
+    body.innerHTML=rows.length?rows.map(x=>'<tr><td><b>'+escA(x.member)+'</b></td><td>'+escA(x.date)+'</td><td>'+Number(x.invoice||0)+'</td><td>'+escA(x.name)+'</td><td>'+Number(x.pax||0)+'</td><td>'+escA(x.travel)+'</td><td>'+escA(x.package)+'</td><td>Rp '+moneyA(x.omset)+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+  }
+  window.renderIncomeMember=renderIncome;
+
+  async function refreshFromSupabase(){
+    if(window.currentRole!=='admin')return;
+    const c=C();if(!c)return;
+    try{
+      const r=await c.rpc('admin_dashboard_snapshot');
+      if(r.error)throw r.error;
+      const d=r.data||{};
+      if(!d.success)throw new Error(d.message||'Snapshot admin gagal');
+      const activities=Array.isArray(d.activities)?d.activities:[];
+      const leads=Array.isArray(d.leads)?d.leads:[];
+      const closings=Array.isArray(d.closings)?d.closings:[];
+      const byA=new Map(),byL=new Map(),byC=new Map();
+      activities.forEach(x=>{const k=String(x.member_id);if(!byA.has(k))byA.set(k,[]);byA.get(k).push(x)});
+      leads.forEach(x=>{const k=String(x.member_id);if(!byL.has(k))byL.set(k,[]);byL.get(k).push(x)});
+      closings.forEach(x=>{const k=String(x.member_id);if(!byC.has(k))byC.set(k,[]);byC.get(k).push(x)});
+      const dbA=x=>({id:x.id,date:x.activity_date||'',day:Number(x.program_day||0),japri:Number(x.japri||0),follow:Number(x.follow_up||0),conv:Number(x.conversation||0),lead:Number(x.lead||0),offer:Number(x.offer||0),closing:Number(x.closing||0),referral:Number(x.referral||0),notes:x.notes||''});
+      const dbL=x=>({id:x.id,date:x.lead_date||'',time:x.lead_time||'',name:x.name||'',city:x.city||'',contact:x.contact||'',source:x.source||'',response:x.response||'',plan:x.plan||'',funnel:x.funnel||'',closing:x.closing||'Belum Closing',closingDate:x.closing_date||'',fu1:x.fu1||'',fu1Response:x.fu1_response||'',fu2:x.fu2||'',fu2Response:x.fu2_response||'',fu3:x.fu3||'',fu3Response:x.fu3_response||'',noClose:x.no_close||'',cs:x.cs||'',note:x.note||'',score:Number(x.score||0)});
+      const dbC=x=>({id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),pax:Number(x.pax||1),travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),date:x.closing_date||'',createdAt:x.created_at||''});
+      window.members=(Array.isArray(d.profiles)?d.profiles:[]).map(m=>{
+        const id=String(m.id),aa=(byA.get(id)||[]).map(dbA),ll=(byL.get(id)||[]).map(dbL),cc=(byC.get(id)||[]).map(dbC);
+        const sales={};aa.forEach(a=>{if(a.day)sales[a.day]={...a}});
+        return {id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',role:m.role||'member',status:m.status||'pending',day:Number(m.day||0),checks:{},sales,activityLog:aa,leads:ll,closingData:cc,registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null};
+      });
+      ensureIncomePage();
+      try{if(typeof window.renderAllAdmin==='function')window.renderAllAdmin()}catch(e){console.warn('admin render',e)}
+      renderIncome();
+    }catch(e){
+      console.error('Final admin Supabase sync:',e);
+      ensureIncomePage();
+      try{if(typeof window.renderMembers==='function')window.renderMembers()}catch(_){}
+      try{if(typeof window.renderApproval==='function')window.renderApproval()}catch(_){}
+      renderIncome();
+    }
+  }
+
+  window.umrohAdminRefreshBridge=refreshFromSupabase;
+  window.finalAdminRefresh=refreshFromSupabase;
+
+  const oldShow=window.showPage;
+  window.showPage=function(page){
+    try{if(typeof oldShow==='function')oldShow.apply(this,arguments)}catch(e){console.warn('showPage base',e)}
+    document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+    const target=document.getElementById('page-'+page);
+    if(target)target.classList.add('active');
+    document.querySelectorAll('.navItem[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
+    if(window.currentRole==='admin' && (page==='adminDashboard'||page==='members'||page==='activities'||page==='adminLeads'||page==='adminIncome'))setTimeout(refreshFromSupabase,30);
+    window.scrollTo(0,0);
+  };
+
+  function bindNav(){
+    ['adminNav','memberNav'].forEach(id=>{
+      const nav=document.getElementById(id);
+      if(!nav||nav.dataset.finalBound)return;
+      nav.dataset.finalBound='1';
+      nav.addEventListener('click',function(e){
+        const item=e.target.closest('.navItem[data-page]');
+        if(!item)return;
+        e.preventDefault();e.stopPropagation();
+        const page=item.dataset.page;
+        try{window.showPage(page)}catch(err){console.error('Menu navigation:',err)}
+      },true);
+    });
+    const mt=document.querySelectorAll('.mobileMenuToggle');
+    mt.forEach(btn=>{if(btn.dataset.finalBound)return;btn.dataset.finalBound='1';btn.addEventListener('click',function(){const id=btn.dataset.nav||btn.getAttribute('data-target');const nav=id&&document.getElementById(id);if(nav)nav.classList.toggle('mobile-menu-open')})});
+  }
+
+  function boot(){
+    ensureIncomePage();
+    bindNav();
+    if(window.currentRole==='admin')setTimeout(refreshFromSupabase,80);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&window.currentRole==='admin')setTimeout(refreshFromSupabase,80)});
+  setInterval(function(){if(window.currentRole==='admin'&&!document.hidden)refreshFromSupabase()},5000);
+})();
+</script>
 </body>
 </html>
