@@ -560,7 +560,7 @@ const supabaseClient=(window.supabase&&typeof window.supabase.createClient==="fu
 window.supabaseClient=supabaseClient;
 </script>
 <script>
-const ADMIN_USER="mahirdigitalumroh";
+window.ADMIN_USER="mahirdigitalumroh";
 // ---------- AUTH V2 ----------
 const AUTH_SESSION_KEY="pasukanUmrohAuthSessionV2";
 const PBKDF2_ITERATIONS=120000;
@@ -591,7 +591,7 @@ function clearAuthSession(){try{sessionStorage.removeItem(AUTH_SESSION_KEY)}catc
 function restoreAuthSession(){
   try{
     const x=JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY)||"null");if(!x)return false;
-    if(x.role==="admin"){currentRole="admin";currentUser={name:"Super Admin",username:ADMIN_USER,roleLabel:"Super Admin"};enterApp();showPage("adminDashboard");return true}
+    if(x.role==="admin"){currentRole="admin";currentUser={name:"Super Admin",username:window.ADMIN_USER,roleLabel:"Super Admin"};enterApp();showPage("adminDashboard");return true}
     if(x.role==="member"){const m=members.find(v=>v.id===x.userId||v.username===x.username);if(m&&m.status==="approved"){currentRole="member";currentUser=m;enterApp();showPage("memberDashboard");return true}}
   }catch(e){}
   clearAuthSession();return false;
@@ -2301,7 +2301,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     }
     showLoginMsg("Sedang memverifikasi login...",true);
     try{
-      if(u===ADMIN_USER){
+      if(u===window.ADMIN_USER){
         var auth=await client.auth.signInWithPassword({
           email:"biakbiakempat@gmail.com",
           password:p
@@ -2314,7 +2314,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
         currentUser={
           id:auth.data.user.id,
           name:auth.data.user.user_metadata?.name||"Super Admin",
-          username:ADMIN_USER,
+          username:window.ADMIN_USER,
           roleLabel:"Super Admin",
           role:"super_admin",
           status:"approved"
