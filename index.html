@@ -2375,7 +2375,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     var controller=typeof AbortController==="function"?new AbortController():null;
     var timer=controller?setTimeout(function(){controller.abort()},8000):null;
     try{
-      var res=await fetch("https://insciufudobddaqzxzil.supabase.co/auth/v1/health",{method:"GET",cache:"no-store",signal:controller?controller.signal:undefined});
+      var res=await fetch("https://insciufudobddaqzxzil.supabase.co/auth/v1/health",{method:"GET",cache:"no-store",headers:{"apikey":SUPABASE_PUBLISHABLE_KEY,"Authorization":"Bearer "+SUPABASE_PUBLISHABLE_KEY},signal:controller?controller.signal:undefined});
       if(!res.ok) throw new Error("Supabase health check HTTP "+res.status);
     }catch(e){
       var msg=String(e&&e.message||e||"");
