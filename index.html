@@ -960,9 +960,9 @@ function editAdminLead(mid,id){
 function deleteAdminLead(mid,id){const m=members.find(x=>x.id===mid);if(!m||!confirm("Hapus lead ini?"))return;m.leads=(m.leads||[]).filter(x=>x.id!==id);save();renderAllAdmin();renderAdminLeadReport();}
 function xlsEscape(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 function downloadExcel(filename,headers,rows){
- const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table>
-
-
+ const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table></body></html>`;
+ const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
+}
 
 <script id="phase3CentralClient">
 /* PHASE 3 — CENTRAL DATA CLIENT
@@ -1349,39 +1349,6 @@ function downloadExcel(filename,headers,rows){
   },1200);
 })();
 </script>
-
-<script id="finalCentralAuthFix">
-(function(){
-  const $=id=>document.getElementById(id);
-  const form=$("regForm");
-  const showMsg=(s,ok=false)=>{const e=$("authMsg");if(e)e.innerHTML='<div class="msg '+(ok?"ok":"err")+'">'+String(s||"")+"</div>"};
-  if(!form)return;
-  form.onsubmit=async function(e){
-    e.preventDefault();
-    const name=$("regName")?.value.trim()||"";
-    const username=$("regUsername")?.value.trim().toLowerCase()||"";
-    const wa=$("regWa")?.value.trim()||"";
-    const password=$("regPassword")?.value||"";
-    if(!name||!username||!wa||!password){showMsg("Lengkapi semua data.");return}
-    if(password.length<8){showMsg("Password minimal 8 karakter.");return}
-    try{
-      const client=window.supabaseClient;if(!client){showMsg("Koneksi database belum siap. Silakan refresh halaman.");return} const {data,error}=await client.rpc("member_register",{p_name:name,p_username:username,p_wa:wa,p_password:password});
-      if(error)throw error;
-      if(!data?.success){showMsg(data?.message||"Pendaftaran gagal.");return}
-      form.reset();
-      authMode("login");
-      showMsg("Pendaftaran berhasil. Tunggu approval Super Admin.",true);
-    }catch(err){
-      console.error("Final central member register",err);
-      showMsg("Pendaftaran gagal: "+(err?.message||"koneksi database bermasalah"));
-    }
-  };
-})();
-<\/script>
-
-</body></html>`;
- const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
-}
 function exportMyLeads(){const start=$("leadExportStart")?.value||"";const end=$("leadExportEnd")?.value||"";if(start&&end&&start>end){alert("Tanggal mulai tidak boleh lebih besar dari tanggal akhir.");return}const rows=(currentUser.leads||[]).filter(l=>(!start||l.date>=start)&&(!end||l.date<=end)).map(l=>[l.date,l.time,l.name,l.city,l.contact,l.source,l.response,l.plan,l.funnel,l.closing,l.closingDate,l.fu1,l.fu1Response||"",l.fu2,l.fu2Response||"",l.fu3,l.fu3Response||"",l.noClose,l.cs,l.note]);downloadExcel("leads-"+(currentUser.username||"member")+".xls",["Tanggal","Waktu","Nama","Kota","Kontak","Sumber Lead","Respon","Rencana Order","Funnel","Closing","Tanggal Closing","FU1","Respon FU1","FU2","Respon FU2","FU3","Respon FU3","Alasan Tidak Closing","CS","Keterangan"],rows)}
 function exportAllLeads(){const rows=leadRecords().map(l=>[l.member,l.date,l.time,l.name,l.city,l.contact,l.source,l.response,l.plan,l.funnel,l.closing,l.closingDate,l.fu1,l.fu2,l.fu3,l.noClose,l.cs,l.note,l.score]);downloadExcel("semua-leads-pasukan-umroh.xls",["Member","Tanggal","Waktu","Nama","Kota","Kontak","Sumber Lead","Respon","Rencana Order","Funnel","Closing","Tanggal Closing","FU1","FU2","FU3","Alasan Tidak Closing","CS","Keterangan","Lead Score"],rows)}
 function exportAllActivities(){const rows=[];members.forEach(m=>activityRecords(m).forEach(r=>rows.push([r.member,r.date,r.day,r.japri,r.follow,r.conv,r.lead,r.offer,r.closing,r.referral,r.notes])));downloadExcel("aktivitas-sales-pasukan-umroh.xls",["Member","Tanggal","Hari","Japri","Follow-up","Percakapan","Lead","Offer","Closing","Referral","Catatan"],rows)}
