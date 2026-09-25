@@ -1688,6 +1688,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     }
     return true;
   }
+  window.__umrohEnsureCentralConfig=ensureCentralConfig;
   const today=()=>new Date().toISOString().slice(0,10);
   const esc2=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
   const waUrl=w=>{let n=String(w||'').replace(/\D/g,'');if(n.startsWith('0'))n='62'+n.slice(1);if(!n.startsWith('62'))n='62'+n;return 'https://wa.me/'+n};
@@ -2252,7 +2253,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
         // Load shared configuration/data after the dashboard is visible.
         setTimeout(async function(){
           try{
-            if(typeof ensureCentralConfig==="function")await ensureCentralConfig();
+            if(typeof window.__umrohEnsureCentralConfig==="function")await window.__umrohEnsureCentralConfig();
             if(typeof window.umrohAdminRefreshBridge==="function")await window.umrohAdminRefreshBridge();
             else if(typeof loadAdminCentral==="function")await loadAdminCentral();
             if(typeof renderAllAdmin==="function")renderAllAdmin();
