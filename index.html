@@ -3096,3 +3096,107 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 </script>
 </body>
 </html>
+
+<style id="superAdminActionInteractionFixV3">
+/* V3 — Super Admin actions: explicit button hit-area + delegated handlers.
+   This is intentionally scoped to supabase-live-v1. */
+#page-members .btnMini,
+#page-members button,
+#page-members a { position:relative; z-index:5; pointer-events:auto; }
+#page-members .panel,
+#page-members .tableWrap,
+#page-members #memberRows,
+#page-members #approvalList { position:relative; z-index:2; }
+#page-members .actionBusy { opacity:.65; pointer-events:none!important; }
+</style>
+<script id="superAdminActionInteractionFixV3">
+(function(){
+  const M=()=>window.members||members||[];
+  const byId=id=>document.getElementById(id);
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  const sid=v=>String(v??'');
+  function rowMember(id){return M().find(x=>sid(x.id)===sid(id));}
+  function setBusy(el,on){if(el)el.classList.toggle('actionBusy',!!on);}
+
+  async function runAction(el,fn){
+    setBusy(el,true);
+    try{await fn()}finally{setBusy(el,false)}
+  }
+
+  function renderApprovalV3(){
+    const list=byId('approvalList'); if(!list)return;
+    const pending=M().filter(m=>String(m.status)==='pending');
+    const label=byId('pendingLabel'); if(label)label.textContent=pending.length+' pending';
+    if(!pending.length){list.className='empty';list.innerHTML='Belum ada pendaftaran.';return}
+    list.className='';
+    list.innerHTML=pending.map(m=>{
+      const id=esc(m.id);
+      return '<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
+        '<div><b>'+esc(m.name)+'</b><div class="muted">Daftar: '+esc(m.registeredAt||'-')+' • '+esc(m.username)+' • <a target="_blank" rel="noopener" href="'+(typeof waUrl==='function'?waUrl(m.wa):'#')+'">'+esc(m.wa)+'</a></div></div>'+
+        '<div class="linkBtns" style="margin-top:0">'+
+        '<button type="button" class="btnMini" data-admin-action="approve" data-id="'+id+'">✓ Approve</button>'+
+        '<button type="button" class="btnMini" style="background:#fff0f0;color:#a33" data-admin-action="reject" data-id="'+id+'">Tolak</button>'+
+        '</div></div>';
+    }).join('');
+  }
+
+  function renderMembersV3(){
+    const body=byId('memberRows'); if(!body)return;
+    const q=(byId('memberSearch')?.value||'').toLowerCase().trim();
+    const rows=M().slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')))
+      .filter(m=>(String(m.name||'')+' '+String(m.username||'')+' '+String(m.wa||'')).toLowerCase().includes(q));
+    body.innerHTML=rows.length?rows.map(m=>{
+      const id=esc(m.id);
+      const pct=typeof progressOf==='function'?progressOf(m):Math.round((Number(m.day||0)/60)*100);
+      return '<tr data-member-id="'+id+'">'+
+        '<td><b>'+esc(m.name)+'</b></td><td>'+esc(m.username)+'</td>'+
+        '<td><a target="_blank" rel="noopener" href="'+(typeof waUrl==='function'?waUrl(m.wa):'#')+'">'+esc(m.wa)+'</a></td>'+
+        '<td><span class="status '+(m.status==='approved'?'active':'pending')+'">'+(m.status==='approved'?'AKTIF':'PENDING')+'</span></td>'+
+        '<td>'+esc(m.registeredAt||'-')+'</td><td>'+Number(m.day||0)+'/60</td>'+
+        '<td><b>'+pct+'%</b><div class="pctBar"><span style="width:'+pct+'%"></span></div></td>'+
+        '<td>'+totalLead(m)+'</td><td>'+totalClosing(m)+'</td>'+
+        '<td><button type="button" class="btnMini" data-admin-action="edit" data-id="'+id+'">Edit</button> '+
+        '<button type="button" class="btnMini" style="background:#fff0f0;color:#a33" data-admin-action="delete" data-id="'+id+'">Hapus</button></td>'+
+        '</tr>';
+    }).join(''):'<tr><td colspan="10"><div class="empty">Belum ada member yang terdaftar.</div></td></tr>';
+  }
+
+  function bind(containerId){
+    const el=byId(containerId); if(!el||el.dataset.actionFixV3)return;
+    el.dataset.actionFixV3='1';
+    el.addEventListener('click',function(e){
+      const b=e.target.closest('[data-admin-action]');
+      if(!b||!el.contains(b))return;
+      e.preventDefault();e.stopPropagation();
+      const id=b.getAttribute('data-id');
+      const action=b.getAttribute('data-admin-action');
+      runAction(b,async()=>{
+        if(action==='approve')return window.approveMember(id);
+        if(action==='reject')return window.rejectMember(id);
+        if(action==='edit')return window.adminEditMember(id);
+        if(action==='delete')return window.deleteMember(id);
+      }).catch(err=>console.error('Admin action V3:',err));
+    },true);
+  }
+
+  window.renderApprovalV3=renderApprovalV3;
+  window.renderMembersV3=renderMembersV3;
+
+  const oldRenderMembers=window.renderMembers;
+  window.renderMembers=function(){
+    try{if(typeof oldRenderMembers==='function')oldRenderMembers.apply(this,arguments)}catch(e){console.warn('renderMembers base:',e)}
+    try{renderMembersV3()}catch(e){console.error('renderMembers V3:',e)}
+  };
+  const oldRenderApproval=window.renderApproval;
+  window.renderApproval=function(){
+    try{if(typeof oldRenderApproval==='function')oldRenderApproval.apply(this,arguments)}catch(e){console.warn('renderApproval base:',e)}
+    try{renderApprovalV3()}catch(e){console.error('renderApproval V3:',e)}
+  };
+
+  function boot(){
+    bind('approvalList');bind('memberRows');
+    if(currentRole==='admin'){renderMembersV3();renderApprovalV3()}
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
