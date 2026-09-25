@@ -1094,14 +1094,14 @@ function downloadExcel(filename,headers,rows){
 
   const oldEnter=window.enterApp;
   window.enterApp=function(){
-    oldEnter.apply(this,arguments);
+    if(typeof oldEnter==='function')oldEnter.apply(this,arguments);
     if(currentRole==='member')setTimeout(loadMemberCentral,120);
     if(currentRole==='admin')setTimeout(async()=>{await seedOrLoadAdminConfig();await loadAdminCentral();},120);
   };
 
   const oldShow=window.showPage;
   window.showPage=function(page){
-    const r=oldShow.apply(this,arguments);
+    const r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;
     if(currentRole==='member')setTimeout(loadMemberCentral,80);
     if(currentRole==='admin'&&(page==='adminDashboard'||page==='members'||page==='activities'||page==='adminLeads'||page==='adminIncome'))setTimeout(loadAdminCentral,80);
     return r;
@@ -1402,11 +1402,11 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     $('incomeBarChart').innerHTML=top.length?top.map(x=>'<div class="barItem"><div class="barValue">Rp '+money(x.omset)+'</div><div class="bar" style="height:'+Math.max(4,Math.round(x.omset/max*220))+'px" title="'+esc2(x.member)+'"></div><div class="barLabel">'+esc2(x.member)+'</div></div>').join(''):'<div class="empty" style="margin:auto">Belum ada data.</div>';
   };
   const oldShowPage=window.showPage;
-  window.showPage=function(page){const r=oldShowPage.apply(this,arguments);setTimeout(()=>{if(page==='memberClosing')renderMemberClosing();if(page==='adminIncome')renderIncomeMember();if(page==='adminLeads')renderAdminLeadReport()},30);return r};
+  window.showPage=function(page){const r=typeof oldShowPage==='function'?oldShowPage.apply(this,arguments):undefined;setTimeout(()=>{if(page==='memberClosing')renderMemberClosing();if(page==='adminIncome')renderIncomeMember();if(page==='adminLeads')renderAdminLeadReport()},30);return r};
   const oldRenderMember=window.renderMember;
-  window.renderMember=function(){try{oldRenderMember.apply(this,arguments)}catch(e){}try{renderMemberClosing();const k=document.getElementById('mClose');if(k)k.textContent=readClosing(currentUser).length}catch(e){}};
+  window.renderMember=function(){try{typeof oldRenderMember==='function'&&oldRenderMember.apply(this,arguments)}catch(e){}try{renderMemberClosing();const k=document.getElementById('mClose');if(k)k.textContent=readClosing(currentUser).length}catch(e){}};
   const oldRenderAllAdmin=window.renderAllAdmin;
-  window.renderAllAdmin=function(){try{oldRenderAllAdmin.apply(this,arguments)}catch(e){}try{renderIncomeMember();renderAdminLeadReport()}catch(e){}};
+  window.renderAllAdmin=function(){try{typeof oldRenderAllAdmin==='function'&&oldRenderAllAdmin.apply(this,arguments)}catch(e){}try{renderIncomeMember();renderAdminLeadReport()}catch(e){}};
   window.addEventListener('storage',e=>{if(e.key==='pasukanUmrohMahirDigitalV6'){try{renderIncomeMember();renderMemberClosing()}catch(err){}}});
   document.addEventListener('DOMContentLoaded',()=>{initUI();resetClosingForm();setTimeout(()=>{try{renderIncomeMember()}catch(e){}},100)});
   if(document.readyState!=='loading'){initUI();resetClosingForm();setTimeout(()=>{try{renderIncomeMember()}catch(e){}},100)}
@@ -1439,7 +1439,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     const membersTitle=document.querySelector('#page-members .title p');if(membersTitle)membersTitle.textContent='Kelola seluruh member yang mendaftar, akun, approval, dan progress. Data diurutkan A-Z.';
   }
   const oldRenderMembers=window.renderMembers;
-  window.renderMembers=function(){try{oldRenderMembers.apply(this,arguments)}catch(e){}try{enhance()}catch(e){}};
+  window.renderMembers=function(){try{typeof oldRenderMembers==='function'&&oldRenderMembers.apply(this,arguments)}catch(e){}try{enhance()}catch(e){}};
   document.addEventListener('DOMContentLoaded',()=>setTimeout(enhance,50));
 })();
 </script>
@@ -1800,7 +1800,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     <a id="memberPopupButton" class="btn" target="_blank" rel="noopener" style="display:none;text-decoration:none;text-align:center"></a>
   </div>
 </div>
-<script>(function(){const K=['pasukanUmrohInfoBarsV12','pasukanUmrohPopupsV12','pasukanUmrohScheduleV9'];function r(){try{if(typeof renderInfoBars==='function')renderInfoBars()}catch(e){}}window.addEventListener('storage',e=>{if(K.includes(e.key))setTimeout(r,50)});window.addEventListener('load',()=>setTimeout(r,100));const sp=window.showPage;if(typeof sp==='function')window.showPage=function(){const x=sp.apply(this,arguments);setTimeout(r,30);return x}})();</script><script>
+<script>(function(){const K=['pasukanUmrohInfoBarsV12','pasukanUmrohPopupsV12','pasukanUmrohScheduleV9'];function r(){try{if(typeof renderInfoBars==='function')renderInfoBars()}catch(e){}}window.addEventListener('storage',e=>{if(K.includes(e.key))setTimeout(r,50)});window.addEventListener('load',()=>setTimeout(r,100));const sp=window.showPage;if(typeof sp==='function')window.showPage=function(){const x=typeof sp==='function'?sp.apply(this,arguments):undefined;setTimeout(r,30);return x}})();</script><script>
 /* POPUP FIX FINAL: independent from the earlier IIFE */
 (function(){
   function getPopups(){try{return JSON.parse(localStorage.getItem('pasukanUmrohPopupsV12')||'[]')}catch(e){return []}}
@@ -1828,7 +1828,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   if(oldLogin){oldLogin.addEventListener('submit',function(){setTimeout(function(){if(typeof window.forceMemberPopup==='function')window.forceMemberPopup()},700)})}
   var oldShow=window.showPage;
   if(typeof oldShow==='function'){
-    window.showPage=function(page){var r=oldShow.apply(this,arguments);if(page==='memberDashboard')setTimeout(function(){if(typeof window.forceMemberPopup==='function')window.forceMemberPopup()},500);return r;};
+    window.showPage=function(page){var r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;if(page==='memberDashboard')setTimeout(function(){if(typeof window.forceMemberPopup==='function')window.forceMemberPopup()},500);return r;};
   }
   setTimeout(function(){if(typeof window.forceMemberPopup==='function')window.forceMemberPopup()},1200);
 })();
@@ -1837,7 +1837,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 (function(){
   const K='pasukanUmrohPopupShownThisLogin';
   const oldLogout=window.logout;
-  if(typeof oldLogout==='function'){window.logout=function(){try{sessionStorage.removeItem(K)}catch(e){} return oldLogout.apply(this,arguments);};}
+  if(typeof oldLogout==='function'){window.logout=function(){try{sessionStorage.removeItem(K)}catch(e){} return typeof oldLogout==='function'?oldLogout.apply(this,arguments):undefined;};}
 })();
 </script>
 
@@ -1934,7 +1934,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   };
 
   const oldEnter=window.enterApp;
-  window.enterApp=function(){oldEnter.apply(this,arguments);if(currentRole==='admin')setTimeout(adminRefresh,80)};
+  window.enterApp=function(){if(typeof oldEnter==='function')oldEnter.apply(this,arguments);if(currentRole==='admin')setTimeout(adminRefresh,80)};
 
   window.approveMember=async function(id){
     try{const {data,error}=await sb().rpc('member_approve',{p_member_id:id});if(error)throw error;if(!data?.success){alert(data?.message||'Gagal approve.');return}await adminRefresh()}
@@ -1971,7 +1971,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   };
 
   const oldShow=window.showPage;
-  window.showPage=function(page){const r=oldShow.apply(this,arguments);if(currentRole==='admin'&&(page==='adminDashboard'||page==='members'))setTimeout(adminRefresh,100);return r};
+  window.showPage=function(page){const r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;if(currentRole==='admin'&&(page==='adminDashboard'||page==='members'))setTimeout(adminRefresh,100);return r};
 
   // Force a fresh member login after Phase A. Super Admin session is preserved.
   setTimeout(function(){
@@ -2058,7 +2058,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     const token=sessionApi.get();
     try{if(token&&supabaseClient)await supabaseClient.rpc('member_session_logout',{p_token:token})}catch(e){console.warn('Member session logout:',e)}
     sessionApi.clear();
-    return oldLogout.apply(this,arguments);
+    return typeof oldLogout==='function'?oldLogout.apply(this,arguments):undefined;
   };
 })();
 </script>
