@@ -2370,23 +2370,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   function getClient(){
     return window.supabaseClient || (typeof sb==="function" ? sb() : null);
   }
-  async function preflight(){
-    if(!navigator.onLine) throw new Error("Perangkat sedang offline.");
-    var controller=typeof AbortController==="function"?new AbortController():null;
-    var timer=controller?setTimeout(function(){controller.abort()},8000):null;
-    try{
-      var res=await fetch("https://insciufudobddaqzxzil.supabase.co/auth/v1/health",{method:"GET",cache:"no-store",headers:{"apikey":SUPABASE_PUBLISHABLE_KEY,"Authorization":"Bearer "+SUPABASE_PUBLISHABLE_KEY},signal:controller?controller.signal:undefined});
-      if(!res.ok) throw new Error("Supabase health check HTTP "+res.status);
-    }catch(e){
-      var msg=String(e&&e.message||e||"");
-      if(e&&e.name==="AbortError") throw new Error("Server Supabase tidak merespons dalam 8 detik.");
-      if(/Failed to fetch|NetworkError|Load failed|ERR_NAME_NOT_RESOLVED/i.test(msg))
-        throw new Error("Server Supabase tidak dapat dijangkau dari jaringan/browser ini (DNS/koneksi).");
-      throw e;
-    }finally{
-      if(timer)clearTimeout(timer);
-    }
-  }
   async function handle(e){
     e.preventDefault();
     e.stopPropagation();
@@ -2395,10 +2378,8 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     var client=getClient();
     if(!client){showMsg("Modul Supabase belum siap. Refresh halaman lalu coba lagi.");return false;}
     if(!u||!p){showMsg("Username dan password wajib diisi.");return false;}
-    showMsg("Memeriksa koneksi...",true);
+    showMsg("Sedang memverifikasi login...",true);
     try{
-      await preflight();
-      showMsg("Sedang memverifikasi login...",true);
       if(u==="mahirdigitalumroh"){
         var auth=await client.auth.signInWithPassword({email:"biakbiakempat@gmail.com",password:p});
         if(auth.error||!auth.data?.user){
