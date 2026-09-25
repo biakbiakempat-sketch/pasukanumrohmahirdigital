@@ -1473,8 +1473,9 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 (function(){
   const INFO_KEY='pasukanUmrohInfoBarsV12';
   const POP_KEY='pasukanUmrohPopupsV12';
-  const jx=(k,d)=>{try{return JSON.parse(localStorage.getItem(k)||'null')??d}catch(e){return d}};
-  const px=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+  const centralKey=k=>k===INFO_KEY?'info_bars':(k===POP_KEY?'popups':null);
+  const jx=(k,d)=>{try{const c=window.__umrohCentralConfig;const key=centralKey(k);const v=key&&c?c[key]:null;return v==null?d:JSON.parse(JSON.stringify(v))}catch(e){return d}};
+  const px=(k,v)=>{const key=centralKey(k);if(key&&typeof window.__umrohSetCentralConfig==='function')return window.__umrohSetCentralConfig(key,v);};
   const e2=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
   const infoBars=()=>jx(INFO_KEY,[]);
   const popups=()=>jx(POP_KEY,[]);
@@ -1601,7 +1602,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     settings:{programName:'Pasukan Umroh Mahir Digital',duration:60,unlock:100},
     materials:[
       {id:1,name:'TUTORIAL DASHBOARD',desc:'Panduan menggunakan dashboard program.',links:[]},
-      {id:2,name:'SCRIPT SALES',desc:'Greeting, probing, follow-up, objection, closing.',links:[{name:'Google Drive Script Sales',url:'https://drive.google.com/drive/folders/1jlfJ7Qo14WFhW9hjXEJEJE91-hcNfCP28?usp=sharing'}]},
+      {id:2,name:'SCRIPT SALES',desc:'Greeting, probing, follow-up, objection, closing.',links:[{name:'Google Drive Script Sales',url:'https://drive.google.com/drive/folders/1jlfJ7Qo14WFhW9hjXEJEU91-hcNfCP28?usp=sharing'}]},
       {id:3,name:'KONTEN NON BRAND',desc:'Materi konten non-brand yang dapat digunakan member.',links:[{name:'Google Drive Konten Non Brand',url:'https://drive.google.com/drive/folders/1OBkGY_C3sSYgj4SDQSdpzhijFtsSMHtT?usp=sharing'}]},
       {id:4,name:'KONTEN BRAND',desc:'Materi konten brand.',links:[]},
       {id:5,name:'PRODUK KNOWLEDGE BRAND',desc:'Produk, paket, fasilitas, FAQ, dan pengetahuan brand.',links:[]},
@@ -1615,6 +1616,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     ]
   };
   const centralConfig={settings:null,schedule:null,materials:null,rewards:null,checklist:null,info_bars:null,popups:null};
+  window.__umrohCentralConfig=centralConfig;
   const cloneCfg=v=>{try{return v==null?v:JSON.parse(JSON.stringify(v))}catch(e){return v}};
   const j=(k,d)=>{
     const v=centralConfig[k];
@@ -1640,6 +1642,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     syncCentralConfig(k,centralConfig[k]);
     return centralConfig[k];
   };
+  window.__umrohSetCentralConfig=put;
   async function loadCentralConfig(){
     const c=window.supabaseClient;
     if(!c)return false;
