@@ -1,3 +1,11 @@
+-- LEGACY SQL — DO NOT RUN AGAINST THE LIVE SUPABASE PROJECT.
+--
+-- This file belongs to the original phase-1/app_members architecture.
+-- The live application uses the profiles/member_* architecture documented in
+-- supabase/live_contract.md. Keep this file only as historical reference.
+-- Live project: insciufudobddaqzxzil
+-- Live source branch: supabase-live-v1
+--
 -- PASUKAN UMROH MAHIR DIGITAL
 -- PHASE 1 DATABASE MIGRATION
 -- Modules: DATA MEMBER, LEADS, AKTIVITAS SALES, CLOSING
