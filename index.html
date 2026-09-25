@@ -2934,5 +2934,165 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   };
 })();
 </script>
+
+<script id="superAdminMemberCrudFixV2">
+(function(){
+  const S=()=>window.supabaseClient||null;
+  const $m=id=>document.getElementById(id);
+  const escM=v=>typeof esc2==='function'?esc2(v):String(v??'');
+  const safeId=v=>JSON.stringify(String(v??''));
+
+  async function adminRequired(){
+    if(currentRole!=='admin'||!S()) throw new Error('Super Admin belum login.');
+  }
+
+  window.adminEditMember=async function(id){
+    try{
+      await adminRequired();
+      const m=(window.members||members||[]).find(x=>String(x.id)===String(id));
+      if(!m){alert('Member tidak ditemukan.');return}
+      $m('memberModalTitle').textContent='Edit Member';
+      $m('editMemberId').value=String(m.id);
+      $m('newName').value=m.name||'';
+      $m('newUsername').value=m.username||'';
+      $m('newUsername').disabled=false;
+      $m('newWa').value=m.wa||'';
+      $m('newPassword').value='';
+      $m('modalBack').classList.add('show');
+    }catch(e){console.error('Admin edit member:',e);alert(e?.message||e)}
+  };
+
+  window.openModal=function(id){
+    if(id!==undefined&&id!==null&&String(id)!==''){
+      return window.adminEditMember(id);
+    }
+    $m('memberModalTitle').textContent='Tambah Member';
+    $m('editMemberId').value='';
+    $m('newName').value='';
+    $m('newUsername').value='';
+    $m('newUsername').disabled=false;
+    $m('newWa').value='';
+    $m('newPassword').value='';
+    $m('modalBack').classList.add('show');
+  };
+
+  window.saveMemberAdmin=async function(){
+    try{
+      await adminRequired();
+      const id=String($m('editMemberId')?.value||'').trim();
+      const name=String($m('newName')?.value||'').trim();
+      const username=String($m('newUsername')?.value||'').trim();
+      const wa=String($m('newWa')?.value||'').trim();
+      const password=String($m('newPassword')?.value||'');
+      if(!name||!username||!wa){alert('Nama, username, dan WhatsApp wajib diisi.');return}
+      if(!id&&!password){alert('Password wajib diisi untuk member baru.');return}
+
+      const r=await S().rpc('admin_member_upsert',{
+        p_id:id||null,
+        p_name:name,
+        p_username:username,
+        p_wa:wa,
+        p_password:password||null,
+        p_status:id ? ((window.members||members).find(x=>String(x.id)===id)?.status||'approved') : 'approved',
+        p_day:id ? Number((window.members||members).find(x=>String(x.id)===id)?.day||0) : 1
+      });
+      if(r.error)throw r.error;
+      if(!r.data?.success)throw new Error(r.data?.message||'Gagal menyimpan member.');
+      if(typeof closeModal==='function')closeModal();
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      alert('Data member berhasil disimpan ke database.');
+    }catch(e){console.error('Admin member save:',e);alert('Gagal menyimpan member: '+(e?.message||e))}
+  };
+
+  window.approveMember=async function(id){
+    try{
+      await adminRequired();
+      const r=await S().rpc('member_approve',{p_member_id:String(id)});
+      if(r.error)throw r.error;
+      if(!r.data?.success)throw new Error(r.data?.message||'Approval gagal.');
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      alert('Member berhasil di-approve.');
+    }catch(e){console.error('Admin approval:',e);alert('Gagal approve member: '+(e?.message||e))}
+  };
+
+  window.rejectMember=async function(id){
+    if(!confirm('Tolak/hapus pendaftaran member ini? Data member dan data terkait akan ikut dihapus.'))return;
+    try{
+      await adminRequired();
+      const r=await S().rpc('member_reject',{p_member_id:String(id)});
+      if(r.error)throw r.error;
+      if(!r.data?.success)throw new Error(r.data?.message||'Penolakan gagal.');
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      alert('Pendaftaran member ditolak dan dihapus.');
+    }catch(e){console.error('Admin reject:',e);alert('Gagal menolak member: '+(e?.message||e))}
+  };
+
+  window.deleteMember=async function(id){
+    if(!confirm('Hapus member ini beserta seluruh data aktivitas, lead, closing, dan checklist-nya?'))return;
+    try{
+      await adminRequired();
+      const r=await S().rpc('admin_member_delete',{p_member_id:String(id)});
+      if(r.error)throw r.error;
+      if(!r.data?.success)throw new Error(r.data?.message||'Penghapusan gagal.');
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      alert('Member dan data terkait berhasil dihapus.');
+    }catch(e){console.error('Admin delete member:',e);alert('Gagal menghapus member: '+(e?.message||e))}
+  };
+
+  window.renderMembers=function(){
+    const q=($m('memberSearch')?.value||'').toLowerCase().trim();
+    const rows=(window.members||members||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')))
+      .filter(m=>(String(m.name||'')+' '+String(m.username||'')+' '+String(m.wa||'')).toLowerCase().includes(q));
+    const body=$m('memberRows');if(!body)return;
+    body.innerHTML=rows.length?rows.map(m=>{
+      const id=safeId(m.id),pct=typeof progressOf==='function'?progressOf(m):Math.round((Number(m.day||0)/60)*100);
+      return '<tr data-member-id="'+escM(m.id)+'" style="cursor:pointer">'+
+        '<td><b>'+escM(m.name)+'</b></td>'+
+        '<td>'+escM(m.username)+'</td>'+
+        '<td><a target="_blank" href="'+(typeof waUrl==='function'?waUrl(m.wa):'#')+'" onclick="event.stopPropagation()">'+escM(m.wa)+'</a></td>'+
+        '<td><span class="status '+(m.status==='approved'?'active':'pending')+'">'+(m.status==='approved'?'AKTIF':'PENDING')+'</span></td>'+
+        '<td>'+escM(m.registeredAt||'-')+'</td>'+
+        '<td>'+Number(m.day||0)+'/60</td>'+
+        '<td><b>'+pct+'%</b><div class="pctBar"><span style="width:'+pct+'%"></span></div></td>'+
+        '<td>'+totalLead(m)+'</td><td>'+totalClosing(m)+'</td>'+
+        '<td><button class="btnMini" onclick="event.stopPropagation();adminEditMember('+id+')">Edit</button> '+
+        '<button class="btnMini" style="background:#fff0f0;color:#a33" onclick="event.stopPropagation();deleteMember('+id+')">Hapus</button></td>'+
+      '</tr>';
+    }).join(''):'<tr><td colspan="10"><div class="empty">Belum ada member yang terdaftar.</div></td></tr>';
+  };
+
+  window.renderApproval=function(){
+    const list=$m('approvalList');if(!list)return;
+    const p=(window.members||members||[]).filter(m=>m.status==='pending');
+    $m('pendingLabel').textContent=p.length+' pending';
+    list.className=p.length?'':'empty';
+    list.innerHTML=p.length?p.map(m=>{
+      const id=safeId(m.id);
+      return '<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
+        '<div><b>'+escM(m.name)+'</b><div class="muted">Daftar: '+escM(m.registeredAt||'-')+' • '+escM(m.username)+' • <a target="_blank" href="'+(typeof waUrl==='function'?waUrl(m.wa):'#')+'">'+escM(m.wa)+'</a></div></div>'+
+        '<div><button class="btnMini" onclick="approveMember('+id+')">✓ Approve</button> '+
+        '<button class="btnMini" style="background:#fff0f0;color:#a33" onclick="rejectMember('+id+')">Tolak</button></div>'+
+      '</div>';
+    }).join(''):'Belum ada pendaftaran.';
+  };
+
+  function bindMemberRows(){
+    const body=$m('memberRows');
+    if(!body||body.dataset.crudV2Bound)return;
+    body.dataset.crudV2Bound='1';
+    body.addEventListener('click',function(e){
+      if(e.target.closest('button,a'))return;
+      const tr=e.target.closest('tr[data-member-id]');
+      if(tr)window.adminEditMember(tr.dataset.memberId);
+    });
+  }
+
+  function boot(){
+    bindMemberRows();
+    if(currentRole==='admin'){window.renderMembers();window.renderApproval();}
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
 </body>
 </html>
