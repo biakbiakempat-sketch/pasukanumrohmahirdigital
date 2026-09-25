@@ -3094,6 +3094,71 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
 </script>
+
+<!-- SUPER ADMIN CRUD HARD FIX V4 -->
+<style id="superAdminCrudHardFixV4">
+#page-members{position:relative!important;z-index:100!important}
+#page-members .panel{position:relative!important;z-index:101!important}
+#page-members button,#page-members a{pointer-events:auto!important}
+#page-members .btnMini{cursor:pointer!important;position:relative!important;z-index:1000!important;touch-action:manipulation!important}
+</style>
+<script id="superAdminCrudHardFixV4">
+(function(){
+  'use strict';
+  function el(id){return document.getElementById(id)}
+  function bind(){
+    document.querySelectorAll('#page-members [data-crud-action]').forEach(function(btn){
+      if(btn.dataset.v4==='1')return;
+      btn.dataset.v4='1'; btn.type='button'; btn.style.pointerEvents='auto';
+      btn.onclick=function(e){
+        e.preventDefault(); e.stopPropagation();
+        var id=btn.getAttribute('data-id'), a=btn.getAttribute('data-crud-action');
+        if(btn.dataset.busy==='1')return;
+        btn.dataset.busy='1'; btn.disabled=true;
+        Promise.resolve().then(function(){
+          if(a==='approve')return window.approveMember(String(id));
+          if(a==='reject')return window.rejectMember(String(id));
+          if(a==='edit')return window.adminEditMember(String(id));
+          if(a==='delete')return window.deleteMember(String(id));
+        }).catch(function(err){console.error('CRUD V4',err);alert('Gagal: '+(err&&err.message||err))})
+        .finally(function(){btn.disabled=false;delete btn.dataset.busy});
+      };
+    });
+  }
+  function repaint(){
+    var body=el('memberRows'), list=el('approvalList');
+    if(body){
+      body.querySelectorAll('button').forEach(function(b){
+        var text=(b.textContent||'').trim().toLowerCase();
+        var oc=b.getAttribute('onclick')||'';
+        var id=null;
+        if(text==='edit') id=(oc.match(/openModal\(([^)]+)\)/)||[])[1];
+        if(text==='hapus') id=(oc.match(/deleteMember\(([^)]+)\)/)||[])[1] || (b.closest('tr')||{}).getAttribute?.('data-member-id');
+        if(id){b.removeAttribute('onclick');b.setAttribute('data-crud-action',text==='edit'?'edit':'delete');b.setAttribute('data-id',String(id).replace(/["']/g,''));}
+      });
+    }
+    if(list){
+      list.querySelectorAll('button').forEach(function(b){
+        var text=(b.textContent||'').trim().toLowerCase(), oc=b.getAttribute('onclick')||'';
+        var id=(oc.match(/(?:approveMember|rejectMember)\(([^)]+)\)/)||[])[1];
+        if(id){b.removeAttribute('onclick');b.setAttribute('data-crud-action',text.indexOf('approve')>=0?'approve':'reject');b.setAttribute('data-id',String(id).replace(/["']/g,''));}
+      });
+    }
+    bind();
+  }
+  function install(){
+    repaint();
+    document.addEventListener('click',function(e){
+      var b=e.target && e.target.closest ? e.target.closest('#page-members [data-crud-action]') : null;
+      if(b && b.dataset.v4!=='1') { e.preventDefault(); e.stopPropagation(); }
+    },true);
+    var target=el('page-members')||document.body;
+    new MutationObserver(function(){repaint()}).observe(target,{subtree:true,childList:true});
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(install,300)});
+  else setTimeout(install,300);
+})();
+</script>
 </body>
 </html>
 
