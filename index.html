@@ -2096,5 +2096,100 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   else initMobileDropdown();
 })();
 </script>
-<script id="finalMobileLoginFix">(function(){function boot(){const form=document.getElementById("loginForm");if(!form||form.dataset.finalLoginFix==="1")return;form.dataset.finalLoginFix="1";const legacy=window.loginFormSubmit;form.onsubmit=async function(e){e.preventDefault();e.stopPropagation();const u=(document.getElementById("loginUser")?.value||"").trim(),p=document.getElementById("loginPass")?.value||"",m=document.getElementById("authMsg"),show=function(t,ok){if(m)m.innerHTML="<div class=\"msg "+(ok?"ok":"err")+"\">"+String(t)+"</div>"};if(u!=="mahirdigitalumroh"){if(typeof legacy==="function")return legacy(e);show("Modul login belum siap. Refresh halaman lalu coba lagi.");return false}const c=window.supabaseClient;if(!c||!c.auth||typeof c.auth.signInWithPassword!=="function"){show("Koneksi login belum siap. Pastikan internet aktif, lalu refresh halaman.");return false}show("Sedang memverifikasi login...",true);try{const result=await Promise.race([c.auth.signInWithPassword({email:"biakbiakempat@gmail.com",password:p}),new Promise(function(_,reject){setTimeout(function(){reject(new Error("Waktu koneksi habis."))},15000)})]),data=result?.data,error=result?.error;if(error||!data?.user){console.error("Super Admin login:",error);show(error?.message||"Username atau password salah.");return false}currentUser={id:data.user.id,name:data.user.user_metadata?.name||"Super Admin",username:"mahirdigitalumroh",roleLabel:"Super Admin",role:"super_admin",status:"approved"};currentRole="admin";if(typeof saveAuthSession==="function")saveAuthSession();if(typeof enterApp==="function")enterApp();if(typeof showPage==="function")showPage("adminDashboard");return false}catch(err){console.error("Final Super Admin login:",err);show("Login gagal: "+(err?.message||"koneksi ke Supabase bermasalah"));return false}}}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot()})();</script></body>
+<script id="finalMobileLoginFix">(function(){
+  function boot(){
+    const form=document.getElementById("loginForm");
+    if(!form||form.dataset.finalLoginFix==="1")return;
+    form.dataset.finalLoginFix="1";
+    form.onsubmit=async function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      const u=(document.getElementById("loginUser")?.value||"").trim();
+      const p=document.getElementById("loginPass")?.value||"";
+      const m=document.getElementById("authMsg");
+      const show=function(t,ok){
+        if(m)m.innerHTML='<div class="msg '+(ok?"ok":"err")+'">'+String(t)+'</div>';
+      };
+      if(u!=="mahirdigitalumroh"){
+        if(typeof window.loginFormSubmit==="function"){
+          return window.loginFormSubmit(e);
+        }
+        show("Modul login belum siap. Refresh halaman lalu coba lagi.");
+        return false;
+      }
+      const c=window.supabaseClient;
+      if(!c||!c.auth||typeof c.auth.setSession!=="function"){
+        show("Koneksi login belum siap. Refresh halaman lalu coba lagi.");
+        return false;
+      }
+      show("Menghubungkan ke Supabase...",true);
+      const controller=new AbortController();
+      const timer=setTimeout(function(){controller.abort()},12000);
+      try{
+        const response=await fetch(
+          "https://insciufudobddaqzxzil.supabase.co/auth/v1/token?grant_type=password",
+          {
+            method:"POST",
+            headers:{
+              "apikey":"sb_publishable_hqJ2gxeoNcOt2srRCrS4cw_-tiFy2EP",
+              "Content-Type":"application/json"
+            },
+            body:JSON.stringify({
+              email:"biakbiakempat@gmail.com",
+              password:p
+            }),
+            signal:controller.signal
+          }
+        );
+        let body=null;
+        try{body=await response.json()}catch(_){}
+        if(!response.ok||!body?.access_token||!body?.refresh_token){
+          const detail=body?.error_description||body?.msg||body?.message||"Username atau password salah.";
+          show(detail);
+          return false;
+        }
+        show("Login Supabase berhasil. Menyiapkan dashboard...",true);
+        const sessionResult=await c.auth.setSession({
+          access_token:body.access_token,
+          refresh_token:body.refresh_token
+        });
+        if(sessionResult?.error){
+          show("Login berhasil, tetapi session aplikasi gagal dibuat: "+sessionResult.error.message);
+          return false;
+        }
+        const user=sessionResult?.data?.user||body?.user;
+        if(!user?.id){
+          show("Login berhasil, tetapi data akun tidak diterima.");
+          return false;
+        }
+        currentUser={
+          id:user.id,
+          name:user.user_metadata?.name||"Super Admin",
+          username:"mahirdigitalumroh",
+          roleLabel:"Super Admin",
+          role:"super_admin",
+          status:"approved"
+        };
+        currentRole="admin";
+        if(typeof saveAuthSession==="function")saveAuthSession();
+        show("Login berhasil. Membuka dashboard...",true);
+        if(typeof enterApp==="function")enterApp();
+        if(typeof showPage==="function")showPage("adminDashboard");
+        return false;
+      }catch(err){
+        console.error("Final Super Admin login:",err);
+        if(err?.name==="AbortError"){
+          show("Koneksi ke Supabase timeout (12 detik).");
+        }else{
+          show("Login gagal: "+(err?.message||"koneksi ke Supabase bermasalah"));
+        }
+        return false;
+      }finally{
+        clearTimeout(timer);
+      }
+    };
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);
+  else boot();
+})();</script></body>
 </html>
