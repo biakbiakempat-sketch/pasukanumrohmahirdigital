@@ -3095,6 +3095,72 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 })();
 </script>
 
+<!-- SCHEDULE CENTRAL KEY FIX V7 -->
+<script id="scheduleCentralKeyFixV7">
+(function(){
+  const C=()=>window.__umrohCentralConfig||null;
+  const esc=v=>typeof esc2==='function'?esc2(v):String(v??'');
+  const getSchedule=()=>{const c=C();return c&&Array.isArray(c.schedule)?JSON.parse(JSON.stringify(c.schedule)):[]};
+  window.openScheduleForm=function(id){
+    const x=id?getSchedule().find(a=>String(a.id)===String(id)):null;
+    $('scheduleModalTitle').textContent=x?'Edit Jadwal / Webinar':'Tambah Jadwal / Webinar';
+    $('schId').value=x?.id||'';
+    $('schName').value=x?.name||'';
+    $('schDate').value=x?.date||new Date().toISOString().slice(0,10);
+    $('schMode').value=x?.mode||'Online';
+    $('schLink').value=x?.link||'';
+    $('scheduleModal').classList.add('show');
+  };
+  window.closeScheduleForm=function(){$('scheduleModal').classList.remove('show')};
+  window.saveScheduleItem=async function(){
+    const name=$('schName').value.trim(),date=$('schDate').value,mode=$('schMode').value,link=$('schLink').value.trim(),rawId=$('schId').value;
+    if(!name||!date){alert('Nama kegiatan dan tanggal wajib diisi.');return}
+    const c=C(); if(!c){alert('Database konfigurasi belum siap.');return}
+    const arr=getSchedule(),id=rawId?String(rawId):'';
+    if(id){
+      const x=arr.find(a=>String(a.id)===id);
+      if(x){x.name=name;x.date=date;x.mode=mode;x.link=link}
+    }else{
+      arr.push({id:String(Date.now()),name,date,mode,link});
+    }
+    c.schedule=arr;
+    try{
+      const sb=window.supabaseClient;
+      if(!sb)throw new Error('Koneksi Supabase belum siap.');
+      const {error}=await sb.from('program_configs').upsert({
+        config_key:'schedule',config_value:arr,updated_at:new Date().toISOString()
+      },{onConflict:'config_key'});
+      if(error)throw error;
+      window.__umrohCentralConfig.schedule=arr;
+      closeScheduleForm();
+      renderScheduleAdmin();
+      if(typeof renderInfoBars==='function')renderInfoBars();
+      alert('Jadwal disimpan.');
+    }catch(e){
+      console.error('Schedule save:',e);
+      alert('Gagal menyimpan jadwal ke database: '+(e?.message||e));
+    }
+  };
+  window.deleteScheduleItem=async function(id){
+    if(!confirm('Hapus jadwal ini?'))return;
+    const arr=getSchedule().filter(x=>String(x.id)!==String(id));
+    try{
+      const sb=window.supabaseClient;if(!sb)throw new Error('Koneksi Supabase belum siap.');
+      const {error}=await sb.from('program_configs').upsert({
+        config_key:'schedule',config_value:arr,updated_at:new Date().toISOString()
+      },{onConflict:'config_key'});
+      if(error)throw error;
+      C().schedule=arr;renderScheduleAdmin();
+      if(typeof renderInfoBars==='function')renderInfoBars();
+    }catch(e){console.error('Schedule delete:',e);alert('Gagal menghapus jadwal: '+(e?.message||e))}
+  };
+  window.renderScheduleAdmin=function(){
+    const arr=getSchedule().slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const el=$('scheduleAdminWrap');if(!el)return;
+    el.innerHTML=arr.length?arr.map(x=>'<div class="scheduleRow"><div><b>'+esc(x.name)+'</b></div><div>'+esc(x.date)+'</div><div><span class="pill">'+esc(x.mode)+'</span></div><div>'+(x.link?'<a target="_blank" href="'+esc(x.link)+'">Buka Link</a>':'<span class="muted">Tidak ada link</span>')+'</div><div><button class="btnMini" onclick="openScheduleForm('+JSON.stringify(String(x.id))+')">Edit</button> <button class="btnMini" onclick="deleteScheduleItem('+JSON.stringify(String(x.id))+')">Hapus</button></div></div>').join(''):'<div class="empty">Belum ada jadwal atau webinar.</div>';
+  };
+})();
+</script>
 <!-- SUPER ADMIN PASSWORD RESET V6 -->
 <style id="superAdminPasswordResetV6">
 #adminPasswordHelp{font-size:12px;color:#6f7d95;margin-top:6px;line-height:1.45}
