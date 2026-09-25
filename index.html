@@ -961,150 +961,7 @@ function deleteAdminLead(mid,id){const m=members.find(x=>x.id===mid);if(!m||!con
 function xlsEscape(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 function downloadExcel(filename,headers,rows){
  const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table>
-<script id="approvalSyncFinalFix">
-(function(){
-  const PENDING_KEY='pasukanUmrohPendingApprovalUsernameV1';
-  const NOTICE_SHOWN='pasukanUmrohApprovalNoticeShownV1';
-  const client=()=>window.supabaseClient||null;
-  const escHtml=s=>String(s??'').replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
-  function pendingGet(){try{return localStorage.getItem(PENDING_KEY)||''}catch(e){return ''}}
-  function pendingSet(v){try{v?localStorage.setItem(PENDING_KEY,v):localStorage.removeItem(PENDING_KEY)}catch(e){}}
-  function shownGet(){try{return sessionStorage.getItem(NOTICE_SHOWN)==='1'}catch(e){return false}}
-  function shownSet(){try{sessionStorage.setItem(NOTICE_SHOWN,'1')}catch(e){}}
 
-  function ensureNotice(){
-    if(document.getElementById('approvalNoticeOverlay'))return;
-    const d=document.createElement('div');
-    d.id='approvalNoticeOverlay';
-    d.innerHTML='<div class="approvalNoticeBox" role="dialog" aria-modal="true">'+
-      '<button class="approvalNoticeClose" type="button" aria-label="Tutup">×</button>'+
-      '<div class="approvalNoticeIcon">✓</div>'+
-      '<h3 id="approvalNoticeTitle">Akun Disetujui</h3>'+
-      '<p id="approvalNoticeText"></p>'+
-      '<button class="btn approvalNoticeBtn" type="button">Lanjut Login</button>'+
-      '</div>';
-    document.body.appendChild(d);
-    const close=()=>d.classList.remove('show');
-    d.querySelector('.approvalNoticeClose').addEventListener('click',close);
-    d.querySelector('.approvalNoticeBtn').addEventListener('click',close);
-    d.addEventListener('click',e=>{if(e.target===d)close()});
-  }
-  function showNotice(title,text){
-    ensureNotice();
-    const d=document.getElementById('approvalNoticeOverlay');
-    document.getElementById('approvalNoticeTitle').textContent=title||'Akun Disetujui';
-    document.getElementById('approvalNoticeText').textContent=text||'Akun kamu sudah disetujui oleh Super Admin. Silakan login.';
-    d.classList.add('show');
-    shownSet();
-  }
-
-  async function checkPendingApproval(){
-    const u=pendingGet(), c=client();
-    if(!u||!c||currentRole)return;
-    try{
-      const {data,error}=await c.rpc('member_approval_status',{p_username:u});
-      if(error)throw error;
-      if(data?.success && data.status==='approved'){
-        pendingSet('');
-        showNotice('🎉 Akun Kamu Sudah Disetujui','Akun @'+u+' sudah disetujui oleh Super Admin. Silakan login untuk mulai Program Pasukan Umroh.');
-      }
-    }catch(e){console.warn('Approval status check:',e)}
-  }
-
-  async function loadApprovalNotifications(){
-    const c=client(),token=window.umrohMemberSession?.get?.();
-    if(!c||!token)return;
-    try{
-      const {data,error}=await c.rpc('member_notifications_list',{p_token:token});
-      if(error)throw error;
-      const rows=Array.isArray(data?.notifications)?data.notifications:[];
-      if(!rows.length)return;
-      for(const n of rows){
-        if(n.type==='approval'){
-          if(!shownGet()){
-            showNotice(n.title||'🎉 Akun Kamu Sudah Disetujui',n.message||'Akun kamu sudah disetujui oleh Super Admin. Silakan mulai program.');
-          }
-          await c.rpc('member_notification_read',{p_token:token,p_id:n.id});
-        }
-      }
-    }catch(e){console.warn('Approval notification load:',e)}
-  }
-
-  const oldLogin=window.loginFormSubmit;
-  window.loginFormSubmit=async function(e){
-    const u=(document.getElementById('loginUser')?.value||'').trim();
-    if(u==='mahirdigitalumroh' && typeof oldLogin==='function')return oldLogin.apply(this,arguments);
-
-    e?.preventDefault?.();
-    const p=document.getElementById('loginPass')?.value||'';
-    const m=document.getElementById('authMsg');
-    const msgLocal=(t,ok)=>{if(m)m.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+escHtml(t)+'</div>'};
-    if(!u||!p){msgLocal('Username dan password wajib diisi.');return false}
-    const c=client();
-    if(!c){msgLocal('Koneksi database belum siap. Refresh halaman lalu coba lagi.');return false}
-    try{
-      msgLocal('Sedang memverifikasi login...',true);
-      const {data,error}=await c.rpc('member_login',{p_username:u,p_password:p});
-      if(error)throw error;
-      if(!data?.success){
-        if(data?.status==='pending'){
-          pendingSet(u);
-          msgLocal('Akun masih menunggu approval Super Admin. Setelah disetujui, pemberitahuan akan muncul di halaman ini.');
-        }else if(data?.status==='rejected'){
-          pendingSet('');
-          msgLocal('Pendaftaran member ditolak.');
-        }else{
-          msgLocal(data?.message||'Username atau password salah.');
-        }
-        return false;
-      }
-      pendingSet('');
-      if(window.umrohMemberSession)window.umrohMemberSession.set(data.token||'');
-      const pr=data.profile||{};
-      currentUser={id:pr.id,name:pr.name||'',username:pr.username||u,wa:pr.wa||'',role:pr.role||'member',status:pr.status||'approved',day:Number(pr.day||1),checks:{},sales:{},activityLog:[],leads:[],registeredAt:pr.registered_at||today(),approvedAt:pr.approved_at||null};
-      currentRole='member';
-      members=[currentUser];
-      saveAuthSession();
-      enterApp();
-      showPage('memberDashboard');
-      setTimeout(loadApprovalNotifications,250);
-      return false;
-    }catch(err){
-      console.error('Final member login:',err);
-      msgLocal('Login gagal: '+(err?.message||'koneksi database bermasalah'));
-      return false;
-    }
-  };
-
-  const rf=document.getElementById('regForm');
-  if(rf){
-    const oldReg=rf.onsubmit;
-    rf.onsubmit=function(e){
-      const u=(document.getElementById('regUsername')?.value||'').trim().toLowerCase();
-      if(u)pendingSet(u);
-      return typeof oldReg==='function'?oldReg.apply(this,arguments):true;
-    };
-  }
-
-  ensureNotice();
-  document.addEventListener('visibilitychange',function(){if(!document.hidden)checkPendingApproval()});
-  setTimeout(checkPendingApproval,1200);
-  setInterval(function(){
-    if(!document.hidden && !currentRole && document.getElementById('auth')?.classList.contains('hidden')===false)checkPendingApproval();
-  },5000);
-  window.umrohApprovalSync={check:checkPendingApproval,notifications:loadApprovalNotifications};
-})();
-</script>
-<style id="approvalSyncFinalFixStyle">
-#approvalNoticeOverlay{position:fixed;inset:0;z-index:100001;background:rgba(8,13,85,.55);display:none;align-items:center;justify-content:center;padding:18px}
-#approvalNoticeOverlay.show{display:flex}
-.approvalNoticeBox{width:min(430px,100%);background:#fff;border-radius:20px;padding:28px 24px 24px;box-shadow:0 20px 60px rgba(0,0,0,.28);text-align:center;position:relative}
-.approvalNoticeIcon{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;margin:0 auto 12px;background:#e8f8f2;color:#08b879;font-size:30px;font-weight:900}
-.approvalNoticeBox h3{margin:0 30px 9px;font-size:22px;color:#172653}
-.approvalNoticeBox p{margin:0;color:#73809c;line-height:1.55;font-size:14px}
-.approvalNoticeBtn{width:100%;margin-top:18px}
-.approvalNoticeClose{position:absolute;right:12px;top:8px;border:0;background:transparent;color:#73809c;font-size:28px;line-height:1}
-</style>
 \n</body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
@@ -2575,5 +2432,149 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   setInterval(function(){if(currentRole==='admin'&&typeof adminRefresh==='function')adminRefresh()},5000);
 })();
 </script>
+<script id="approvalSyncFinalFix">
+(function(){
+  const PENDING_KEY='pasukanUmrohPendingApprovalUsernameV1';
+  const NOTICE_SHOWN='pasukanUmrohApprovalNoticeShownV1';
+  const client=()=>window.supabaseClient||null;
+  const escHtml=s=>String(s??'').replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+  function pendingGet(){try{return localStorage.getItem(PENDING_KEY)||''}catch(e){return ''}}
+  function pendingSet(v){try{v?localStorage.setItem(PENDING_KEY,v):localStorage.removeItem(PENDING_KEY)}catch(e){}}
+  function shownGet(){try{return sessionStorage.getItem(NOTICE_SHOWN)==='1'}catch(e){return false}}
+  function shownSet(){try{sessionStorage.setItem(NOTICE_SHOWN,'1')}catch(e){}}
+
+  function ensureNotice(){
+    if(document.getElementById('approvalNoticeOverlay'))return;
+    const d=document.createElement('div');
+    d.id='approvalNoticeOverlay';
+    d.innerHTML='<div class="approvalNoticeBox" role="dialog" aria-modal="true">'+
+      '<button class="approvalNoticeClose" type="button" aria-label="Tutup">×</button>'+
+      '<div class="approvalNoticeIcon">✓</div>'+
+      '<h3 id="approvalNoticeTitle">Akun Disetujui</h3>'+
+      '<p id="approvalNoticeText"></p>'+
+      '<button class="btn approvalNoticeBtn" type="button">Lanjut Login</button>'+
+      '</div>';
+    document.body.appendChild(d);
+    const close=()=>d.classList.remove('show');
+    d.querySelector('.approvalNoticeClose').addEventListener('click',close);
+    d.querySelector('.approvalNoticeBtn').addEventListener('click',close);
+    d.addEventListener('click',e=>{if(e.target===d)close()});
+  }
+  function showNotice(title,text){
+    ensureNotice();
+    const d=document.getElementById('approvalNoticeOverlay');
+    document.getElementById('approvalNoticeTitle').textContent=title||'Akun Disetujui';
+    document.getElementById('approvalNoticeText').textContent=text||'Akun kamu sudah disetujui oleh Super Admin. Silakan login.';
+    d.classList.add('show');
+    shownSet();
+  }
+
+  async function checkPendingApproval(){
+    const u=pendingGet(), c=client();
+    if(!u||!c||currentRole)return;
+    try{
+      const {data,error}=await c.rpc('member_approval_status',{p_username:u});
+      if(error)throw error;
+      if(data?.success && data.status==='approved'){
+        pendingSet('');
+        showNotice('🎉 Akun Kamu Sudah Disetujui','Akun @'+u+' sudah disetujui oleh Super Admin. Silakan login untuk mulai Program Pasukan Umroh.');
+      }
+    }catch(e){console.warn('Approval status check:',e)}
+  }
+
+  async function loadApprovalNotifications(){
+    const c=client(),token=window.umrohMemberSession?.get?.();
+    if(!c||!token)return;
+    try{
+      const {data,error}=await c.rpc('member_notifications_list',{p_token:token});
+      if(error)throw error;
+      const rows=Array.isArray(data?.notifications)?data.notifications:[];
+      if(!rows.length)return;
+      for(const n of rows){
+        if(n.type==='approval'){
+          if(!shownGet()){
+            showNotice(n.title||'🎉 Akun Kamu Sudah Disetujui',n.message||'Akun kamu sudah disetujui oleh Super Admin. Silakan mulai program.');
+          }
+          await c.rpc('member_notification_read',{p_token:token,p_id:n.id});
+        }
+      }
+    }catch(e){console.warn('Approval notification load:',e)}
+  }
+
+  const oldLogin=window.loginFormSubmit;
+  window.loginFormSubmit=async function(e){
+    const u=(document.getElementById('loginUser')?.value||'').trim();
+    if(u==='mahirdigitalumroh' && typeof oldLogin==='function')return oldLogin.apply(this,arguments);
+
+    e?.preventDefault?.();
+    const p=document.getElementById('loginPass')?.value||'';
+    const m=document.getElementById('authMsg');
+    const msgLocal=(t,ok)=>{if(m)m.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+escHtml(t)+'</div>'};
+    if(!u||!p){msgLocal('Username dan password wajib diisi.');return false}
+    const c=client();
+    if(!c){msgLocal('Koneksi database belum siap. Refresh halaman lalu coba lagi.');return false}
+    try{
+      msgLocal('Sedang memverifikasi login...',true);
+      const {data,error}=await c.rpc('member_login',{p_username:u,p_password:p});
+      if(error)throw error;
+      if(!data?.success){
+        if(data?.status==='pending'){
+          pendingSet(u);
+          msgLocal('Akun masih menunggu approval Super Admin. Setelah disetujui, pemberitahuan akan muncul di halaman ini.');
+        }else if(data?.status==='rejected'){
+          pendingSet('');
+          msgLocal('Pendaftaran member ditolak.');
+        }else{
+          msgLocal(data?.message||'Username atau password salah.');
+        }
+        return false;
+      }
+      pendingSet('');
+      if(window.umrohMemberSession)window.umrohMemberSession.set(data.token||'');
+      const pr=data.profile||{};
+      currentUser={id:pr.id,name:pr.name||'',username:pr.username||u,wa:pr.wa||'',role:pr.role||'member',status:pr.status||'approved',day:Number(pr.day||1),checks:{},sales:{},activityLog:[],leads:[],registeredAt:pr.registered_at||today(),approvedAt:pr.approved_at||null};
+      currentRole='member';
+      members=[currentUser];
+      saveAuthSession();
+      enterApp();
+      showPage('memberDashboard');
+      setTimeout(loadApprovalNotifications,250);
+      return false;
+    }catch(err){
+      console.error('Final member login:',err);
+      msgLocal('Login gagal: '+(err?.message||'koneksi database bermasalah'));
+      return false;
+    }
+  };
+
+  const rf=document.getElementById('regForm');
+  if(rf){
+    const oldReg=rf.onsubmit;
+    rf.onsubmit=function(e){
+      const u=(document.getElementById('regUsername')?.value||'').trim().toLowerCase();
+      if(u)pendingSet(u);
+      return typeof oldReg==='function'?oldReg.apply(this,arguments):true;
+    };
+  }
+
+  ensureNotice();
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)checkPendingApproval()});
+  setTimeout(checkPendingApproval,1200);
+  setInterval(function(){
+    if(!document.hidden && !currentRole && document.getElementById('auth')?.classList.contains('hidden')===false)checkPendingApproval();
+  },5000);
+  window.umrohApprovalSync={check:checkPendingApproval,notifications:loadApprovalNotifications};
+})();
+</script>
+<style id="approvalSyncFinalFixStyle">
+#approvalNoticeOverlay{position:fixed;inset:0;z-index:100001;background:rgba(8,13,85,.55);display:none;align-items:center;justify-content:center;padding:18px}
+#approvalNoticeOverlay.show{display:flex}
+.approvalNoticeBox{width:min(430px,100%);background:#fff;border-radius:20px;padding:28px 24px 24px;box-shadow:0 20px 60px rgba(0,0,0,.28);text-align:center;position:relative}
+.approvalNoticeIcon{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;margin:0 auto 12px;background:#e8f8f2;color:#08b879;font-size:30px;font-weight:900}
+.approvalNoticeBox h3{margin:0 30px 9px;font-size:22px;color:#172653}
+.approvalNoticeBox p{margin:0;color:#73809c;line-height:1.55;font-size:14px}
+.approvalNoticeBtn{width:100%;margin-top:18px}
+.approvalNoticeClose{position:absolute;right:12px;top:8px;border:0;background:transparent;color:#73809c;font-size:28px;line-height:1}
+</style>
 </body>
 </html>
