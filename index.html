@@ -1351,7 +1351,10 @@ function downloadExcel(filename,headers,rows){
     const submit=form?.querySelector('button[type="submit"]');
 
     if(u!==ADMIN_USER_FIXED){
-      /* Let the existing central member login handler process member accounts. */
+      /* Preserve the existing central member login flow. */
+      if(typeof window.__previousLoginFormSubmit==="function"){
+        return window.__previousLoginFormSubmit(e);
+      }
       return;
     }
 
@@ -1445,6 +1448,9 @@ function downloadExcel(filename,headers,rows){
   function install(){
     const form=document.getElementById("loginForm");
     if(!form)return;
+    if(typeof window.__previousLoginFormSubmit!=="function"){
+      window.__previousLoginFormSubmit=window.loginFormSubmit;
+    }
     ensureResetButton();
     form.onsubmit=robustAdminLogin;
   }
