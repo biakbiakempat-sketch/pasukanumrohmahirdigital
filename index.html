@@ -3146,10 +3146,9 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     const arr=getSchedule().filter(x=>String(x.id)!==String(id));
     try{
       const sb=window.supabaseClient;if(!sb)throw new Error('Koneksi Supabase belum siap.');
-      const {error}=await sb.from('program_configs').upsert({
-        config_key:'schedule',config_value:arr,updated_at:new Date().toISOString()
-      },{onConflict:'config_key'});
+      const {data,error}=await sb.rpc('admin_config_save',{p_config_key:'schedule',p_config_value:arr});
       if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Akses Super Admin ditolak.');
       C().schedule=arr;renderScheduleAdmin();
       if(typeof renderInfoBars==='function')renderInfoBars();
     }catch(e){console.error('Schedule delete:',e);alert('Gagal menghapus jadwal: '+(e?.message||e))}
@@ -3522,5 +3521,45 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     window.forceMemberPopup();
   };
   setInterval(tick,1000);
+})();
+</script>
+<!-- MEMBER SCHEDULE WEBINAR CARD V10 -->
+<style id="memberScheduleWebinarCardV10">
+#memberScheduleWebinarCard{margin-top:12px}
+#memberScheduleWebinarCard .swGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#memberScheduleWebinarCard .swItem{border:1px solid var(--line,#e6e9ef);border-radius:10px;padding:10px;background:#fff}
+#memberScheduleWebinarCard .swDate{font-size:11px;color:#71809a;margin-bottom:4px}
+#memberScheduleWebinarCard .swName{font-weight:800;color:#172a55}
+#memberScheduleWebinarCard .swMode{font-size:11px;margin-top:5px;color:#65738c}
+#memberScheduleWebinarCard .swLink{display:inline-block;margin-top:7px;font-size:11px;font-weight:800}
+@media(max-width:700px){#memberScheduleWebinarCard .swGrid{grid-template-columns:1fr}}
+</style>
+<script id="memberScheduleWebinarCardV10">
+(function(){
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  function render(){
+    if(typeof currentRole==='undefined'||currentRole!=='member'||!currentUser)return;
+    const root=document.getElementById('page-memberDashboard');
+    if(!root)return;
+    let card=document.getElementById('memberScheduleWebinarCard');
+    if(!card){
+      card=document.createElement('div');
+      card.id='memberScheduleWebinarCard';
+      const kpi=root.querySelector('.kpi');
+      if(kpi&&kpi.parentNode)kpi.parentNode.insertBefore(card,kpi.nextSibling);
+      else root.prepend(card);
+    }
+    const arr=Array.isArray(window.__umrohCentralConfig?.schedule)?window.__umrohCentralConfig.schedule.slice():[];
+    arr.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+    const upcoming=arr.filter(x=>String(x.date||'')>=new Date().toISOString().slice(0,10));
+    const list=(upcoming.length?upcoming:arr).slice(0,4);
+    const webinars=list.filter(x=>/webinar|kajian|kelas|training/i.test(String(x.name||'')));
+    const shown=webinars.length?webinars:list;
+    card.innerHTML='<div class="panel"><h3 style="margin-bottom:8px">📅 Jadwal Webinar / Kajian</h3>'+(shown.length?'<div class="swGrid">'+shown.map(x=>'<div class="swItem"><div class="swDate">'+esc(x.date||'')+'</div><div class="swName">'+esc(x.name||'Kegiatan')+'</div><div class="swMode">'+esc(x.mode||'')+'</div>'+(x.link?'<a class="swLink" target="_blank" rel="noopener" href="'+esc(x.link)+'">🔗 Buka Link</a>':'')+'</div>').join('')+'</div>':'<div class="notice">Belum ada jadwal webinar/kajian.</div>')+'</div>';
+  }
+  const old=window.renderMember;
+  window.renderMember=function(){try{if(typeof old==='function')old.apply(this,arguments)}finally{setTimeout(render,0)}};
+  setTimeout(render,1200);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(render,150)});
 })();
 </script>
