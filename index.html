@@ -1041,273 +1041,41 @@ function downloadExcel(filename,headers,rows){
   async function loadAdminCentral(){
     if(currentRole!=='admin'||!S())return;
     try{
-      const [snap,cfg]=await Promise.all([S().rpc('admin_central_snapshot'),S().rpc('admin_config_get')]);
-      if(snap.error)throw snap.error;
-      if(!snap.data?.success)throw new Error(snap.data?.message||'Snapshot admin gagal');
-      const rows=snap.data.members||[];
-      members=rows.map(m=>{
+      const [pr,ar,lr,cr,cfg]=await Promise.all([
+        S().from('profiles').select('id,name,username,wa,role,status,day,registered_at,approved_at').eq('role','member').order('name',{ascending:true}),
+        S().from('sales_activities').select('*').order('activity_date',{ascending:false}),
+        S().from('member_leads').select('*').order('lead_date',{ascending:false}),
+        S().from('member_closings').select('*').order('closing_date',{ascending:false}),
+        S().rpc('admin_config_get')
+      ]);
+      if(pr.error)throw pr.error;
+      if(ar.error)throw ar.error;
+      if(lr.error)throw lr.error;
+      if(cr.error)throw cr.error;
+
+      const activityBy=new Map(), leadBy=new Map(), closingBy=new Map();
+      (ar.data||[]).forEach(x=>{const k=String(x.member_id);if(!activityBy.has(k))activityBy.set(k,[]);activityBy.get(k).push(x)});
+      (lr.data||[]).forEach(x=>{const k=String(x.member_id);if(!leadBy.has(k))leadBy.set(k,[]);leadBy.get(k).push(x)});
+      (cr.data||[]).forEach(x=>{const k=String(x.member_id);if(!closingBy.has(k))closingBy.set(k,[]);closingBy.get(k).push(x)});
+
+      members=(pr.data||[]).map(m=>{
+        const id=String(m.id);
         const x={id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',role:m.role||'member',
           status:m.status||'pending',day:Number(m.day||0),checks:{},sales:{},activityLog:[],
           leads:[],closingData:[],registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null};
-        x.activityLog=(m.activities||[]).map(dbToActivity);
+        x.activityLog=(activityBy.get(id)||[]).map(dbToActivity);
         x.sales={};x.activityLog.forEach(a=>{if(a.day)x.sales[a.day]={...a}});
-        x.leads=(m.leads||[]).map(dbToLead);
-        x.closingData=(m.closings||[]).map(dbToClosing);
+        x.leads=(leadBy.get(id)||[]).map(dbToLead);
+        x.closingData=(closingBy.get(id)||[]).map(dbToClosing);
         return x;
       });
-      if(cfg.data?.success){
-        const c=cfg.data.configs||{};
-        Object.keys(cfgKeys).forEach(k=>{if(c[k]!=null)setLS(cfgKeys[k],c[k])});
+      if(cfg?.data?.success){
+        const cc=cfg.data.configs||{};
+        Object.keys(cfgKeys).forEach(k=>{if(cc[k]!=null)setLS(cfgKeys[k],cc[k])});
       }
       if(typeof renderAllAdmin==='function')renderAllAdmin();
     }catch(e){console.error('Phase 3 admin load:',e)}
-  }
-
-  async function saveConfigIfChanged(){
-    if(currentRole!=='admin'||!S())return;
-    const keys=Object.keys(cfgKeys);
-    for(const k of keys){
-      const v=getLS(cfgKeys[k],null);
-      if(v==null)continue;
-      try{
-        const sig=JSON.stringify(v);
-        if(window.__centralConfigSig?.[k]===sig)continue;
-        const {data,error}=await S().rpc('admin_config_save',{p_config_key:k,p_config_value:v});
-        if(!error&&data?.success){
-          window.__centralConfigSig=window.__centralConfigSig||{};
-          window.__centralConfigSig[k]=sig;
-        }
-      }catch(e){console.warn('Config sync '+k,e)}
-    }
-  }
-
-  async function seedOrLoadAdminConfig(){
-    if(currentRole!=='admin'||!S())return;
-    try{
-      const {data,error}=await S().rpc('admin_config_get');
-      if(error||!data?.success)return;
-      const server=data.configs||{};
-      let changed=false;
-      for(const k of Object.keys(cfgKeys)){
-        const sv=server[k],lv=getLS(cfgKeys[k],null);
-        if(isEmptyCfg(sv)&&!isEmptyCfg(lv)){
-          const r=await S().rpc('admin_config_save',{p_config_key:k,p_config_value:lv});
-          if(!r.error&&r.data?.success){server[k]=lv;changed=true}
-        }else if(sv!=null){
-          setLS(cfgKeys[k],sv);
-        }
-        if(server[k]!=null){
-          window.__centralConfigSig=window.__centralConfigSig||{};
-          window.__centralConfigSig[k]=JSON.stringify(server[k]);
-        }
-      }
-      if(changed)await loadAdminCentral();
-    }catch(e){console.warn('Phase 3 config bootstrap:',e)}
-  }
-
-  function leadArgs(l){
-    return {
-      p_lead_date:l.date||isoToday(),p_lead_time:l.time||null,p_name:l.name||'',p_city:l.city||'',
-      p_contact:l.contact||'',p_source:l.source||'',p_response:l.response||'',p_plan:l.plan||'',
-      p_funnel:l.funnel||'',p_closing:l.closing||'Belum Closing',p_closing_date:l.closingDate||null,
-      p_fu1:l.fu1||null,p_fu1_response:l.fu1Response||null,p_fu2:l.fu2||null,p_fu2_response:l.fu2Response||null,
-      p_fu3:l.fu3||null,p_fu3_response:l.fu3Response||null,p_no_close:l.noClose||'',p_cs:l.cs||'',
-      p_note:l.note||'',p_score:Number(l.score||0)
-    };
-  }
-
-  window.saveLead=async function(){
-    if(!currentUser||currentRole!=='member')return;
-    const name=$('lName').value.trim(),contact=$('lContact').value.trim();
-    if(!name||!contact){alert('Nama dan kontak wajib diisi.');return}
-    const id=$('editLeadId').value||null;
-    const l={id,date:$('lDate').value,time:$('lTime').value,name,city:$('lCity').value.trim(),contact,
-      source:resolvedLeadSource(),response:$('lResponse').value,plan:resolvedLeadPlan(),funnel:$('lFunnel').value,
-      closing:$('lClosing').value,closingDate:$('lClosingDate').value,fu1:$('lFu1').value,fu1Response:$('lFu1Response').value,
-      fu2:$('lFu2').value,fu2Response:$('lFu2Response').value,fu3:$('lFu3').value,fu3Response:$('lFu3Response').value,
-      noClose:$('lNoClose').value.trim(),cs:currentUser.name,note:$('lNote').value.trim(),score:0};
-    try{
-      const {data,error}=await S().rpc('member_lead_upsert',{p_token:token(),p_id:id,...leadArgs(l)});
-      if(error||!data?.success)throw error||new Error(data?.message||'Gagal menyimpan lead');
-      resetLeadForm();await loadMemberCentral();alert('Lead berhasil disimpan ke database.');
-    }catch(e){console.error(e);alert('Gagal menyimpan lead: '+(e?.message||e))}
   };
-  window.editLead=function(id){
-    const l=(currentUser?.leads||[]).find(x=>String(x.id)===String(id));if(!l)return;
-    $('editLeadId').value=l.id;$('lDate').value=l.date||isoToday();$('lTime').value=l.time||'';$('lName').value=l.name||'';
-    $('lCity').value=l.city||'';$('lContact').value=l.contact||'';
-    const sources=['WhatsApp Organik','Instagram Organik','Facebook Organik','TikTok Organik','Referral','Website','Event'];
-    $('lSource').value=sources.includes(l.source)?l.source:'Lainnya';$('lSourceOther').value=sources.includes(l.source)?'':(l.source||'');
-    $('lResponse').value=l.response||'Hot';
-    const plans=['Oktober 2026','November 2026','Desember 2026','Januari 2027','Awal Ramadhan 1448 H','Umrah Ramadhan 1448 H','Itikaf 1448 H','Syawal 1448 H','Maret 2027','Daftar Haji'];
-    $('lPlan').value=plans.includes(l.plan)?l.plan:'Lainnya';$('lPlanOther').value=plans.includes(l.plan)?'':(l.plan||'');
-    $('lFunnel').value=l.funnel||'Greeting';$('lClosing').value=l.closing||'Belum Closing';$('lClosingDate').value=l.closingDate||'';
-    $('lFu1').value=l.fu1||'';$('lFu1Response').value=l.fu1Response||'Respon';$('lFu2').value=l.fu2||'';$('lFu2Response').value=l.fu2Response||'Respon';
-    $('lFu3').value=l.fu3||'';$('lFu3Response').value=l.fu3Response||'Respon';$('lNoClose').value=l.noClose||'';$('lCs').value=currentUser.name||'';
-    $('lNote').value=l.note||'';$('leadFormTitle').textContent='Edit Lead';toggleLeadOtherFields();showPage('leads');
-  };
-  window.deleteLead=async function(id){
-    if(!currentUser||!confirm('Hapus lead ini?'))return;
-    try{const {data,error}=await S().rpc('member_lead_delete',{p_token:token(),p_id:id});
-      if(error||!data?.success)throw error||new Error(data?.message||'Gagal menghapus lead');
-      await loadMemberCentral();}catch(e){console.error(e);alert('Gagal menghapus lead: '+(e?.message||e))}
-  };
-  window.renderMyLeadsTable=function(){
-    const body=$('myLeadRows');if(!body)return;const rows=currentUser?.leads||[];
-    body.innerHTML=rows.length?rows.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(l=>{
-      const id=JSON.stringify(String(l.id));
-      return '<tr><td>'+esc(l.date)+'</td><td><b>'+esc(l.name)+'</b></td><td>'+esc(l.contact)+'</td><td>'+esc(l.source)+'</td><td>'+esc(l.response)+'</td><td>'+esc(l.plan)+'</td><td>'+esc(l.funnel)+'</td><td>'+esc(l.closing)+'</td><td><button class="btnMini" onclick="editLead('+id+')">Edit</button> <button class="btnMini danger" onclick="deleteLead('+id+')">Hapus</button></td></tr>';
-    }).join(''):'<tr><td colspan="9"><div class="empty">Belum ada lead. Klik "+ Lead Baru" untuk mulai.</div></td></tr>';
-  };
-
-  window.saveClosing=async function(){
-    if(!currentUser||currentRole!=='member')return;
-    const name=$('cName').value.trim(),travel=$('cTravel').value.trim(),pkg=$('cPackage').value.trim(),date=$('cDate').value;
-    const invoice=Number($('cInvoice').value)||0,pax=Number($('cPax').value)||0,omset=Number($('cOmset').value)||0,id=$('closingEditId').value||null;
-    if(!name||!travel||!pkg||!date||invoice<1||pax<1||omset<0){alert('Lengkapi data closing dengan benar.');return}
-    try{
-      const {data,error}=await S().rpc('member_closing_upsert',{p_token:token(),p_id:id,p_closing_name:name,p_invoice:invoice,p_pax:pax,p_travel:travel,p_package:pkg,p_omset:omset,p_closing_date:date});
-      if(error||!data?.success)throw error||new Error(data?.message||'Gagal menyimpan closing');
-      resetClosingForm();await loadMemberCentral();alert('Data closing berhasil disimpan ke database.');
-    }catch(e){console.error(e);alert('Gagal menyimpan closing: '+(e?.message||e))}
-  };
-  window.editClosing=function(id){
-    const x=(currentUser?.closingData||[]).find(v=>String(v.id)===String(id));if(!x)return;
-    $('closingEditId').value=x.id;$('cName').value=x.name||'';$('cInvoice').value=x.invoice||1;$('cPax').value=x.pax||1;$('cTravel').value=x.travel||'';$('cPackage').value=x.package||'';$('cOmset').value=x.omset||0;$('cDate').value=x.date||isoToday();
-  };
-  window.deleteClosing=async function(id){
-    if(!currentUser||!confirm('Hapus data closing ini?'))return;
-    try{const {data,error}=await S().rpc('member_closing_delete',{p_token:token(),p_id:id});
-      if(error||!data?.success)throw error||new Error(data?.message||'Gagal menghapus closing');
-      await loadMemberCentral();}catch(e){console.error(e);alert('Gagal menghapus closing: '+(e?.message||e))}
-  };
-  window.renderMemberClosing=function(){
-    const m=currentUser;if(!m||!$('myClosingRows'))return;const rows=(m.closingData||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-    const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0),pax=rows.reduce((n,x)=>n+Number(x.pax||0),0),om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
-    $('myClosingInvoices').textContent=inv;$('myClosingPax').textContent=pax;$('myClosingOmset').textContent='Rp '+Number(om||0).toLocaleString('id-ID');$('myClosingCount').textContent=rows.length;
-    $('myClosingRows').innerHTML=rows.length?rows.map(x=>{
-      const id=JSON.stringify(String(x.id));
-      return '<tr><td>'+esc(x.date)+'</td><td><b>'+esc(x.name)+'</b></td><td>'+x.invoice+'</td><td>'+x.pax+'</td><td>'+esc(x.travel)+'</td><td>'+esc(x.package)+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td><td><button class="btnMini" onclick="editClosing('+id+')">Edit</button> <button class="btnMini danger" onclick="deleteClosing('+id+')">Hapus</button></td></tr>';
-    }).join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
-  };
-
-  window.toggleCheck=async function(i,val){
-    if(!currentUser||currentRole!=='member')return;
-    const day=currentDay();currentUser.checks=currentUser.checks||{};const st={...(currentUser.checks[day]||{})};st[i]=!!val;currentUser.checks[day]=st;
-    try{
-      const {data,error}=await S().rpc('member_checklist_save',{p_token:token(),p_program_day:day,p_checks:st});
-      if(error||!data?.success)throw error||new Error(data?.message||'Gagal menyimpan checklist');
-      renderMember();
-    }catch(e){console.error(e);alert('Checklist gagal disimpan: '+(e?.message||e))}
-  };
-
-  window.finishMemberDay=async function(){
-    if(!currentUser||currentRole!=='member')return;
-    const day=currentDay(),tasks=tasksForDay(day),st=currentUser.checks?.[day]||{};
-    if(!tasks.every((_,i)=>st[i])){alert('Semua perintah hari ini harus selesai 100% sebelum lanjut.');return}
-    if(day>=60){alert('Program 60 hari selesai.');return}
-    try{
-      const {data,error}=await S().rpc('member_set_day',{p_token:token(),p_day:day+1});
-      if(error||!data?.success)throw error||new Error(data?.message||'Gagal membuka hari berikutnya');
-      currentUser.day=Number(data.day||day+1);await loadMemberCentral();showPage('memberDashboard');alert('Hari '+day+' selesai. Hari '+(day+1)+' terbuka.');
-    }catch(e){console.error(e);alert('Gagal membuka hari berikutnya: '+(e?.message||e))}
-  };
-
-  window.totalClosing=function(m){
-    const c=Array.isArray(m?.closingData)?m.closingData:[];
-    return c.length || Object.values(m?.sales||{}).reduce((n,d)=>n+Number(d.closing||0),0);
-  };
-
-  window.renderMembers=function(){
-    const q=($('memberSearch')?.value||'').toLowerCase();
-    const rows=(members||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name))).filter(m=>(m.name+' '+m.username+' '+m.wa).toLowerCase().includes(q));
-    $('memberRows').innerHTML=rows.length?rows.map(m=>{
-      const id=JSON.stringify(String(m.id));
-      return '<tr><td><b>'+esc(m.name)+'</b></td><td>'+esc(m.username)+'</td><td><a target="_blank" href="'+waUrl(m.wa)+'">'+esc(m.wa)+'</a></td><td><span class="status '+(m.status==='approved'?'active':'pending')+'">'+(m.status==='approved'?'AKTIF':'PENDING')+'</span></td><td>'+esc(m.registeredAt||'-')+'</td><td>'+Number(m.day||0)+'/60</td><td><b>'+progressOf(m)+'%</b><div class="pctBar"><span style="width:'+progressOf(m)+'%"></span></div></td><td>'+totalLead(m)+'</td><td>'+totalClosing(m)+'</td><td><button class="btnMini" onclick="openModal('+id+')">Edit</button> <button class="btnMini" onclick="deleteMember('+id+')">Hapus</button></td></tr>';
-    }).join(''):'<tr><td colspan="10"><div class="empty">Belum ada member yang terdaftar.</div></td></tr>';
-  };
-  window.renderApproval=function(){
-    const p=(members||[]).filter(m=>m.status==='pending');$('pendingLabel').textContent=p.length+' pending';
-    $('approvalList').innerHTML=p.length?p.map(m=>{const id=JSON.stringify(String(m.id));return '<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px"><div><b>'+esc(m.name)+'</b><div class="muted">Daftar: '+esc(m.registeredAt||'-')+' • '+esc(m.username)+' • <a target="_blank" href="'+waUrl(m.wa)+'">'+esc(m.wa)+'</a></div></div><div><button class="btnMini" onclick="approveMember('+id+')">✓ Approve</button> <button class="btnMini" style="background:#fff0f0;color:#a33" onclick="rejectMember('+id+')">Tolak</button></div></div>'}).join(''):'<div class="empty">Belum ada pendaftaran.</div>';
-  };
-
-  window.renderAdminLeadReport=function(){
-    if(!$('adminLeadMemberFilter'))return;
-    const rows=(members||[]).flatMap(m=>(m.leads||[]).map(l=>({...l,memberId:m.id,member:m.name})));
-    const start=$('adminLeadStart')?.value||'',end=$('adminLeadEnd')?.value||'',mid=$('adminLeadMemberFilter')?.value||'all';
-    const filtered=rows.filter(l=>(mid==='all'||String(l.memberId)===String(mid))&&(!start||l.date>=start)&&(!end||l.date<=end));
-    $('leadTotal').textContent=filtered.length;$('leadHot').textContent=filtered.filter(l=>String(l.response).toLowerCase()==='hot').length;$('leadWarm').textContent=filtered.filter(l=>String(l.response).toLowerCase()==='warm').length;$('leadCold').textContent=filtered.filter(l=>String(l.response).toLowerCase()==='cold').length;$('leadNoResp').textContent=filtered.filter(l=>String(l.response).toLowerCase().includes('no respon')).length;$('leadClosing').textContent=filtered.filter(l=>l.closing==='Closing').length;
-    $('adminLeadRows').innerHTML=filtered.length?filtered.sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(l=>{
-      const mid=JSON.stringify(String(l.memberId)),id=JSON.stringify(String(l.id));
-      return '<tr><td>'+esc(l.member)+'</td><td>'+esc(l.date)+'</td><td><b>'+esc(l.name)+'</b></td><td>'+esc(l.contact)+'</td><td>'+esc(l.source)+'</td><td>'+esc(l.response)+'</td><td>'+esc(l.plan)+'</td><td>'+esc(l.funnel)+'</td><td>'+esc(l.closing)+'</td><td>'+Number(l.score||0)+'</td><td><button class="btnMini" onclick="editAdminLead('+mid+','+id+')">Edit</button> <button class="btnMini danger" onclick="deleteAdminLead('+mid+','+id+')">Hapus</button></td></tr>';
-    }).join(''):'<tr><td colspan="11"><div class="empty">Belum ada lead pada periode ini.</div></td></tr>';
-  };
-
-  function adminLeadArgs(){
-    return {
-      p_lead_date:$('alDate').value||isoToday(),p_lead_time:$('alTime').value||null,p_name:$('alName').value.trim(),
-      p_city:$('alCity').value.trim(),p_contact:$('alContact').value.trim(),p_source:$('alSource').value,p_response:$('alResponse').value,
-      p_plan:$('alPlan').value,p_funnel:$('alFunnel').value,p_closing:$('alClosing').value,p_closing_date:$('alClosingDate').value||null,
-      p_fu1:$('alFu1').value||null,p_fu1_response:null,p_fu2:$('alFu2').value||null,p_fu2_response:null,p_fu3:$('alFu3').value||null,p_fu3_response:null,
-      p_no_close:$('alNoClose').value.trim(),p_cs:$('alCs').value.trim(),p_note:$('alNote').value.trim(),p_score:Number($('alScore').value)||0
-    };
-  }
-  window.saveAdminLead=async function(){
-    const mid=$('adminLeadMember').value,id=$('adminLeadEditId').value||null;
-    if(!mid){alert('Pilih member.');return}
-    if(!$('alName').value.trim()||!$('alContact').value.trim()){alert('Nama dan kontak wajib diisi.');return}
-    try{
-      const {data,error}=await S().rpc('admin_lead_upsert',{p_member_id:mid,p_id:id,...adminLeadArgs()});
-      if(error||!data?.success)throw error||new Error(data?.message||'Gagal menyimpan lead');
-      closeAdminLeadForm();await loadAdminCentral();alert('Lead berhasil disimpan ke database.');
-    }catch(e){console.error(e);alert('Gagal menyimpan lead: '+(e?.message||e))}
-  };
-  window.deleteAdminLead=async function(mid,id){
-    if(!confirm('Hapus lead ini?'))return;
-    try{const {data,error}=await S().rpc('admin_lead_delete',{p_member_id:mid,p_id:id});if(error||!data?.success)throw error||new Error(data?.message||'Gagal menghapus lead');await loadAdminCentral()}
-    catch(e){console.error(e);alert('Gagal menghapus lead: '+(e?.message||e))}
-  };
-  window.openAdminLeadForm=function(memberId){
-    if(!members.length){alert('Belum ada member.');return}
-    const sel=$('adminLeadMember');sel.innerHTML=members.map(m=>'<option value="'+esc(m.id)+'">'+esc(m.name)+'</option>').join('');
-    sel.value=memberId?String(memberId):String(members[0].id);$('adminLeadEditId').value='';$('adminLeadModalTitle').textContent='Tambah Lead';resetAdminLeadForm();$('leadAdminModal').classList.add('show');
-  };
-  window.editAdminLead=function(mid,id){
-    const m=members.find(x=>String(x.id)===String(mid)),l=m?.leads?.find(x=>String(x.id)===String(id));if(!m||!l)return;
-    openAdminLeadForm(m.id);$('adminLeadEditId').value=l.id;$('adminLeadMember').value=m.id;$('alDate').value=l.date||isoToday();$('alTime').value=l.time||'';
-    $('alName').value=l.name||'';$('alCity').value=l.city||'';$('alContact').value=l.contact||'';$('alSource').value=l.source||'WhatsApp Organik';$('alResponse').value=l.response||'Hot';$('alPlan').value=l.plan||'';
-    $('alFunnel').value=l.funnel||'Conversation';$('alClosing').value=l.closing||'Belum Closing';$('alClosingDate').value=l.closingDate||'';$('alScore').value=l.score||0;
-    $('alFu1').value=l.fu1||'';$('alFu2').value=l.fu2||'';$('alFu3').value=l.fu3||'';$('alNoClose').value=l.noClose||'';$('alCs').value=l.cs||'';$('alNote').value=l.note||'';$('adminLeadModalTitle').textContent='Edit Lead';
-  };
-
-  window.renderIncomeMember=function(){
-    if(!$('incomeRows'))return;
-    let rows=(members||[]).flatMap(m=>(m.closingData||[]).map(x=>({...x,memberId:m.id,member:m.name})));
-    const q=($('incomeMemberSearch')?.value||'').toLowerCase().trim(),start=$('incomeStart')?.value||'',end=$('incomeEnd')?.value||'',sort=$('incomeSort')?.value||'date_desc';
-    if(q)rows=rows.filter(x=>String(x.member).toLowerCase().includes(q));if(start)rows=rows.filter(x=>x.date>=start);if(end)rows=rows.filter(x=>x.date<=end);
-    rows.sort((a,b)=>sort==='member_az'?String(a.member).localeCompare(String(b.member)):sort==='date_asc'?String(a.date).localeCompare(String(b.date)):String(b.date).localeCompare(String(a.date)));
-    const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0),pax=rows.reduce((n,x)=>n+Number(x.pax||0),0),om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
-    $('incomeInvoiceTotal').textContent=inv;$('incomePaxTotal').textContent=pax;$('incomeOmsetTotal').textContent='Rp '+Number(om||0).toLocaleString('id-ID');$('incomeMemberTotal').textContent=new Set(rows.map(x=>x.memberId)).size;
-    $('incomeRows').innerHTML=rows.length?rows.map(x=>'<tr><td><b>'+esc(x.member)+'</b></td><td>'+esc(x.date)+'</td><td>'+x.invoice+'</td><td>'+esc(x.name)+'</td><td>'+x.pax+'</td><td>'+esc(x.travel)+'</td><td>'+esc(x.package)+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
-    const grouped={};rows.forEach(x=>{grouped[x.member]=grouped[x.member]||{member:x.member,invoice:0,pax:0,omset:0};grouped[x.member].invoice+=Number(x.invoice||0);grouped[x.member].pax+=Number(x.pax||0);grouped[x.member].omset+=Number(x.omset||0)});
-    const summary=Object.values(grouped).sort((a,b)=>String(a.member).localeCompare(String(b.member)));
-    $('incomeMemberSummaryRows').innerHTML=summary.length?summary.map(x=>'<tr><td><b>'+esc(x.member)+'</b></td><td>'+x.invoice+'</td><td>'+x.pax+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td></tr>').join(''):'<tr><td colspan="4"><div class="empty">Belum ada closing.</div></td></tr>';
-    const top=summary.slice().sort((a,b)=>b.omset-a.omset).slice(0,10),max=Math.max(1,...top.map(x=>x.omset));
-    $('incomeBarChart').innerHTML=top.length?top.map(x=>'<div class="barItem"><div class="barValue">Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</div><div class="bar" style="height:'+Math.max(4,Math.round(x.omset/max*220))+'px"></div><div class="barLabel">'+esc(x.member)+'</div></div>').join(''):'<div class="empty" style="margin:auto">Belum ada data.</div>';
-  };
-
-  window.renderAdminActivityReport=function(){
-    if(!$('adminActivityMember'))return;
-    const mid=$('adminActivityMember').value||'all',start=$('adminActivityStart')?.value||'',end=$('adminActivityEnd')?.value||'';
-    const rows=(members||[]).filter(m=>mid==='all'||String(m.id)===String(mid)).flatMap(m=>(m.activityLog||[]).map(r=>({...r,member:m.name})).filter(r=>(!start||r.date>=start)&&(!end||r.date<=end)));
-    const sum={japri:0,follow:0,conv:0,lead:0,offer:0,closing:0,referral:0};rows.forEach(r=>Object.keys(sum).forEach(k=>sum[k]+=Number(r[k]||0)));
-    const map={actJapri:'japri',actFollow:'follow',actConv:'conv',actLead:'lead',actOffer:'offer',actClose:'closing',actReferral:'referral'};
-    Object.keys(map).forEach(id=>{if($(id))$(id).textContent=sum[map[id]]});
-    if($('activityEmpty'))$('activityEmpty').classList.toggle('hidden',rows.length>0);
-    if($('activityTableWrap'))$('activityTableWrap').classList.toggle('hidden',rows.length===0);
-    if($('activityRows'))$('activityRows').innerHTML=rows.sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(r=>'<tr><td>'+esc(r.member)+'</td><td>'+esc(r.date)+'</td><td>'+r.day+'</td><td>'+r.japri+'</td><td>'+r.follow+'</td><td>'+r.conv+'</td><td>'+r.lead+'</td><td>'+r.offer+'</td><td>'+r.closing+'</td><td>'+r.referral+'</td><td>'+esc(r.notes)+'</td></tr>').join('');
-  };
-
   window.renderAllAdmin=function(){
     try{renderAdminDashboard()}catch(e){}
     try{renderMembers()}catch(e){}
