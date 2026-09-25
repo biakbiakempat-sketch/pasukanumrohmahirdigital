@@ -1294,6 +1294,165 @@ function downloadExcel(filename,headers,rows){
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",bind);else bind();
 })();
 </script>
+
+<script id="superAdminLoginFinalFix">
+/* SUPER ADMIN LOGIN FINAL FIX — 2026-09-25
+   Keep the 7AM UX, but use Supabase Auth for central admin data.
+   Never hide the login screen until authentication + profile load succeed.
+*/
+(function(){
+  const ADMIN_USER_FIXED="mahirdigitalumroh";
+  const ADMIN_EMAIL_FIXED="biakbiak@gmail.com";
+  const ADMIN_ID_FIXED="af004c29-8504-4724-88c1-34369a125019";
+
+  function authMessage(html,ok){
+    const e=document.getElementById("authMsg");
+    if(e)e.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+html+'</div>';
+  }
+
+  function ensureResetButton(){
+    const form=document.getElementById("loginForm");
+    if(!form || document.getElementById("superAdminResetBtn")) return;
+    const btn=document.createElement("button");
+    btn.id="superAdminResetBtn";
+    btn.type="button";
+    btn.className="btn gray";
+    btn.style.cssText="width:100%;margin-top:8px";
+    btn.textContent="🔐 Reset Password Super Admin";
+    btn.addEventListener("click",async function(){
+      btn.disabled=true;
+      btn.textContent="Mengirim email reset...";
+      try{
+        if(typeof window.umrohAdminResetPassword==="function"){
+          await window.umrohAdminResetPassword();
+        }else{
+          const sb=window.supabaseClient;
+          if(!sb) throw new Error("Koneksi Supabase belum siap.");
+          const redirectTo=window.location.origin+window.location.pathname;
+          const {error}=await sb.auth.resetPasswordForEmail(ADMIN_EMAIL_FIXED,{redirectTo});
+          if(error)throw error;
+          authMessage("Email reset password sudah dikirim ke <b>"+ADMIN_EMAIL_FIXED+"</b>.",true);
+        }
+      }catch(err){
+        authMessage("Gagal mengirim email reset password: "+(err?.message||err),false);
+      }finally{
+        btn.disabled=false;
+        btn.textContent="🔐 Reset Password Super Admin";
+      }
+    });
+    form.appendChild(btn);
+  }
+
+  async function robustAdminLogin(e){
+    e.preventDefault();
+    const form=e.currentTarget||document.getElementById("loginForm");
+    const u=(document.getElementById("loginUser")?.value||"").trim();
+    const p=document.getElementById("loginPass")?.value||"";
+    const submit=form?.querySelector('button[type="submit"]');
+
+    if(u!==ADMIN_USER_FIXED){
+      /* Let the existing central member login handler process member accounts. */
+      return;
+    }
+
+    if(submit){submit.disabled=true;submit.textContent="Memverifikasi...";}
+    authMessage("Sedang memverifikasi akun Super Admin ke Supabase...",true);
+
+    try{
+      const sb=window.supabaseClient;
+      if(!sb) throw new Error("Modul Supabase belum termuat. Refresh halaman sekali.");
+
+      await sb.auth.signOut();
+      const {data,error}=await sb.auth.signInWithPassword({
+        email:ADMIN_EMAIL_FIXED,
+        password:p
+      });
+      if(error || !data?.user){
+        throw new Error(error?.message||"Password Super Admin tidak cocok.");
+      }
+      if(String(data.user.id)!==ADMIN_ID_FIXED){
+        await sb.auth.signOut();
+        throw new Error("Akun yang digunakan bukan akun Super Admin.");
+      }
+
+      const {data:profile,error:profileError}=await sb
+        .from("profiles")
+        .select("id,name,username,role,status,wa,day,registered_at,approved_at")
+        .eq("id",ADMIN_ID_FIXED)
+        .eq("role","super_admin")
+        .single();
+      if(profileError || !profile){
+        await sb.auth.signOut();
+        throw new Error("Auth berhasil, tetapi profil Super Admin tidak ditemukan.");
+      }
+
+      /* Central member load — do not depend on the older async wrapper. */
+      const {data:rows,error:rowsError}=await sb
+        .from("profiles")
+        .select("id,name,username,wa,role,status,day,registered_at,approved_at")
+        .eq("role","member")
+        .order("name",{ascending:true});
+      if(rowsError)throw rowsError;
+
+      members.length=0;
+      (rows||[]).forEach(function(pr){
+        members.push({
+          id:pr.id,
+          name:pr.name,
+          username:pr.username,
+          wa:pr.wa||"",
+          role:pr.role,
+          status:pr.status,
+          day:Number(pr.day||0),
+          checks:{},
+          sales:{},
+          activityLog:[],
+          leads:[],
+          registeredAt:pr.registered_at?String(pr.registered_at).slice(0,10):"-",
+          approvedAt:pr.approved_at?String(pr.approved_at).slice(0,10):""
+        });
+      });
+
+      currentRole="admin";
+      currentUser={
+        id:profile.id,
+        name:profile.name||"Super Admin",
+        username:profile.username||ADMIN_USER_FIXED,
+        role:"super_admin",
+        roleLabel:"Super Admin",
+        status:profile.status
+      };
+
+      saveAuthSession();
+      enterApp();
+      showPage("adminDashboard");
+      authMessage("Login Super Admin berhasil.",true);
+    }catch(err){
+      console.error("SUPER ADMIN LOGIN FINAL FIX:",err);
+      try{await window.supabaseClient?.auth?.signOut()}catch(_){}
+      /* Restore login screen if any older code hid it. */
+      try{
+        document.getElementById("app")?.classList.add("hidden");
+        document.getElementById("auth")?.classList.remove("hidden");
+      }catch(_){}
+      authMessage("Login Super Admin gagal: "+(err?.message||"Terjadi kesalahan.")+
+        '<br><button type="button" class="btnMini" style="margin-top:8px" onclick="umrohAdminResetPassword()">Kirim email reset password</button>',false);
+    }finally{
+      if(submit){submit.disabled=false;submit.textContent="Masuk";}
+    }
+  }
+
+  function install(){
+    const form=document.getElementById("loginForm");
+    if(!form)return;
+    ensureResetButton();
+    form.onsubmit=robustAdminLogin;
+  }
+
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install);
+  else install();
+})();
+</script>
 </body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
