@@ -3095,6 +3095,49 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 })();
 </script>
 
+<!-- SUPER ADMIN PASSWORD RESET V6 -->
+<style id="superAdminPasswordResetV6">
+#adminPasswordHelp{font-size:12px;color:#6f7d95;margin-top:6px;line-height:1.45}
+#adminPasswordTools{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+#adminPasswordTools button{border:0;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer}
+</style>
+<script id="superAdminPasswordResetV6">
+(function(){
+  function el(id){return document.getElementById(id)}
+  function randomPassword(){
+    const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    const a=new Uint32Array(10); crypto.getRandomValues(a);
+    let s=''; for(let i=0;i<a.length;i++) s+=chars[a[i]%chars.length];
+    return s;
+  }
+  function ensureTools(){
+    const input=el('newPassword'); if(!input||el('adminPasswordTools'))return;
+    input.type='text';
+    input.autocomplete='new-password';
+    input.placeholder='Kosongkan jika password tidak diubah';
+    const help=document.createElement('div');
+    help.id='adminPasswordHelp';
+    help.textContent='Password lama tidak disimpan dalam bentuk yang bisa dibaca kembali. Jika member lupa, buat password baru di sini lalu klik Simpan Member.';
+    const tools=document.createElement('div');
+    tools.id='adminPasswordTools';
+    const b=document.createElement('button');
+    b.type='button';
+    b.textContent='🔑 Buat Password Baru';
+    b.onclick=function(){ input.value=randomPassword(); input.focus(); };
+    const copy=document.createElement('button');
+    copy.type='button';
+    copy.textContent='📋 Salin';
+    copy.onclick=async function(){
+      if(!input.value){alert('Buat password baru dulu.');return}
+      try{await navigator.clipboard.writeText(input.value);alert('Password baru disalin.')}catch(e){input.select();document.execCommand('copy');alert('Password baru disalin.')}
+    };
+    tools.appendChild(b); tools.appendChild(copy);
+    input.parentNode.appendChild(help); input.parentNode.appendChild(tools);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ensureTools);else ensureTools();
+  new MutationObserver(ensureTools).observe(document.body,{subtree:true,childList:true});
+})();
+</script>
 <!-- SUPER ADMIN CRUD HARD FIX V5: restore modal/action layer + Super Admin interaction -->
 <style id="superAdminCrudHardFixV5">
 /* Modal must sit above every admin panel/button layer. */
