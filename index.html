@@ -686,61 +686,7 @@ function tasksForDay(day){
 function save(){/* Member persistence is handled by Supabase. Legacy localStorage is intentionally ignored. */}
 function initials(n){return (n||"SA").split(/\s+/).map(x=>x[0]).join("").slice(0,2).toUpperCase()}
 function authMode(mode){$("tabLogin").classList.toggle("active",mode==="login");$("tabReg").classList.toggle("active",mode==="reg");$("loginForm").classList.toggle("hidden",mode!=="login");$("regForm").classList.toggle("hidden",mode!=="reg");$("authMsg").innerHTML=""}
-window.loginFormSubmit=async e=>{
- e.preventDefault();
- const u=$("loginUser").value.trim(),p=$("loginPass").value;
- // Supabase Auth migration:
- // Super Admin can keep using the existing username in the UI.
- // The username is mapped to the Supabase Auth email behind the scenes.
- const supabaseLoginEmail = u==="mahirdigitalumroh"
-   ? "biakbiakempat@gmail.com"
-   : (u.includes("@") ? u : null);
- if(supabaseLoginEmail){
-   try{
-     if(!supabaseClient){
-       $("authMsg").innerHTML='<div class="msg err">Modul login belum termuat. Refresh halaman 1x lalu coba lagi.</div>';
-       return;
-     }
-     $("authMsg").innerHTML='<div class="msg ok">Sedang memverifikasi login...</div>';
-     const {data,error}=await supabaseClient.auth.signInWithPassword({email:supabaseLoginEmail,password:p});
-     if(error||!data?.user){
-       $("authMsg").innerHTML='<div class="msg err">Email atau password salah.</div>';
-       return;
-     }
-     const {data:profile,error:profileError}=await supabaseClient.from("profiles").select("*").eq("id",data.user.id).single();
-     if(profileError||!profile){
-       await supabaseClient.auth.signOut();
-       $("authMsg").innerHTML='<div class="msg err">Akun Auth sudah ada, tetapi profil aplikasi belum ditemukan.</div>';
-       return;
-     }
-     if(profile.status!=="approved"){
-       await supabaseClient.auth.signOut();
-       $("authMsg").innerHTML='<div class="msg err">Akun masih menunggu approval Super Admin.</div>';
-       return;
-     }
-     currentUser={id:profile.id,name:profile.name,username:profile.username,wa:profile.wa||"",role:profile.role,status:profile.status,day:Number(profile.day||0),checks:{},sales:{},activityLog:[],leads:[]};
-     currentRole=profile.role==="super_admin"?"admin":"member";
-     saveAuthSession();
-     enterApp();
-     showPage(currentRole==="admin"?"adminDashboard":"memberDashboard");
-     if(currentRole==="member")setTimeout(()=>showActivePopup(true),180);
-     return;
-   }catch(err){
-     console.error("Supabase Auth:",err);
-     $("authMsg").innerHTML='<div class="msg err">Koneksi ke Supabase gagal. Coba lagi.</div>';
-     return;
-   }
- }
- if(u===ADMIN_USER){
-   $("authMsg").innerHTML='<div class="msg err">Login Super Admin harus melalui Supabase Auth.</div>';return;
- }
- const m=members.find(x=>x.username===u);
- if(!m || !(await verifyPassword(p,m.password))){$("authMsg").innerHTML='<div class="msg err">Username atau password salah.</div>';return}
- if(!String(m.password||"").startsWith("pbkdf2$")){m.password=await createPasswordHash(p);save()}
- if(m.role==="admin" && m.status==="approved"){currentRole="admin";currentUser=m;saveAuthSession();enterApp();showPage("adminDashboard");return}
- if(m.status!=="approved"){$("authMsg").innerHTML='<div class="msg err">Akun masih menunggu approval Super Admin.</div>';return}
- currentRole="member";currentUser=m;saveAuthSession();enterApp();showPage("memberDashboard");setTimeout(()=>showActivePopup(true),180);
-};
+
 $("regForm").onsubmit=async e=>{
  e.preventDefault();const name=$("regName").value.trim(),username=$("regUsername").value.trim(),wa=$("regWa").value.trim(),password=$("regPassword").value;
  if(members.some(x=>x.username===username)){$("authMsg").innerHTML='<div class="msg err">Username sudah digunakan.</div>';return}
@@ -2154,35 +2100,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   }
   async function adminRefresh(){if(currentRole!=='admin')return;try{if(typeof window.umrohAdminRefreshBridge==='function'){await window.umrohAdminRefreshBridge();return}await loadDbMembers();if(typeof renderAllAdmin==='function')renderAllAdmin()}catch(e){console.error('DB member refresh',e)}}
 
-  window.loginFormSubmit=async function(e){
-    e.preventDefault();
-    const u=$('loginUser').value.trim(),p=$('loginPass').value;
-    if(u===ADMIN_USER){
-      const c=sb();if(!c){msg('Modul login belum siap. Tunggu 1–2 detik lalu coba lagi.');return}
-      try{
-        const {data,error}=await c.auth.signInWithPassword({email:'biakbiakempat@gmail.com',password:p});
-        if(error||!data?.user){console.error('Super Admin Auth:',error);msg(error?.message||'Username atau password salah.');return}
-        // Super Admin is authorized by Supabase Auth. Do not depend on a profiles SELECT,
-        // because mobile browsers can hit a stricter RLS policy even after Auth succeeds.
-        currentUser={id:data.user.id,name:data.user.user_metadata?.name||'Super Admin',username:ADMIN_USER,roleLabel:'Super Admin',role:'super_admin',status:'approved'};
-        currentRole='admin';
-        saveAuthSession();
-        enterApp();
-        showPage('adminDashboard');
-        setTimeout(adminRefresh,50);
-      }catch(err){console.error('Super Admin login:',err);msg('Koneksi ke Supabase gagal. Periksa internet lalu coba lagi.')}
-      return;
-    }
-    try{
-      msg('Sedang memverifikasi login...',true);
-      const {data,error}=await sb().rpc('member_login',{p_username:u,p_password:p});
-      if(error)throw error;
-      if(!data?.success){msg(data?.message||'Username atau password salah.');return}
-      if(window.umrohMemberSession)window.umrohMemberSession.set(data.token||'');currentUser=profileMap(data.profile);currentRole='member';members=[currentUser];
-      saveAuthSession();enterApp();showPage('memberDashboard');
-      setTimeout(()=>{try{showActivePopup(true)}catch(e){}},180);
-    }catch(err){console.error('Member DB login',err);msg('Login gagal: '+(err?.message||'koneksi database bermasalah'))}
-  };
+  
 
   const rf=$('regForm');
   if(rf)rf.onsubmit=async function(e){
@@ -2361,64 +2279,93 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   else initMobileDropdown();
 })();
 </script>
-<script id="finalMobileLoginFix">
+
+<script id="canonicalLoginHandler">
 (function(){
-  function showMsg(text,ok){
+  function showLoginMsg(text,ok){
     var m=document.getElementById("authMsg");
     if(m)m.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+String(text)+'</div>';
   }
-  function getClient(){
-    return window.supabaseClient || (typeof sb==="function" ? sb() : null);
-  }
-  async function handle(e){
+  async function handleLogin(e){
     e.preventDefault();
-    e.stopPropagation();
     var u=(document.getElementById("loginUser")?.value||"").trim();
     var p=document.getElementById("loginPass")?.value||"";
-    var client=getClient();
-    if(!client){showMsg("Modul Supabase belum siap. Refresh halaman lalu coba lagi.");return false;}
-    if(!u||!p){showMsg("Username dan password wajib diisi.");return false;}
-    showMsg("Sedang memverifikasi login...",true);
+    var client=window.supabaseClient;
+    if(!client || !client.auth || typeof client.auth.signInWithPassword!=="function"){
+      showLoginMsg("Modul login Supabase belum siap. Refresh halaman lalu coba lagi.");
+      return false;
+    }
+    if(!u || !p){
+      showLoginMsg("Username dan password wajib diisi.");
+      return false;
+    }
+    showLoginMsg("Sedang memverifikasi login...",true);
     try{
-      if(u==="mahirdigitalumroh"){
-        var auth=await client.auth.signInWithPassword({email:"biakbiakempat@gmail.com",password:p});
-        if(auth.error||!auth.data?.user){
+      if(u===ADMIN_USER){
+        var auth=await client.auth.signInWithPassword({
+          email:"biakbiakempat@gmail.com",
+          password:p
+        });
+        if(auth.error || !auth.data?.user){
           console.error("Super Admin Auth:",auth.error);
-          showMsg(auth.error?.message||"Username atau password salah.");
+          showLoginMsg(auth.error?.message||"Username atau password salah.");
           return false;
         }
-        currentUser={id:auth.data.user.id,name:auth.data.user.user_metadata?.name||"Super Admin",username:"mahirdigitalumroh",roleLabel:"Super Admin",role:"super_admin",status:"approved"};
+        currentUser={
+          id:auth.data.user.id,
+          name:auth.data.user.user_metadata?.name||"Super Admin",
+          username:ADMIN_USER,
+          roleLabel:"Super Admin",
+          role:"super_admin",
+          status:"approved"
+        };
         currentRole="admin";
         if(typeof saveAuthSession==="function")saveAuthSession();
         if(typeof enterApp==="function")enterApp();
         if(typeof showPage==="function")showPage("adminDashboard");
-        setTimeout(function(){try{if(typeof adminRefresh==="function")adminRefresh()}catch(x){}},50);
+        setTimeout(function(){
+          try{if(typeof adminRefresh==="function")adminRefresh()}catch(x){}
+        },50);
         return false;
       }
-      var rpc=await client.rpc("member_login",{p_username:u,p_password:p});
+
+      var rpc=await client.rpc("member_login",{
+        p_username:u,
+        p_password:p
+      });
       if(rpc.error)throw rpc.error;
-      if(!rpc.data?.success){showMsg(rpc.data?.message||"Username atau password salah.");return false;}
-      if(window.umrohMemberSession)window.umrohMemberSession.set(rpc.data.token||"");
-      currentUser=typeof profileMap==="function"?profileMap(rpc.data.profile):rpc.data.profile;
+      if(!rpc.data?.success){
+        showLoginMsg(rpc.data?.message||"Username atau password salah.");
+        return false;
+      }
+      if(window.umrohMemberSession){
+        window.umrohMemberSession.set(rpc.data.token||"");
+      }
+      currentUser=typeof profileMap==="function"
+        ? profileMap(rpc.data.profile)
+        : rpc.data.profile;
       currentRole="member";
+      members=[currentUser];
       if(typeof saveAuthSession==="function")saveAuthSession();
       if(typeof enterApp==="function")enterApp();
       if(typeof showPage==="function")showPage("memberDashboard");
-      setTimeout(function(){try{if(typeof showActivePopup==="function")showActivePopup(true)}catch(x){}},180);
+      setTimeout(function(){
+        try{if(typeof showActivePopup==="function")showActivePopup(true)}catch(x){}
+      },180);
       return false;
     }catch(err){
       console.error("Login:",err);
-      showMsg("Login gagal: "+(err?.message||"koneksi ke Supabase bermasalah"));
+      var detail=String(err?.message||err||"");
+      if(/failed to fetch/i.test(detail)){
+        showLoginMsg("Browser gagal menghubungi Supabase. Periksa koneksi lalu coba lagi.");
+      }else{
+        showLoginMsg("Login gagal: "+detail);
+      }
       return false;
     }
   }
-  function boot(){
-    var form=document.getElementById("loginForm");
-    if(!form)return;
-    form.onsubmit=handle;
-    window.loginFormSubmit=handle;
-  }
-  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
+  window.loginFormSubmit=handleLogin;
 })();
-</script></body>
+</script>
+</body>
 </html>
