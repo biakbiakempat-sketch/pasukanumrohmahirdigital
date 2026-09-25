@@ -1026,7 +1026,7 @@ function downloadExcel(filename,headers,rows){
       currentUser.activityLog.forEach(x=>{if(x.day)currentUser.sales[x.day]={...x}});
       if(cfgR.data?.success){
         const c=cfgR.data.configs||{};
-        Object.keys(cfgKeys).forEach(k=>{if(c[k]!=null)setLS(cfgKeys[k],c[k])});
+        Object.keys(c).forEach(k=>{if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=c[k]});
       }
       const day=currentDay();
       const ck=await S().rpc('member_checklist_get',{p_token:token(),p_program_day:day});
@@ -1071,7 +1071,7 @@ function downloadExcel(filename,headers,rows){
       });
       if(cfg?.data?.success){
         const cc=cfg.data.configs||{};
-        Object.keys(cfgKeys).forEach(k=>{if(cc[k]!=null)setLS(cfgKeys[k],cc[k])});
+        Object.keys(cc).forEach(k=>{if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=cc[k]});
       }
       if(typeof renderAllAdmin==='function')renderAllAdmin();
     }catch(e){console.error('Phase 3 admin load:',e)}
@@ -1096,7 +1096,7 @@ function downloadExcel(filename,headers,rows){
   window.enterApp=function(){
     if(typeof oldEnter==='function')oldEnter.apply(this,arguments);
     if(currentRole==='member')setTimeout(loadMemberCentral,120);
-    if(currentRole==='admin')setTimeout(async()=>{await seedOrLoadAdminConfig();await loadAdminCentral();},120);
+    if(currentRole==='admin')setTimeout(async()=>{await ensureCentralConfig();await loadAdminCentral();},120);
   };
 
   const oldShow=window.showPage;
@@ -1109,7 +1109,7 @@ function downloadExcel(filename,headers,rows){
 
   window.umrohAdminRefreshBridge=loadAdminCentral;
   window.__centralConfigSig={};
-  setInterval(function(){if(currentRole==='admin')saveConfigIfChanged()},4000);
+  // Central configuration is persisted directly to Supabase by put()/syncCentralConfig().
   setInterval(function(){if(currentRole==='member'&&!document.hidden)loadMemberCentral()},10000);
   setTimeout(function(){
     if(currentRole==='admin'){seedOrLoadAdminConfig();loadAdminCentral()}
@@ -1597,27 +1597,101 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   const CFG={
     settingsKey:'pasukanUmrohSettingsV9', scheduleKey:'pasukanUmrohScheduleV9', materialKey:'pasukanUmrohMaterialsV9', rewardKey:'pasukanUmrohRewardsV9', checklistKey:'pasukanUmrohChecklistV9'
   };
-  const j=(k,d)=>{try{return JSON.parse(localStorage.getItem(k)||'null')??d}catch(e){return d}};
-  const put=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+  const CENTRAL_DEFAULTS={
+    settings:{programName:'Pasukan Umroh Mahir Digital',duration:60,unlock:100},
+    materials:[
+      {id:1,name:'TUTORIAL DASHBOARD',desc:'Panduan menggunakan dashboard program.',links:[]},
+      {id:2,name:'SCRIPT SALES',desc:'Greeting, probing, follow-up, objection, closing.',links:[{name:'Google Drive Script Sales',url:'https://drive.google.com/drive/folders/1jlfJ7Qo14WFhW9hjXEJEJE91-hcNfCP28?usp=sharing'}]},
+      {id:3,name:'KONTEN NON BRAND',desc:'Materi konten non-brand yang dapat digunakan member.',links:[{name:'Google Drive Konten Non Brand',url:'https://drive.google.com/drive/folders/1OBkGY_C3sSYgj4SDQSdpzhijFtsSMHtT?usp=sharing'}]},
+      {id:4,name:'KONTEN BRAND',desc:'Materi konten brand.',links:[]},
+      {id:5,name:'PRODUK KNOWLEDGE BRAND',desc:'Produk, paket, fasilitas, FAQ, dan pengetahuan brand.',links:[]},
+      {id:6,name:'ROLEPLAY',desc:'Latihan percakapan sampai next step.',links:[]}
+    ],
+    rewards:[
+      {id:15,day:15,name:'Webinar Khusus Gratis',desc:'40 menit • Minimal 20 orang'},
+      {id:30,day:30,name:'Webinar 1-on-1 Jualan Organik',desc:'40 menit'},
+      {id:45,day:45,name:'Webinar 1-on-1 Iklan Umroh',desc:'40 menit'},
+      {id:60,day:60,name:'Kelas Semi Private Online Jualan Umroh',desc:'3 jam'}
+    ]
+  };
+  const centralConfig={settings:null,schedule:null,materials:null,rewards:null,checklist:null,info_bars:null,popups:null};
+  const cloneCfg=v=>{try{return v==null?v:JSON.parse(JSON.stringify(v))}catch(e){return v}};
+  const j=(k,d)=>{
+    const v=centralConfig[k];
+    return v==null?cloneCfg(d):cloneCfg(v);
+  };
+  async function syncCentralConfig(key,value){
+    try{
+      const c=window.supabaseClient;
+      if(!c)return;
+      const {error}=await c.from('program_configs').upsert({
+        config_key:key,
+        config_value:value,
+        updated_at:new Date().toISOString()
+      },{onConflict:'config_key'});
+      if(error)throw error;
+    }catch(e){
+      console.error('Central config save '+key+':',e);
+      notify('Gagal menyimpan '+key+' ke Supabase.');
+    }
+  }
+  const put=(k,v)=>{
+    centralConfig[k]=cloneCfg(v);
+    syncCentralConfig(k,centralConfig[k]);
+    return centralConfig[k];
+  };
+  async function loadCentralConfig(){
+    const c=window.supabaseClient;
+    if(!c)return false;
+    try{
+      const {data,error}=await c.from('program_configs').select('config_key,config_value');
+      if(error)throw error;
+      (data||[]).forEach(row=>{if(Object.prototype.hasOwnProperty.call(centralConfig,row.config_key))centralConfig[row.config_key]=row.config_value});
+      return true;
+    }catch(e){
+      console.error('Central config load:',e);
+      return false;
+    }
+  }
+  async function ensureCentralConfig(){
+    await loadCentralConfig();
+    const defaults={
+      settings:CENTRAL_DEFAULTS.settings,
+      materials:CENTRAL_DEFAULTS.materials,
+      rewards:CENTRAL_DEFAULTS.rewards,
+      schedule:[],
+      info_bars:[],
+      popups:[]
+    };
+    for(const [key,value] of Object.entries(defaults)){
+      if(centralConfig[key]==null||((Array.isArray(centralConfig[key])||typeof centralConfig[key]==='object')&&Object.keys(centralConfig[key]).length===0&&key!=='settings')){
+        await syncCentralConfig(key,value);
+        centralConfig[key]=cloneCfg(value);
+      }
+    }
+    if(centralConfig.checklist==null){
+      const c={};
+      for(let d=1;d<=60;d++){
+        let base=[];
+        try{
+          const special=(typeof daySpecific!=='undefined'?(daySpecific[d]||[]):[]);
+          const common=(typeof commonBase!=='undefined'?commonBase:[]);
+          base=d===1?special.slice():[...common.filter(x=>!special.includes(x) && !(special.some(y=>y.includes('5 Story')) && x==='Upload 3–5 Story')),...special];
+        }catch(e){}
+        c[d]={active:true,tasks:base};
+      }
+      centralConfig.checklist=c;
+      await syncCentralConfig('checklist',c);
+    }
+    return true;
+  }
   const today=()=>new Date().toISOString().slice(0,10);
   const esc2=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
   const waUrl=w=>{let n=String(w||'').replace(/\D/g,'');if(n.startsWith('0'))n='62'+n.slice(1);if(!n.startsWith('62'))n='62'+n;return 'https://wa.me/'+n};
-  const cfg=()=>j(CFG.settingsKey,{programName:'Pasukan Umroh Mahir Digital',duration:60,unlock:100});
-  function schedule(){return j(CFG.scheduleKey,[])}
-  function materials(){return j(CFG.materialKey,[
-    {id:1,name:'TUTORIAL DASHBOARD',desc:'Panduan menggunakan dashboard program.',links:[]},
-    {id:2,name:'SCRIPT SALES',desc:'Greeting, probing, follow-up, objection, closing.',links:[{name:'Google Drive Script Sales',url:'https://drive.google.com/drive/folders/1jlfJ7Qo14WFhW9hjXEJEU91-hcNfCP28?usp=sharing'}]},
-    {id:3,name:'KONTEN NON BRAND',desc:'Materi konten non-brand yang dapat digunakan member.',links:[{name:'Google Drive Konten Non Brand',url:'https://drive.google.com/drive/folders/1OBkGY_C3sSYgj4SDQSdpzhijFtsSMHtT?usp=sharing'}]},
-    {id:4,name:'KONTEN BRAND',desc:'Materi konten brand.',links:[]},
-    {id:5,name:'PRODUK KNOWLEDGE BRAND',desc:'Produk, paket, fasilitas, FAQ, dan pengetahuan brand.',links:[]},
-    {id:6,name:'ROLEPLAY',desc:'Latihan percakapan sampai next step.',links:[]}
-  ])}
-  function rewards(){return j(CFG.rewardKey,[
-    {id:15,day:15,name:'Webinar Khusus Gratis',desc:'40 menit • Minimal 20 orang'},
-    {id:30,day:30,name:'Webinar 1-on-1 Jualan Organik',desc:'40 menit'},
-    {id:45,day:45,name:'Webinar 1-on-1 Iklan Umroh',desc:'40 menit'},
-    {id:60,day:60,name:'Kelas Semi Private Online Jualan Umroh',desc:'3 jam'}
-  ])}
+  const cfg=()=>j('settings',CENTRAL_DEFAULTS.settings);
+  function schedule(){return j('schedule',[])}
+  function materials(){return j('materials',CENTRAL_DEFAULTS.materials)}
+  function rewards(){return j('rewards',CENTRAL_DEFAULTS.rewards)}
   function checklist(){
     let c=j(CFG.checklistKey,null); if(c) return c;
     const c2={}; for(let d=1;d<=60;d++){let base=[]; try{const special=(typeof daySpecific!=='undefined'?(daySpecific[d]||[]):[]); const common=(typeof commonBase!=='undefined'?commonBase:[]); base=d===1?special.slice():[...common.filter(x=>!special.includes(x) && !(special.some(y=>y.includes('5 Story')) && x==='Upload 3–5 Story')),...special];}catch(e){} c2[d]={active:true,tasks:base};}
@@ -2111,9 +2185,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
         if(m)m.innerHTML='<div class="msg '+(ok?"ok":"err")+'">'+String(t)+'</div>';
       };
       if(u!=="mahirdigitalumroh"){
-        if(typeof window.loginFormSubmit==="function"){
-          return window.loginFormSubmit(e);
-        }
+        if(typeof window.loginFormSubmit==="function")return window.loginFormSubmit(e);
         show("Modul login belum siap. Refresh halaman lalu coba lagi.");
         return false;
       }
@@ -2134,18 +2206,14 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
               "apikey":"sb_publishable_hqJ2gxeoNcOt2srRCrS4cw_-tiFy2EP",
               "Content-Type":"application/json"
             },
-            body:JSON.stringify({
-              email:"biakbiakempat@gmail.com",
-              password:p
-            }),
+            body:JSON.stringify({email:"biakbiakempat@gmail.com",password:p}),
             signal:controller.signal
           }
         );
         let body=null;
         try{body=await response.json()}catch(_){}
         if(!response.ok||!body?.access_token||!body?.refresh_token){
-          const detail=body?.error_description||body?.msg||body?.message||"Username atau password salah.";
-          show(detail);
+          show(body?.error_description||body?.msg||body?.message||"Username atau password salah.");
           return false;
         }
         show("Login Supabase berhasil. Menyiapkan dashboard...",true);
@@ -2158,38 +2226,44 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
           return false;
         }
         const user=sessionResult?.data?.user||body?.user;
-        if(!user?.id){
-          show("Login berhasil, tetapi data akun tidak diterima.");
-          return false;
-        }
-        currentUser={
-          id:user.id,
-          name:user.user_metadata?.name||"Super Admin",
-          username:"mahirdigitalumroh",
-          roleLabel:"Super Admin",
-          role:"super_admin",
-          status:"approved"
-        };
+        if(!user?.id){show("Login berhasil, tetapi data akun tidak diterima.");return false;}
+        currentUser={id:user.id,name:user.user_metadata?.name||"Super Admin",username:"mahirdigitalumroh",roleLabel:"Super Admin",role:"super_admin",status:"approved"};
         currentRole="admin";
         if(typeof saveAuthSession==="function")saveAuthSession();
-        show("Login berhasil. Membuka dashboard...",true);
-        if(typeof enterApp==="function")enterApp();
-        if(typeof showPage==="function")showPage("adminDashboard");
+
+        // Do not pass through the old nested enterApp/showPage wrappers.
+        const auth=document.getElementById("auth"),app=document.getElementById("app");
+        if(auth)auth.classList.add("hidden");
+        if(app)app.classList.remove("hidden");
+        document.getElementById("memberNav")?.classList.add("hidden");
+        document.getElementById("adminNav")?.classList.remove("hidden");
+        const rb=document.getElementById("roleBadge");if(rb)rb.textContent="SUPER ADMIN";
+        const tn=document.getElementById("topName");if(tn)tn.textContent=currentUser.name;
+        const tr=document.getElementById("topRole");if(tr)tr.textContent="Super Admin";
+        const ta=document.getElementById("topAvatar");if(ta)ta.textContent=typeof initials==="function"?initials(currentUser.name):"SA";
+        document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
+        document.getElementById("page-adminDashboard")?.classList.add("active");
+        document.querySelectorAll(".navItem[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page==="adminDashboard"));
+        show("Login berhasil. Dashboard siap dibuka.",true);
+
+        // Load shared configuration/data after the dashboard is visible.
+        setTimeout(async function(){
+          try{
+            if(typeof ensureCentralConfig==="function")await ensureCentralConfig();
+            if(typeof window.umrohAdminRefreshBridge==="function")await window.umrohAdminRefreshBridge();
+            else if(typeof loadAdminCentral==="function")await loadAdminCentral();
+            if(typeof renderAllAdmin==="function")renderAllAdmin();
+          }catch(err){console.error("Admin dashboard load:",err);}
+        },50);
+        window.scrollTo(0,0);
         return false;
       }catch(err){
         console.error("Final Super Admin login:",err);
-        if(err?.name==="AbortError"){
-          show("Koneksi ke Supabase timeout (12 detik).");
-        }else{
-          show("Login gagal: "+(err?.message||"koneksi ke Supabase bermasalah"));
-        }
+        show(err?.name==="AbortError"?"Koneksi ke Supabase timeout (12 detik).":"Login gagal: "+(err?.message||"koneksi ke Supabase bermasalah"));
         return false;
-      }finally{
-        clearTimeout(timer);
-      }
+      }finally{clearTimeout(timer);}
     };
   }
-  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);
-  else boot();
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
 })();</script></body>
 </html>
