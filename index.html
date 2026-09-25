@@ -960,11 +960,12 @@ function editAdminLead(mid,id){
 function deleteAdminLead(mid,id){const m=members.find(x=>x.id===mid);if(!m||!confirm("Hapus lead ini?"))return;m.leads=(m.leads||[]).filter(x=>x.id!==id);save();renderAllAdmin();renderAdminLeadReport();}
 function xlsEscape(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 function downloadExcel(filename,headers,rows){
- const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table></body></html>`;
+ const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table>
+
+\n</body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
 
-<script id="phase3CentralClient">
 /* PHASE 3 — CENTRAL DATA CLIENT
    Member identity: profiles + short-lived custom session token.
    Shared data: leads, activities, closings, checklist state, program config.
@@ -1026,7 +1027,7 @@ function downloadExcel(filename,headers,rows){
       currentUser.activityLog.forEach(x=>{if(x.day)currentUser.sales[x.day]={...x}});
       if(cfgR.data?.success){
         const c=cfgR.data.configs||{};
-        Object.keys(cfgKeys).forEach(k=>{if(c[k]!=null)setLS(cfgKeys[k],c[k])});
+        Object.keys(c).forEach(k=>{if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=c[k]});
       }
       const day=currentDay();
       const ck=await S().rpc('member_checklist_get',{p_token:token(),p_program_day:day});
@@ -1071,7 +1072,7 @@ function downloadExcel(filename,headers,rows){
       });
       if(cfg?.data?.success){
         const cc=cfg.data.configs||{};
-        Object.keys(cfgKeys).forEach(k=>{if(cc[k]!=null)setLS(cfgKeys[k],cc[k])});
+        Object.keys(cc).forEach(k=>{if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=cc[k]});
       }
       if(typeof renderAllAdmin==='function')renderAllAdmin();
     }catch(e){console.error('Phase 3 admin load:',e)}
@@ -1096,7 +1097,7 @@ function downloadExcel(filename,headers,rows){
   window.enterApp=function(){
     if(typeof oldEnter==='function')oldEnter.apply(this,arguments);
     if(currentRole==='member')setTimeout(loadMemberCentral,120);
-    if(currentRole==='admin')setTimeout(async()=>{await seedOrLoadAdminConfig();await loadAdminCentral();},120);
+    if(currentRole==='admin')setTimeout(async()=>{await ensureCentralConfig();await loadAdminCentral();},120);
   };
 
   const oldShow=window.showPage;
@@ -1109,14 +1110,19 @@ function downloadExcel(filename,headers,rows){
 
   window.umrohAdminRefreshBridge=loadAdminCentral;
   window.__centralConfigSig={};
-  setInterval(function(){if(currentRole==='admin')saveConfigIfChanged()},4000);
+  // Central configuration is persisted directly to Supabase by put()/syncCentralConfig().
   setInterval(function(){if(currentRole==='member'&&!document.hidden)loadMemberCentral()},10000);
-  setTimeout(function(){
-    if(currentRole==='admin'){seedOrLoadAdminConfig();loadAdminCentral()}
-    else if(currentRole==='member')loadMemberCentral();
+  setTimeout(async function(){
+    try{
+      if(currentRole==='admin'){
+        if(typeof window.__umrohEnsureCentralConfig==='function')await window.__umrohEnsureCentralConfig();
+        if(typeof loadAdminCentral==='function')await loadAdminCentral();
+      }else if(currentRole==='member'){
+        if(typeof loadMemberCentral==='function')await loadMemberCentral();
+      }
+    }catch(e){console.error('Central bootstrap:',e)}
   },1200);
 })();
-</script>
 function exportMyLeads(){const start=$("leadExportStart")?.value||"";const end=$("leadExportEnd")?.value||"";if(start&&end&&start>end){alert("Tanggal mulai tidak boleh lebih besar dari tanggal akhir.");return}const rows=(currentUser.leads||[]).filter(l=>(!start||l.date>=start)&&(!end||l.date<=end)).map(l=>[l.date,l.time,l.name,l.city,l.contact,l.source,l.response,l.plan,l.funnel,l.closing,l.closingDate,l.fu1,l.fu1Response||"",l.fu2,l.fu2Response||"",l.fu3,l.fu3Response||"",l.noClose,l.cs,l.note]);downloadExcel("leads-"+(currentUser.username||"member")+".xls",["Tanggal","Waktu","Nama","Kota","Kontak","Sumber Lead","Respon","Rencana Order","Funnel","Closing","Tanggal Closing","FU1","Respon FU1","FU2","Respon FU2","FU3","Respon FU3","Alasan Tidak Closing","CS","Keterangan"],rows)}
 function exportAllLeads(){const rows=leadRecords().map(l=>[l.member,l.date,l.time,l.name,l.city,l.contact,l.source,l.response,l.plan,l.funnel,l.closing,l.closingDate,l.fu1,l.fu2,l.fu3,l.noClose,l.cs,l.note,l.score]);downloadExcel("semua-leads-pasukan-umroh.xls",["Member","Tanggal","Waktu","Nama","Kota","Kontak","Sumber Lead","Respon","Rencana Order","Funnel","Closing","Tanggal Closing","FU1","FU2","FU3","Alasan Tidak Closing","CS","Keterangan","Lead Score"],rows)}
 function exportAllActivities(){const rows=[];members.forEach(m=>activityRecords(m).forEach(r=>rows.push([r.member,r.date,r.day,r.japri,r.follow,r.conv,r.lead,r.offer,r.closing,r.referral,r.notes])));downloadExcel("aktivitas-sales-pasukan-umroh.xls",["Member","Tanggal","Hari","Japri","Follow-up","Percakapan","Lead","Offer","Closing","Referral","Catatan"],rows)}
@@ -1185,7 +1191,7 @@ function jumpMemberDay(day){if(day!==currentDay()){alert("Tampilan program mengi
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 
 /* Clean start: legacy member migration intentionally disabled. Supabase is the only member data source. */
-<\/script>
+</script>
 <style>
 #supabaseRecoveryScreen{position:fixed;inset:0;z-index:100000;background:linear-gradient(135deg,#080d55,#172477);display:none;place-items:center;padding:20px}
 #supabaseRecoveryScreen.show{display:grid}
@@ -1302,7 +1308,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 .activityMemberSearch{max-width:280px}
 @media(max-width:900px){.closingGrid,.closingSummary,.incomeTop{grid-template-columns:1fr 1fr}}@media(max-width:600px){.closingGrid,.closingSummary,.incomeTop{grid-template-columns:1fr}}
 </style>
-<script id="closingMemberFeatureScript">
+<script>
 /* CLOSING MEMBER V1 */
 (function(){
   const money=n=>Number(n||0).toLocaleString('id-ID');
@@ -1363,7 +1369,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     const rows=readClosing(m).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
     const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0),pax=rows.reduce((n,x)=>n+Number(x.pax||0),0),om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
     $('myClosingInvoices').textContent=inv;$('myClosingPax').textContent=pax;$('myClosingOmset').textContent='Rp '+money(om);$('myClosingCount').textContent=rows.length;
-    $('myClosingRows').innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc2(x.date)+'</td><td><b>'+esc2(x.name)+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc2(x.travel)+'</td><td>'+esc2(x.package)+'</td><td>Rp '+money(x.omset)+'</td><td><button class="btnMini" onclick="editClosing('+x.id+')">Edit</button> <button class="btnMini danger" onclick="deleteClosing('+x.id+')">Hapus</button></td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+    $('myClosingRows').innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc2(x.date)+'</td><td><b>'+esc2(x.name)+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc2(x.travel)+'</td><td>'+esc2(x.package)+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td><td><button class="btnMini" onclick="editClosing('+x.id+')">Edit</button> <button class="btnMini danger" onclick="deleteClosing('+x.id+')">Hapus</button></td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
   }
   window.resetClosingForm=resetClosingForm;
   window.saveClosing=function(){
@@ -1394,12 +1400,12 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     const sort=$('incomeSort').value;rows.sort((a,b)=>sort==='member_az'?String(a.member).localeCompare(String(b.member)):sort==='date_asc'?String(a.date).localeCompare(String(b.date)):String(b.date).localeCompare(String(a.date)));
     const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0),pax=rows.reduce((n,x)=>n+Number(x.pax||0),0),om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
     $('incomeInvoiceTotal').textContent=inv;$('incomePaxTotal').textContent=pax;$('incomeOmsetTotal').textContent='Rp '+money(om);$('incomeMemberTotal').textContent=new Set(rows.map(x=>x.memberId)).size;
-    $('incomeRows').innerHTML=rows.length?rows.map(x=>'<tr><td><b>'+esc2(x.member)+'</b></td><td>'+esc2(x.date)+'</td><td>'+Number(x.invoice||0)+'</td><td>'+esc2(x.name)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc2(x.travel)+'</td><td>'+esc2(x.package)+'</td><td>Rp '+money(x.omset)+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+    $('incomeRows').innerHTML=rows.length?rows.map(x=>'<tr><td><b>'+esc2(x.member)+'</b></td><td>'+esc2(x.date)+'</td><td>'+Number(x.invoice||0)+'</td><td>'+esc2(x.name)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc2(x.travel)+'</td><td>'+esc2(x.package)+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
     const grouped={};rows.forEach(x=>{grouped[x.member]=grouped[x.member]||{member:x.member,invoice:0,pax:0,omset:0};grouped[x.member].invoice+=Number(x.invoice||0);grouped[x.member].pax+=Number(x.pax||0);grouped[x.member].omset+=Number(x.omset||0)});
     const summary=Object.values(grouped).sort((a,b)=>String(a.member).localeCompare(String(b.member)));
-    $('incomeMemberSummaryRows').innerHTML=summary.length?summary.map(x=>'<tr><td><b>'+esc2(x.member)+'</b></td><td>'+x.invoice+'</td><td>'+x.pax+'</td><td>Rp '+money(x.omset)+'</td></tr>').join(''):'<tr><td colspan="4"><div class="empty">Belum ada closing.</div></td></tr>';
+    $('incomeMemberSummaryRows').innerHTML=summary.length?summary.map(x=>'<tr><td><b>'+esc2(x.member)+'</b></td><td>'+x.invoice+'</td><td>'+x.pax+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td></tr>').join(''):'<tr><td colspan="4"><div class="empty">Belum ada closing.</div></td></tr>';
     const top=summary.slice().sort((a,b)=>b.omset-a.omset).slice(0,10),max=Math.max(1,...top.map(x=>x.omset));
-    $('incomeBarChart').innerHTML=top.length?top.map(x=>'<div class="barItem"><div class="barValue">Rp '+money(x.omset)+'</div><div class="bar" style="height:'+Math.max(4,Math.round(x.omset/max*220))+'px" title="'+esc2(x.member)+'"></div><div class="barLabel">'+esc2(x.member)+'</div></div>').join(''):'<div class="empty" style="margin:auto">Belum ada data.</div>';
+    $('incomeBarChart').innerHTML=top.length?top.map(x=>'<div class="barItem"><div class="barValue">Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</div><div class="bar" style="height:'+Math.max(4,Math.round(x.omset/max*220))+'px" title="'+esc2(x.member)+'"></div><div class="barLabel">'+esc2(x.member)+'</div></div>').join(''):'<div class="empty" style="margin:auto">Belum ada data.</div>';
   };
   const oldShowPage=window.showPage;
   window.showPage=function(page){const r=typeof oldShowPage==='function'?oldShowPage.apply(this,arguments):undefined;setTimeout(()=>{if(page==='memberClosing')renderMemberClosing();if(page==='adminIncome')renderIncomeMember();if(page==='adminLeads')renderAdminLeadReport()},30);return r};
@@ -1411,8 +1417,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   document.addEventListener('DOMContentLoaded',()=>{initUI();resetClosingForm();setTimeout(()=>{try{renderIncomeMember()}catch(e){}},100)});
   if(document.readyState!=='loading'){initUI();resetClosingForm();setTimeout(()=>{try{renderIncomeMember()}catch(e){}},100)}
 })();
-</script>
-<script id="adminLeadSearchAndMemberAZ">
 /* Leads & activity visibility/search/A-Z fixes */
 (function(){
   function enhance(){
@@ -1455,7 +1459,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 #auth .authBox input:disabled,
 #auth .authBox button:disabled{pointer-events:auto}
 </style>
-<script id="loginSafetyPatch">
+<script>
 (function(){
   function ready(){
     var f=document.getElementById('loginForm'), b=f&&f.querySelector('button[type="submit"]');
@@ -1466,15 +1470,14 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ready);else ready();
 })();
-</script>
 
-<script>
 /* V13 — Info Bar & Pop Up management based on V12 */
 (function(){
   const INFO_KEY='pasukanUmrohInfoBarsV12';
   const POP_KEY='pasukanUmrohPopupsV12';
-  const jx=(k,d)=>{try{return JSON.parse(localStorage.getItem(k)||'null')??d}catch(e){return d}};
-  const px=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+  const centralKey=k=>k===INFO_KEY?'info_bars':(k===POP_KEY?'popups':null);
+  const jx=(k,d)=>{try{const c=window.__umrohCentralConfig;const key=centralKey(k);const v=key&&c?c[key]:null;return v==null?d:JSON.parse(JSON.stringify(v))}catch(e){return d}};
+  const px=(k,v)=>{const key=centralKey(k);if(key&&typeof window.__umrohSetCentralConfig==='function')return window.__umrohSetCentralConfig(key,v);};
   const e2=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
   const infoBars=()=>jx(INFO_KEY,[]);
   const popups=()=>jx(POP_KEY,[]);
@@ -1590,34 +1593,109 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   window.deleteScheduleItem=function(id){oldDeleteSchedule(id);renderInfoBars();};
   setTimeout(()=>{renderInfoBarAdmin();renderPopupAdmin();renderInfoBars();},0);
 })();
-</script>
-<script>
 /* V9 — Super Admin detail revision based on V7. Existing V7 data/model is preserved. */
 (function(){
   const CFG={
     settingsKey:'pasukanUmrohSettingsV9', scheduleKey:'pasukanUmrohScheduleV9', materialKey:'pasukanUmrohMaterialsV9', rewardKey:'pasukanUmrohRewardsV9', checklistKey:'pasukanUmrohChecklistV9'
   };
-  const j=(k,d)=>{try{return JSON.parse(localStorage.getItem(k)||'null')??d}catch(e){return d}};
-  const put=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+  const CENTRAL_DEFAULTS={
+    settings:{programName:'Pasukan Umroh Mahir Digital',duration:60,unlock:100},
+    materials:[
+      {id:1,name:'TUTORIAL DASHBOARD',desc:'Panduan menggunakan dashboard program.',links:[]},
+      {id:2,name:'SCRIPT SALES',desc:'Greeting, probing, follow-up, objection, closing.',links:[{name:'Google Drive Script Sales',url:'https://drive.google.com/drive/folders/1jlfJ7Qo14WFhW9hjXEJEU91-hcNfCP28?usp=sharing'}]},
+      {id:3,name:'KONTEN NON BRAND',desc:'Materi konten non-brand yang dapat digunakan member.',links:[{name:'Google Drive Konten Non Brand',url:'https://drive.google.com/drive/folders/1OBkGY_C3sSYgj4SDQSdpzhijFtsSMHtT?usp=sharing'}]},
+      {id:4,name:'KONTEN BRAND',desc:'Materi konten brand.',links:[]},
+      {id:5,name:'PRODUK KNOWLEDGE BRAND',desc:'Produk, paket, fasilitas, FAQ, dan pengetahuan brand.',links:[]},
+      {id:6,name:'ROLEPLAY',desc:'Latihan percakapan sampai next step.',links:[]}
+    ],
+    rewards:[
+      {id:15,day:15,name:'Webinar Khusus Gratis',desc:'40 menit • Minimal 20 orang'},
+      {id:30,day:30,name:'Webinar 1-on-1 Jualan Organik',desc:'40 menit'},
+      {id:45,day:45,name:'Webinar 1-on-1 Iklan Umroh',desc:'40 menit'},
+      {id:60,day:60,name:'Kelas Semi Private Online Jualan Umroh',desc:'3 jam'}
+    ]
+  };
+  const centralConfig={settings:null,schedule:null,materials:null,rewards:null,checklist:null,info_bars:null,popups:null};
+  window.__umrohCentralConfig=centralConfig;
+  const cloneCfg=v=>{try{return v==null?v:JSON.parse(JSON.stringify(v))}catch(e){return v}};
+  const j=(k,d)=>{
+    const v=centralConfig[k];
+    return v==null?cloneCfg(d):cloneCfg(v);
+  };
+  async function syncCentralConfig(key,value){
+    try{
+      const c=window.supabaseClient;
+      if(!c)return;
+      const {error}=await c.from('program_configs').upsert({
+        config_key:key,
+        config_value:value,
+        updated_at:new Date().toISOString()
+      },{onConflict:'config_key'});
+      if(error)throw error;
+    }catch(e){
+      console.error('Central config save '+key+':',e);
+      notify('Gagal menyimpan '+key+' ke Supabase.');
+    }
+  }
+  const put=(k,v)=>{
+    centralConfig[k]=cloneCfg(v);
+    syncCentralConfig(k,centralConfig[k]);
+    return centralConfig[k];
+  };
+  window.__umrohSetCentralConfig=put;
+  async function loadCentralConfig(){
+    const c=window.supabaseClient;
+    if(!c)return false;
+    try{
+      const {data,error}=await c.from('program_configs').select('config_key,config_value');
+      if(error)throw error;
+      (data||[]).forEach(row=>{if(Object.prototype.hasOwnProperty.call(centralConfig,row.config_key))centralConfig[row.config_key]=row.config_value});
+      return true;
+    }catch(e){
+      console.error('Central config load:',e);
+      return false;
+    }
+  }
+  async function ensureCentralConfig(){
+    await loadCentralConfig();
+    const defaults={
+      settings:CENTRAL_DEFAULTS.settings,
+      materials:CENTRAL_DEFAULTS.materials,
+      rewards:CENTRAL_DEFAULTS.rewards,
+      schedule:[],
+      info_bars:[],
+      popups:[]
+    };
+    for(const [key,value] of Object.entries(defaults)){
+      if(centralConfig[key]==null||((Array.isArray(centralConfig[key])||typeof centralConfig[key]==='object')&&Object.keys(centralConfig[key]).length===0&&key!=='settings')){
+        await syncCentralConfig(key,value);
+        centralConfig[key]=cloneCfg(value);
+      }
+    }
+    if(centralConfig.checklist==null){
+      const c={};
+      for(let d=1;d<=60;d++){
+        let base=[];
+        try{
+          const special=(typeof daySpecific!=='undefined'?(daySpecific[d]||[]):[]);
+          const common=(typeof commonBase!=='undefined'?commonBase:[]);
+          base=d===1?special.slice():[...common.filter(x=>!special.includes(x) && !(special.some(y=>y.includes('5 Story')) && x==='Upload 3–5 Story')),...special];
+        }catch(e){}
+        c[d]={active:true,tasks:base};
+      }
+      centralConfig.checklist=c;
+      await syncCentralConfig('checklist',c);
+    }
+    return true;
+  }
+  window.__umrohEnsureCentralConfig=ensureCentralConfig;
   const today=()=>new Date().toISOString().slice(0,10);
   const esc2=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
   const waUrl=w=>{let n=String(w||'').replace(/\D/g,'');if(n.startsWith('0'))n='62'+n.slice(1);if(!n.startsWith('62'))n='62'+n;return 'https://wa.me/'+n};
-  const cfg=()=>j(CFG.settingsKey,{programName:'Pasukan Umroh Mahir Digital',duration:60,unlock:100});
-  function schedule(){return j(CFG.scheduleKey,[])}
-  function materials(){return j(CFG.materialKey,[
-    {id:1,name:'TUTORIAL DASHBOARD',desc:'Panduan menggunakan dashboard program.',links:[]},
-    {id:2,name:'SCRIPT SALES',desc:'Greeting, probing, follow-up, objection, closing.',links:[{name:'Google Drive Script Sales',url:'https://drive.google.com/drive/folders/1jlfJ7Qo14WFhW9hjXEJEU91-hcNfCP28?usp=sharing'}]},
-    {id:3,name:'KONTEN NON BRAND',desc:'Materi konten non-brand yang dapat digunakan member.',links:[{name:'Google Drive Konten Non Brand',url:'https://drive.google.com/drive/folders/1OBkGY_C3sSYgj4SDQSdpzhijFtsSMHtT?usp=sharing'}]},
-    {id:4,name:'KONTEN BRAND',desc:'Materi konten brand.',links:[]},
-    {id:5,name:'PRODUK KNOWLEDGE BRAND',desc:'Produk, paket, fasilitas, FAQ, dan pengetahuan brand.',links:[]},
-    {id:6,name:'ROLEPLAY',desc:'Latihan percakapan sampai next step.',links:[]}
-  ])}
-  function rewards(){return j(CFG.rewardKey,[
-    {id:15,day:15,name:'Webinar Khusus Gratis',desc:'40 menit • Minimal 20 orang'},
-    {id:30,day:30,name:'Webinar 1-on-1 Jualan Organik',desc:'40 menit'},
-    {id:45,day:45,name:'Webinar 1-on-1 Iklan Umroh',desc:'40 menit'},
-    {id:60,day:60,name:'Kelas Semi Private Online Jualan Umroh',desc:'3 jam'}
-  ])}
+  const cfg=()=>j('settings',CENTRAL_DEFAULTS.settings);
+  function schedule(){return j('schedule',[])}
+  function materials(){return j('materials',CENTRAL_DEFAULTS.materials)}
+  function rewards(){return j('rewards',CENTRAL_DEFAULTS.rewards)}
   function checklist(){
     let c=j(CFG.checklistKey,null); if(c) return c;
     const c2={}; for(let d=1;d<=60;d++){let base=[]; try{const special=(typeof daySpecific!=='undefined'?(daySpecific[d]||[]):[]); const common=(typeof commonBase!=='undefined'?commonBase:[]); base=d===1?special.slice():[...common.filter(x=>!special.includes(x) && !(special.some(y=>y.includes('5 Story')) && x==='Upload 3–5 Story')),...special];}catch(e){} c2[d]={active:true,tasks:base};}
@@ -1832,16 +1910,12 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   }
   setTimeout(function(){if(typeof window.forceMemberPopup==='function')window.forceMemberPopup()},1200);
 })();
-</script>
-<script>
 (function(){
   const K='pasukanUmrohPopupShownThisLogin';
   const oldLogout=window.logout;
   if(typeof oldLogout==='function'){window.logout=function(){try{sessionStorage.removeItem(K)}catch(e){} return typeof oldLogout==='function'?oldLogout.apply(this,arguments):undefined;};}
 })();
-</script>
 
-<script>
 /* V16 / PHASE A.1 — sinkronisasi browser tetap aktif untuk setting non-member.
    Data member sekarang berasal dari Supabase; localStorage tidak lagi menjadi sumber kebenaran member. */
 (function(){
@@ -1872,10 +1946,8 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   setInterval(function(){syncNow(false)},1000);
   window.umrohForceSync=function(){syncNow(true)};
 })();
-</script>
 
 <!-- PHASE A: MEMBER DATABASE AUTH. Super Admin stays on Supabase Auth; members use profiles + RPC. -->
-<script>
 (function(){
   const sb=()=>window.supabaseClient||null;
   const msg=(s,ok=false)=>{const e=$('authMsg');if(e)e.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+esc(String(s||''))+'</div>'};
@@ -2111,9 +2183,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
         if(m)m.innerHTML='<div class="msg '+(ok?"ok":"err")+'">'+String(t)+'</div>';
       };
       if(u!=="mahirdigitalumroh"){
-        if(typeof window.loginFormSubmit==="function"){
-          return window.loginFormSubmit(e);
-        }
+        if(typeof window.loginFormSubmit==="function")return window.loginFormSubmit(e);
         show("Modul login belum siap. Refresh halaman lalu coba lagi.");
         return false;
       }
@@ -2134,18 +2204,14 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
               "apikey":"sb_publishable_hqJ2gxeoNcOt2srRCrS4cw_-tiFy2EP",
               "Content-Type":"application/json"
             },
-            body:JSON.stringify({
-              email:"biakbiakempat@gmail.com",
-              password:p
-            }),
+            body:JSON.stringify({email:"biakbiakempat@gmail.com",password:p}),
             signal:controller.signal
           }
         );
         let body=null;
         try{body=await response.json()}catch(_){}
         if(!response.ok||!body?.access_token||!body?.refresh_token){
-          const detail=body?.error_description||body?.msg||body?.message||"Username atau password salah.";
-          show(detail);
+          show(body?.error_description||body?.msg||body?.message||"Username atau password salah.");
           return false;
         }
         show("Login Supabase berhasil. Menyiapkan dashboard...",true);
@@ -2158,38 +2224,514 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
           return false;
         }
         const user=sessionResult?.data?.user||body?.user;
-        if(!user?.id){
-          show("Login berhasil, tetapi data akun tidak diterima.");
-          return false;
-        }
-        currentUser={
-          id:user.id,
-          name:user.user_metadata?.name||"Super Admin",
-          username:"mahirdigitalumroh",
-          roleLabel:"Super Admin",
-          role:"super_admin",
-          status:"approved"
-        };
+        if(!user?.id){show("Login berhasil, tetapi data akun tidak diterima.");return false;}
+        currentUser={id:user.id,name:user.user_metadata?.name||"Super Admin",username:"mahirdigitalumroh",roleLabel:"Super Admin",role:"super_admin",status:"approved"};
         currentRole="admin";
         if(typeof saveAuthSession==="function")saveAuthSession();
-        show("Login berhasil. Membuka dashboard...",true);
-        if(typeof enterApp==="function")enterApp();
-        if(typeof showPage==="function")showPage("adminDashboard");
+
+        // Do not pass through the old nested enterApp/showPage wrappers.
+        const auth=document.getElementById("auth"),app=document.getElementById("app");
+        if(auth)auth.classList.add("hidden");
+        if(app)app.classList.remove("hidden");
+        document.getElementById("memberNav")?.classList.add("hidden");
+        document.getElementById("adminNav")?.classList.remove("hidden");
+        const rb=document.getElementById("roleBadge");if(rb)rb.textContent="SUPER ADMIN";
+        const tn=document.getElementById("topName");if(tn)tn.textContent=currentUser.name;
+        const tr=document.getElementById("topRole");if(tr)tr.textContent="Super Admin";
+        const ta=document.getElementById("topAvatar");if(ta)ta.textContent=typeof initials==="function"?initials(currentUser.name):"SA";
+        document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
+        document.getElementById("page-adminDashboard")?.classList.add("active");
+        document.querySelectorAll(".navItem[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page==="adminDashboard"));
+        show("Login berhasil. Dashboard siap dibuka.",true);
+
+        // Load shared configuration/data after the dashboard is visible.
+        setTimeout(async function(){
+          try{
+            if(typeof window.__umrohEnsureCentralConfig==="function")await window.__umrohEnsureCentralConfig();
+            if(typeof window.umrohAdminRefreshBridge==="function")await window.umrohAdminRefreshBridge();
+            else if(typeof loadAdminCentral==="function")await loadAdminCentral();
+            if(typeof renderAllAdmin==="function")renderAllAdmin();
+          }catch(err){console.error("Admin dashboard load:",err);}
+        },50);
+        window.scrollTo(0,0);
         return false;
       }catch(err){
         console.error("Final Super Admin login:",err);
-        if(err?.name==="AbortError"){
-          show("Koneksi ke Supabase timeout (12 detik).");
+        show(err?.name==="AbortError"?"Koneksi ke Supabase timeout (12 detik).":"Login gagal: "+(err?.message||"koneksi ke Supabase bermasalah"));
+        return false;
+      }finally{clearTimeout(timer);}
+    };
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
+})();</script>
+<script id="supabaseMemberDataFinalFix">
+/* FINAL MEMBER DATA SYNC — Supabase is the source of truth for member activity. */
+(function(){
+  const S=()=>window.supabaseClient||null;
+  const T=()=>window.umrohMemberSession?.get?.()||'';
+  const safeReload=async()=>{try{if(typeof loadMemberCentral==='function')await loadMemberCentral();}catch(e){console.error('Member reload:',e)}};
+
+  function leadPayload(){
+    const src=$('lSource')?.value||'';
+    const plan=$('lPlan')?.value||'';
+    return {
+      p_token:T(),
+      p_id:$('editLeadId')?.value||null,
+      p_lead_date:$('lDate')?.value||isoToday(),
+      p_lead_time:$('lTime')?.value||null,
+      p_name:$('lName')?.value.trim()||'',
+      p_city:$('lCity')?.value.trim()||'',
+      p_contact:$('lContact')?.value.trim()||'',
+      p_source:src==='Lainnya'?($('lSourceOther')?.value.trim()||'Lainnya'):src,
+      p_response:$('lResponse')?.value||'',
+      p_plan:plan==='Lainnya'?($('lPlanOther')?.value.trim()||'Lainnya'):plan,
+      p_funnel:$('lFunnel')?.value||'',
+      p_closing:$('lClosing')?.value||'Belum Closing',
+      p_closing_date:$('lClosingDate')?.value||null,
+      p_fu1:$('lFu1')?.value||null,p_fu1_response:$('lFu1Response')?.value||'',
+      p_fu2:$('lFu2')?.value||null,p_fu2_response:$('lFu2Response')?.value||'',
+      p_fu3:$('lFu3')?.value||null,p_fu3_response:$('lFu3Response')?.value||'',
+      p_no_close:$('lNoClose')?.value.trim()||'',
+      p_cs:$('lCs')?.value.trim()||currentUser?.name||'',
+      p_note:$('lNote')?.value.trim()||'',
+      p_score:0
+    };
+  }
+
+  window.saveLead=async function(){
+    if(currentRole!=='member'||!currentUser)return;
+    const p=leadPayload();
+    if(!p.p_name||!p.p_contact){alert('Nama dan kontak wajib diisi.');return}
+    if(!S()||!T()){alert('Sesi member belum siap. Silakan login kembali.');return}
+    try{
+      const {data,error}=await S().rpc('member_lead_upsert',p);
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Gagal menyimpan lead.');
+      resetLeadForm();await safeReload();alert('Lead berhasil disimpan ke database.');
+    }catch(e){console.error('Lead save:',e);alert('Gagal menyimpan lead: '+(e?.message||e))}
+  };
+
+  window.deleteLead=async function(id){
+    if(!currentUser||!confirm('Hapus lead ini?'))return;
+    try{
+      const {data,error}=await S().rpc('member_lead_delete',{p_token:T(),p_id:String(id)});
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Gagal menghapus lead.');
+      await safeReload();renderMemberLeadReport();alert('Lead berhasil dihapus.');
+    }catch(e){console.error('Lead delete:',e);alert('Gagal menghapus lead: '+(e?.message||e))}
+  };
+
+  window.renderMyLeadsTable=function(){
+    const rows=currentUser?.leads||[],body=$('myLeadRows');if(!body)return;
+    body.innerHTML=rows.length?rows.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(l=>{
+      const id=JSON.stringify(String(l.id));
+      return '<tr><td>'+esc(l.date)+'</td><td><b>'+esc(l.name)+'</b></td><td>'+esc(l.contact)+'</td><td>'+esc(l.source)+'</td><td>'+esc(l.response)+'</td><td>'+esc(l.plan)+'</td><td>'+esc(l.funnel)+'</td><td>'+esc(l.closing)+'</td><td><button class="btnMini" onclick="editLead('+id+')">Edit</button> <button class="btnMini" style="background:#fff0f0;color:#a33" onclick="deleteLead('+id+')">Hapus</button></td></tr>'
+    }).join(''):'<tr><td colspan="9"><div class="empty">Belum ada lead. Klik "+ Lead Baru" untuk mulai.</div></td></tr>';
+  };
+
+  const oldEditLead=window.editLead;
+  window.editLead=function(id){
+    const l=(currentUser?.leads||[]).find(x=>String(x.id)===String(id));
+    if(!l){if(typeof oldEditLead==='function')return oldEditLead(id);return}
+    $('editLeadId').value=l.id;$('lDate').value=l.date||isoToday();$('lTime').value=l.time||'';
+    $('lName').value=l.name||'';$('lCity').value=l.city||'';$('lContact').value=l.contact||'';
+    $('lSource').value=['WhatsApp Organik','Instagram Organik','Facebook Organik','TikTok Organik','Referral','Website','Event'].includes(l.source)?l.source:'Lainnya';
+    $('lSourceOther').value=$('lSource').value==='Lainnya'?(l.source||''):'';
+    $('lResponse').value=l.response||'Hot';
+    $('lPlan').value=['Oktober 2026','November 2026','Desember 2026','Januari 2027','Awal Ramadhan 1448 H','Umrah Ramadhan 1448 H','Itikaf 1448 H','Syawal 1448 H','Maret 2027','Daftar Haji'].includes(l.plan)?l.plan:'Lainnya';
+    $('lPlanOther').value=$('lPlan').value==='Lainnya'?(l.plan||''):'';
+    $('lFunnel').value=l.funnel||'Greeting';$('lClosing').value=l.closing||'Belum Closing';$('lClosingDate').value=l.closingDate||'';
+    $('lFu1').value=l.fu1||'';$('lFu1Response').value=l.fu1Response||'Respon';$('lFu2').value=l.fu2||'';$('lFu2Response').value=l.fu2Response||'Respon';
+    $('lFu3').value=l.fu3||'';$('lFu3Response').value=l.fu3Response||'Respon';$('lNoClose').value=l.noClose||'';
+    $('lCs').value=currentUser.name||'';$('lNote').value=l.note||'';$('leadFormTitle').textContent='Edit Lead';
+    try{toggleLeadOtherFields()}catch(e){} showPage('leads');
+  };
+
+  window.saveClosing=async function(){
+    if(currentRole!=='member'||!currentUser)return;
+    const p={
+      p_token:T(),p_id:$('closingEditId')?.value||null,p_closing_name:$('cName')?.value.trim()||'',
+      p_invoice:Number($('cInvoice')?.value)||0,p_pax:Number($('cPax')?.value)||0,
+      p_travel:$('cTravel')?.value.trim()||'',p_package:$('cPackage')?.value.trim()||'',
+      p_omset:Number($('cOmset')?.value)||0,p_closing_date:$('cDate')?.value||isoToday()
+    };
+    if(!p.p_closing_name||!p.p_travel||!p.p_package||p.p_invoice<1||p.p_pax<1){alert('Lengkapi data closing dengan benar.');return}
+    try{
+      const {data,error}=await S().rpc('member_closing_upsert',p);
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Gagal menyimpan closing.');
+      resetClosingForm();await safeReload();renderMemberClosing();alert('Closing berhasil disimpan ke database.');
+    }catch(e){console.error('Closing save:',e);alert('Gagal menyimpan closing: '+(e?.message||e))}
+  };
+
+  window.editClosing=function(id){
+    const x=(currentUser?.closingData||[]).find(v=>String(v.id)===String(id));if(!x)return;
+    $('closingEditId').value=x.id;$('cName').value=x.name||'';$('cInvoice').value=x.invoice||1;$('cPax').value=x.pax||1;
+    $('cTravel').value=x.travel||'';$('cPackage').value=x.package||'';$('cOmset').value=x.omset||0;$('cDate').value=x.date||isoToday();
+  };
+  window.deleteClosing=async function(id){
+    if(!currentUser||!confirm('Hapus data closing ini?'))return;
+    try{
+      const {data,error}=await S().rpc('member_closing_delete',{p_token:T(),p_id:String(id)});
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Gagal menghapus closing.');
+      await safeReload();renderMemberClosing();alert('Closing berhasil dihapus.');
+    }catch(e){console.error('Closing delete:',e);alert('Gagal menghapus closing: '+(e?.message||e))}
+  };
+
+  const oldRenderClosing=window.renderMemberClosing;
+  window.renderMemberClosing=function(){
+    if(typeof oldRenderClosing==='function')oldRenderClosing.apply(this,arguments);
+    const rows=currentUser?.closingData||[],body=$('myClosingRows');if(!body)return;
+    body.innerHTML=rows.length?rows.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(x=>{
+      const id=JSON.stringify(String(x.id));
+      return '<tr><td>'+esc(x.date)+'</td><td><b>'+esc(x.name)+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel)+'</td><td>'+esc(x.package)+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td><td><button class="btnMini" onclick="editClosing('+id+')">Edit</button> <button class="btnMini danger" onclick="deleteClosing('+id+')">Hapus</button></td></tr>'
+    }).join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+  };
+
+  window.toggleCheck=async function(i,val){
+    if(!currentUser||currentRole!=='member')return;
+    const day=currentDay(),st=checkState(currentUser,day);st[i]=!!val;
+    try{
+      const {data,error}=await S().rpc('member_checklist_upsert',{p_token:T(),p_program_day:day,p_checks:st});
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Gagal menyimpan checklist.');
+      currentUser.checks=currentUser.checks||{};currentUser.checks[day]=st;renderMember();
+    }catch(e){console.error('Checklist save:',e);alert('Checklist gagal disimpan ke database: '+(e?.message||e))}
+  };
+
+  window.finishMemberDay=async function(){
+    if(!currentUser||currentRole!=='member')return;
+    const day=currentDay(),tasks=tasksForDay(day),st=checkState(currentUser,day),dur=Number(cfg().duration||60),req=unlockRequirement(day);
+    const donePct=tasks.length?Math.round(tasks.filter((_,i)=>st[i]).length/tasks.length*100):100;
+    if(donePct<req){alert('Checklist Hari '+day+' baru '+donePct+'%. Minimal '+req+'% untuk membuka hari berikutnya.');return}
+    const next=Math.min(dur,day+1);
+    try{
+      if(day<dur){
+        const {data,error}=await S().rpc('member_day_update',{p_token:T(),p_day:next});
+        if(error)throw error;if(!data?.success)throw new Error(data?.message||'Gagal memperbarui hari member.');
+        currentUser.day=next;await safeReload();showPage('memberDashboard');alert('Hari '+day+' selesai. Hari '+next+' terbuka.');
+      }else{
+        alert('Program '+dur+' hari selesai.');
+      }
+    }catch(e){console.error('Member day update:',e);alert('Gagal menyimpan progress hari: '+(e?.message||e))}
+  };
+
+  // Re-check server state whenever the app becomes visible.
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&currentRole==='member')setTimeout(safeReload,150)});
+  // Super Admin sees new member/lead/closing changes without manually refreshing the page.
+  setInterval(function(){if(currentRole==='admin'&&typeof adminRefresh==='function')adminRefresh()},5000);
+})();
+</script>
+<script id="approvalSyncFinalFix">
+(function(){
+  const PENDING_KEY='pasukanUmrohPendingApprovalUsernameV1';
+  const NOTICE_SHOWN='pasukanUmrohApprovalNoticeShownV1';
+  const client=()=>window.supabaseClient||null;
+  const escHtml=s=>String(s??'').replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+  function pendingGet(){try{return localStorage.getItem(PENDING_KEY)||''}catch(e){return ''}}
+  function pendingSet(v){try{v?localStorage.setItem(PENDING_KEY,v):localStorage.removeItem(PENDING_KEY)}catch(e){}}
+  function shownGet(){try{return sessionStorage.getItem(NOTICE_SHOWN)==='1'}catch(e){return false}}
+  function shownSet(){try{sessionStorage.setItem(NOTICE_SHOWN,'1')}catch(e){}}
+
+  function ensureNotice(){
+    if(document.getElementById('approvalNoticeOverlay'))return;
+    const d=document.createElement('div');
+    d.id='approvalNoticeOverlay';
+    d.innerHTML='<div class="approvalNoticeBox" role="dialog" aria-modal="true">'+
+      '<button class="approvalNoticeClose" type="button" aria-label="Tutup">×</button>'+
+      '<div class="approvalNoticeIcon">✓</div>'+
+      '<h3 id="approvalNoticeTitle">Akun Disetujui</h3>'+
+      '<p id="approvalNoticeText"></p>'+
+      '<button class="btn approvalNoticeBtn" type="button">Lanjut Login</button>'+
+      '</div>';
+    document.body.appendChild(d);
+    const close=()=>d.classList.remove('show');
+    d.querySelector('.approvalNoticeClose').addEventListener('click',close);
+    d.querySelector('.approvalNoticeBtn').addEventListener('click',close);
+    d.addEventListener('click',e=>{if(e.target===d)close()});
+  }
+  function showNotice(title,text){
+    ensureNotice();
+    const d=document.getElementById('approvalNoticeOverlay');
+    document.getElementById('approvalNoticeTitle').textContent=title||'Akun Disetujui';
+    document.getElementById('approvalNoticeText').textContent=text||'Akun kamu sudah disetujui oleh Super Admin. Silakan login.';
+    d.classList.add('show');
+    shownSet();
+  }
+
+  async function checkPendingApproval(){
+    const u=pendingGet(), c=client();
+    if(!u||!c||currentRole)return;
+    try{
+      const {data,error}=await c.rpc('member_approval_status',{p_username:u});
+      if(error)throw error;
+      if(data?.success && data.status==='approved'){
+        pendingSet('');
+        showNotice('🎉 Akun Kamu Sudah Disetujui','Akun @'+u+' sudah disetujui oleh Super Admin. Silakan login untuk mulai Program Pasukan Umroh.');
+      }
+    }catch(e){console.warn('Approval status check:',e)}
+  }
+
+  async function loadApprovalNotifications(){
+    const c=client(),token=window.umrohMemberSession?.get?.();
+    if(!c||!token)return;
+    try{
+      const {data,error}=await c.rpc('member_notifications_list',{p_token:token});
+      if(error)throw error;
+      const rows=Array.isArray(data?.notifications)?data.notifications:[];
+      if(!rows.length)return;
+      for(const n of rows){
+        if(n.type==='approval'){
+          if(!shownGet()){
+            showNotice(n.title||'🎉 Akun Kamu Sudah Disetujui',n.message||'Akun kamu sudah disetujui oleh Super Admin. Silakan mulai program.');
+          }
+          await c.rpc('member_notification_read',{p_token:token,p_id:n.id});
+        }
+      }
+    }catch(e){console.warn('Approval notification load:',e)}
+  }
+
+  const oldLogin=window.loginFormSubmit;
+  window.loginFormSubmit=async function(e){
+    const u=(document.getElementById('loginUser')?.value||'').trim();
+    if(u==='mahirdigitalumroh' && typeof oldLogin==='function')return oldLogin.apply(this,arguments);
+
+    e?.preventDefault?.();
+    const p=document.getElementById('loginPass')?.value||'';
+    const m=document.getElementById('authMsg');
+    const msgLocal=(t,ok)=>{if(m)m.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+escHtml(t)+'</div>'};
+    if(!u||!p){msgLocal('Username dan password wajib diisi.');return false}
+    const c=client();
+    if(!c){msgLocal('Koneksi database belum siap. Refresh halaman lalu coba lagi.');return false}
+    try{
+      msgLocal('Sedang memverifikasi login...',true);
+      const {data,error}=await c.rpc('member_login',{p_username:u,p_password:p});
+      if(error)throw error;
+      if(!data?.success){
+        if(data?.status==='pending'){
+          pendingSet(u);
+          msgLocal('Akun masih menunggu approval Super Admin. Setelah disetujui, pemberitahuan akan muncul di halaman ini.');
+        }else if(data?.status==='rejected'){
+          pendingSet('');
+          msgLocal('Pendaftaran member ditolak.');
         }else{
-          show("Login gagal: "+(err?.message||"koneksi ke Supabase bermasalah"));
+          msgLocal(data?.message||'Username atau password salah.');
         }
         return false;
-      }finally{
-        clearTimeout(timer);
+      }
+      pendingSet('');
+      if(window.umrohMemberSession)window.umrohMemberSession.set(data.token||'');
+      const pr=data.profile||{};
+      currentUser={id:pr.id,name:pr.name||'',username:pr.username||u,wa:pr.wa||'',role:pr.role||'member',status:pr.status||'approved',day:Number(pr.day||1),checks:{},sales:{},activityLog:[],leads:[],registeredAt:pr.registered_at||today(),approvedAt:pr.approved_at||null};
+      currentRole='member';
+      members=[currentUser];
+      saveAuthSession();
+      enterApp();
+      showPage('memberDashboard');
+      setTimeout(loadApprovalNotifications,250);
+      return false;
+    }catch(err){
+      console.error('Final member login:',err);
+      msgLocal('Login gagal: '+(err?.message||'koneksi database bermasalah'));
+      return false;
+    }
+  };
+
+  const rf=document.getElementById('regForm');
+  if(rf){
+    rf.onsubmit=async function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      const name=(document.getElementById('regName')?.value||'').trim();
+      const username=(document.getElementById('regUsername')?.value||'').trim().toLowerCase();
+      const wa=(document.getElementById('regWa')?.value||'').trim();
+      const password=document.getElementById('regPassword')?.value||'';
+      const m=document.getElementById('authMsg');
+      const msgLocal=(t,ok)=>{if(m)m.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+escHtml(t)+'</div>'};
+      if(!name||!username||!wa||!password){msgLocal('Lengkapi semua data.');return false}
+      if(password.length<8){msgLocal('Password minimal 8 karakter.');return false}
+      const c=client();
+      if(!c){msgLocal('Koneksi database belum siap. Silakan refresh halaman.');return false}
+      try{
+        msgLocal('Mendaftarkan akun ke database...',true);
+        const {data,error}=await c.rpc('member_register',{p_name:name,p_username:username,p_wa:wa,p_password:password});
+        if(error)throw error;
+        if(!data?.success){msgLocal(data?.message||'Pendaftaran gagal.');return false}
+        pendingSet(username);
+        rf.reset();
+        authMode('login');
+        msgLocal('Pendaftaran berhasil. Akun kamu sedang menunggu persetujuan Super Admin.',true);
+        showNotice('⏳ Pendaftaran Berhasil','Akun @'+username+' sudah terdaftar dan sedang menunggu persetujuan Super Admin. Setelah disetujui, pemberitahuan akan muncul di halaman ini.');
+        return false;
+      }catch(err){
+        console.error('Final member register:',err);
+        msgLocal('Pendaftaran gagal: '+(err?.message||'koneksi database bermasalah'));
+        return false;
       }
     };
   }
-  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);
-  else boot();
-})();</script></body>
+
+  ensureNotice();
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)checkPendingApproval()});
+  setTimeout(checkPendingApproval,1200);
+  setInterval(function(){
+    if(!document.hidden && !currentRole && document.getElementById('auth')?.classList.contains('hidden')===false)checkPendingApproval();
+  },5000);
+  window.umrohApprovalSync={check:checkPendingApproval,notifications:loadApprovalNotifications};
+})();
+</script>
+<style id="approvalSyncFinalFixStyle">
+#approvalNoticeOverlay{position:fixed;inset:0;z-index:100001;background:rgba(8,13,85,.55);display:none;align-items:center;justify-content:center;padding:18px}
+#approvalNoticeOverlay.show{display:flex}
+.approvalNoticeBox{width:min(430px,100%);background:#fff;border-radius:20px;padding:28px 24px 24px;box-shadow:0 20px 60px rgba(0,0,0,.28);text-align:center;position:relative}
+.approvalNoticeIcon{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;margin:0 auto 12px;background:#e8f8f2;color:#08b879;font-size:30px;font-weight:900}
+.approvalNoticeBox h3{margin:0 30px 9px;font-size:22px;color:#172653}
+.approvalNoticeBox p{margin:0;color:#73809c;line-height:1.55;font-size:14px}
+.approvalNoticeBtn{width:100%;margin-top:18px}
+.approvalNoticeClose{position:absolute;right:12px;top:8px;border:0;background:transparent;color:#73809c;font-size:28px;line-height:1}
+</style>
+
+<script id="finalAdminCrossDeviceFix">
+(function(){
+  const C=()=>window.supabaseClient||null;
+  const escA=v=>String(v==null?'':v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  const moneyA=n=>Number(n||0).toLocaleString('id-ID');
+
+  function ensureIncomePage(){
+    const content=document.querySelector('.content');
+    if(!content)return;
+    if(!document.getElementById('page-adminIncome')){
+      const sec=document.createElement('section');
+      sec.className='page';
+      sec.id='page-adminIncome';
+      sec.innerHTML=
+        '<div class="title"><div><h2>💰 INCOME MEMBER</h2><p>Semua data closing dari dashboard member — tersimpan di Supabase.</p></div></div>'+
+        '<div class="panel"><div class="adminFilters">'+
+        '<div class="field"><label>Cari Nama Member</label><input id="incomeMemberSearch" class="activityMemberSearch" placeholder="Ketik nama member..."/></div>'+
+        '<div class="field"><label>Tanggal Mulai</label><input id="incomeStart" type="date"/></div>'+
+        '<div class="field"><label>Tanggal Akhir</label><input id="incomeEnd" type="date"/></div>'+
+        '</div></div>'+
+        '<div class="closingSummary">'+
+        '<div class="closingCard"><div class="label">TOTAL INVOICE</div><div class="num" id="incomeInvoiceTotal">0</div></div>'+
+        '<div class="closingCard"><div class="label">TOTAL PAX</div><div class="num" id="incomePaxTotal">0</div></div>'+
+        '<div class="closingCard"><div class="label">TOTAL OMSET</div><div class="num" id="incomeOmsetTotal">Rp 0</div></div>'+
+        '<div class="closingCard"><div class="label">JUMLAH MEMBER CLOSING</div><div class="num" id="incomeMemberTotal">0</div></div></div>'+
+        '<div class="panel"><div class="tableWrap"><table><thead><tr><th>Member</th><th>Tanggal</th><th>Invoice</th><th>Atas Nama</th><th>Pax</th><th>Travel</th><th>Paket</th><th>Omset</th></tr></thead><tbody id="incomeRows"></tbody></table></div></div>';
+      content.appendChild(sec);
+    }
+    const nav=document.getElementById('adminNav');
+    if(nav && !nav.querySelector('[data-page="adminIncome"]')){
+      const d=document.createElement('div');
+      d.className='navItem';
+      d.dataset.page='adminIncome';
+      d.innerHTML='💰 <span>Income Member</span>';
+      nav.appendChild(d);
+    }
+    ['incomeMemberSearch','incomeStart','incomeEnd'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el && !el.dataset.boundFinal){
+        el.dataset.boundFinal='1';
+        el.addEventListener('input',renderIncome);
+        el.addEventListener('change',renderIncome);
+      }
+    });
+  }
+
+  function renderIncome(){
+    const body=document.getElementById('incomeRows');
+    if(!body)return;
+    let rows=[];
+    (window.members||[]).forEach(m=>{
+      (Array.isArray(m.closingData)?m.closingData:[]).forEach(x=>rows.push({...x,member:m.name||m.username||'',memberId:m.id}));
+    });
+    const q=(document.getElementById('incomeMemberSearch')?.value||'').toLowerCase().trim();
+    const st=document.getElementById('incomeStart')?.value||'',en=document.getElementById('incomeEnd')?.value||'';
+    if(q)rows=rows.filter(x=>String(x.member).toLowerCase().includes(q));
+    if(st)rows=rows.filter(x=>String(x.date||'')>=st);
+    if(en)rows=rows.filter(x=>String(x.date||'')<=en);
+    rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+    const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0);
+    const pax=rows.reduce((n,x)=>n+Number(x.pax||0),0);
+    const om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
+    const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+    set('incomeInvoiceTotal',inv);set('incomePaxTotal',pax);set('incomeOmsetTotal','Rp '+moneyA(om));
+    set('incomeMemberTotal',new Set(rows.map(x=>x.memberId)).size);
+    body.innerHTML=rows.length?rows.map(x=>'<tr><td><b>'+escA(x.member)+'</b></td><td>'+escA(x.date)+'</td><td>'+Number(x.invoice||0)+'</td><td>'+escA(x.name)+'</td><td>'+Number(x.pax||0)+'</td><td>'+escA(x.travel)+'</td><td>'+escA(x.package)+'</td><td>Rp '+moneyA(x.omset)+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+  }
+  window.renderIncomeMember=renderIncome;
+
+  async function refreshFromSupabase(){
+    if(window.currentRole!=='admin')return;
+    const c=C();if(!c)return;
+    try{
+      const r=await c.rpc('admin_dashboard_snapshot');
+      if(r.error)throw r.error;
+      const d=r.data||{};
+      if(!d.success)throw new Error(d.message||'Snapshot admin gagal');
+      const activities=Array.isArray(d.activities)?d.activities:[];
+      const leads=Array.isArray(d.leads)?d.leads:[];
+      const closings=Array.isArray(d.closings)?d.closings:[];
+      const byA=new Map(),byL=new Map(),byC=new Map();
+      activities.forEach(x=>{const k=String(x.member_id);if(!byA.has(k))byA.set(k,[]);byA.get(k).push(x)});
+      leads.forEach(x=>{const k=String(x.member_id);if(!byL.has(k))byL.set(k,[]);byL.get(k).push(x)});
+      closings.forEach(x=>{const k=String(x.member_id);if(!byC.has(k))byC.set(k,[]);byC.get(k).push(x)});
+      const dbA=x=>({id:x.id,date:x.activity_date||'',day:Number(x.program_day||0),japri:Number(x.japri||0),follow:Number(x.follow_up||0),conv:Number(x.conversation||0),lead:Number(x.lead||0),offer:Number(x.offer||0),closing:Number(x.closing||0),referral:Number(x.referral||0),notes:x.notes||''});
+      const dbL=x=>({id:x.id,date:x.lead_date||'',time:x.lead_time||'',name:x.name||'',city:x.city||'',contact:x.contact||'',source:x.source||'',response:x.response||'',plan:x.plan||'',funnel:x.funnel||'',closing:x.closing||'Belum Closing',closingDate:x.closing_date||'',fu1:x.fu1||'',fu1Response:x.fu1_response||'',fu2:x.fu2||'',fu2Response:x.fu2_response||'',fu3:x.fu3||'',fu3Response:x.fu3_response||'',noClose:x.no_close||'',cs:x.cs||'',note:x.note||'',score:Number(x.score||0)});
+      const dbC=x=>({id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),pax:Number(x.pax||1),travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),date:x.closing_date||'',createdAt:x.created_at||''});
+      window.members=(Array.isArray(d.profiles)?d.profiles:[]).map(m=>{
+        const id=String(m.id),aa=(byA.get(id)||[]).map(dbA),ll=(byL.get(id)||[]).map(dbL),cc=(byC.get(id)||[]).map(dbC);
+        const sales={};aa.forEach(a=>{if(a.day)sales[a.day]={...a}});
+        return {id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',role:m.role||'member',status:m.status||'pending',day:Number(m.day||0),checks:{},sales,activityLog:aa,leads:ll,closingData:cc,registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null};
+      });
+      ensureIncomePage();
+      try{if(typeof window.renderAllAdmin==='function')window.renderAllAdmin()}catch(e){console.warn('admin render',e)}
+      renderIncome();
+    }catch(e){
+      console.error('Final admin Supabase sync:',e);
+      ensureIncomePage();
+      try{if(typeof window.renderMembers==='function')window.renderMembers()}catch(_){}
+      try{if(typeof window.renderApproval==='function')window.renderApproval()}catch(_){}
+      renderIncome();
+    }
+  }
+
+  window.umrohAdminRefreshBridge=refreshFromSupabase;
+  window.finalAdminRefresh=refreshFromSupabase;
+
+  const oldShow=window.showPage;
+  window.showPage=function(page){
+    try{if(typeof oldShow==='function')oldShow.apply(this,arguments)}catch(e){console.warn('showPage base',e)}
+    document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+    const target=document.getElementById('page-'+page);
+    if(target)target.classList.add('active');
+    document.querySelectorAll('.navItem[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
+    if(window.currentRole==='admin' && (page==='adminDashboard'||page==='members'||page==='activities'||page==='adminLeads'||page==='adminIncome'))setTimeout(refreshFromSupabase,30);
+    window.scrollTo(0,0);
+  };
+
+  function bindNav(){
+    ['adminNav','memberNav'].forEach(id=>{
+      const nav=document.getElementById(id);
+      if(!nav||nav.dataset.finalBound)return;
+      nav.dataset.finalBound='1';
+      nav.addEventListener('click',function(e){
+        const item=e.target.closest('.navItem[data-page]');
+        if(!item)return;
+        e.preventDefault();e.stopPropagation();
+        const page=item.dataset.page;
+        try{window.showPage(page)}catch(err){console.error('Menu navigation:',err)}
+      },true);
+    });
+    const mt=document.querySelectorAll('.mobileMenuToggle');
+    mt.forEach(btn=>{if(btn.dataset.finalBound)return;btn.dataset.finalBound='1';btn.addEventListener('click',function(){const id=btn.dataset.nav||btn.getAttribute('data-target');const nav=id&&document.getElementById(id);if(nav)nav.classList.toggle('mobile-menu-open')})});
+  }
+
+  function boot(){
+    ensureIncomePage();
+    bindNav();
+    if(window.currentRole==='admin')setTimeout(refreshFromSupabase,80);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&window.currentRole==='admin')setTimeout(refreshFromSupabase,80)});
+  setInterval(function(){if(window.currentRole==='admin'&&!document.hidden)refreshFromSupabase()},5000);
+})();
+</script>
+</body>
 </html>
