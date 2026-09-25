@@ -1032,57 +1032,71 @@ function downloadExcel(filename,headers,rows){
  const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table>
 
 
-<!-- CENTRAL DATA BRIDGE V1 -->
+<!-- CENTRAL DATA BRIDGE V2 -->
 <script id="centralDataBridge">
 (function(){
-  const BRIDGE_VERSION="2026-09-25-central-v1";
+  const BRIDGE_VERSION="2026-09-25-central-v2";
   const ADMIN_AUTH_EMAIL="biakbiak@gmail.com";
-  const CENTRAL_SESSION_KEY="pasukanUmrohCentralAuthV1";
+  const CENTRAL_SESSION_KEY="pasukanUmrohCentralAuthV2";
 
-  function msg(t,ok){const e=document.getElementById("authMsg");if(e)e.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+t+'</div>'}
-  function todayLocal(){return new Date().toISOString().slice(0,10)}
-  function centralSession(){try{return JSON.parse(sessionStorage.getItem(CENTRAL_SESSION_KEY)||"null")}catch(e){return null}}
-  function saveCentralSession(){try{sessionStorage.setItem(CENTRAL_SESSION_KEY,JSON.stringify({at:Date.now(),role:currentRole}))}catch(e){}}
-  async function ensureAdminAuth(password){
-    if(!window.supabaseClient)return false;
-    try{
-      const {data,error}=await window.supabaseClient.auth.signInWithPassword({email:ADMIN_AUTH_EMAIL,password});
-      if(error||!data?.user)return false;
-      saveCentralSession();
-      return true;
-    }catch(e){return false}
+  function msg(t,ok){
+    const e=document.getElementById("authMsg");
+    if(e)e.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+t+'</div>';
   }
+  function todayLocal(){return new Date().toISOString().slice(0,10)}
+  function saveCentralSession(){
+    try{sessionStorage.setItem(CENTRAL_SESSION_KEY,JSON.stringify({at:Date.now(),role:currentRole}))}catch(e){}
+  }
+
   async function loadCentralMembers(){
     if(!window.supabaseClient)return false;
     try{
-      const {data,error}=await window.supabaseClient.from("profiles").select("id,name,username,wa,role,status,day,registered_at,approved_at").eq("role","member").order("name",{ascending:true});
+      const {data,error}=await window.supabaseClient
+        .from("profiles")
+        .select("id,name,username,wa,role,status,day,registered_at,approved_at")
+        .eq("role","member")
+        .order("name",{ascending:true});
       if(error||!Array.isArray(data))return false;
       const old=Array.isArray(window.members)?window.members:[];
       const mapped=data.map(p=>{
         const prev=old.find(x=>String(x.username).toLowerCase()===String(p.username).toLowerCase())||{};
-        return {...prev,id:p.id,name:p.name,username:p.username,wa:p.wa||"",role:p.role,status:p.status,day:Number(p.day||0),registeredAt:p.registered_at?String(p.registered_at).slice(0,10):"-",approvedAt:p.approved_at?String(p.approved_at).slice(0,10):""};
+        return {...prev,id:p.id,name:p.name,username:p.username,wa:p.wa||"",role:p.role,status:p.status,
+          day:Number(p.day||0),
+          registeredAt:p.registered_at?String(p.registered_at).slice(0,10):"-",
+          approvedAt:p.approved_at?String(p.approved_at).slice(0,10):""};
       });
-      members.length=0; mapped.forEach(m=>members.push(m));
+      members.length=0;
+      mapped.forEach(m=>members.push(m));
       return true;
-    }catch(e){console.warn("Central member load:",e);return false}
+    }catch(e){
+      console.warn("Central member load:",e);
+      return false;
+    }
   }
+
   async function centralRegister(e){
     e.preventDefault();
-    const name=$("regName").value.trim(),username=$("regUsername").value.trim(),wa=$("regWa").value.trim(),password=$("regPassword").value;
+    const name=$("regName").value.trim(),username=$("regUsername").value.trim(),
+      wa=$("regWa").value.trim(),password=$("regPassword").value;
     if(!name||!username||!wa||!password){msg("Lengkapi semua data.",false);return}
     if(password.length<8){msg("Password minimal 8 karakter.",false);return}
     if(!window.supabaseClient){msg("Koneksi database belum siap. Refresh lalu coba lagi.",false);return}
-    const btn=e.target.querySelector('button[type="submit"]');if(btn){btn.disabled=true;btn.textContent="Mendaftarkan..."}
+    const btn=e.target.querySelector('button[type="submit"]');
+    if(btn){btn.disabled=true;btn.textContent="Mendaftarkan..."}
     try{
-      const {data,error}=await window.supabaseClient.rpc("member_register",{p_name:name,p_username:username,p_wa:wa,p_password:password});
+      const {data,error}=await window.supabaseClient.rpc("member_register",
+        {p_name:name,p_username:username,p_wa:wa,p_password:password});
       if(error)throw error;
       if(!data?.success){msg(data?.message||"Pendaftaran gagal.",false);return}
-      e.target.reset();authMode("login");
+      e.target.reset();
+      authMode("login");
       msg("Pendaftaran berhasil pada "+todayLocal()+". Tunggu approval Super Admin.",true);
     }catch(err){
       console.error("Central register:",err);
       msg("Pendaftaran gagal: "+(err?.message||"Koneksi Supabase bermasalah."),false);
-    }finally{if(btn){btn.disabled=false;btn.textContent="Daftar Member"}}
+    }finally{
+      if(btn){btn.disabled=false;btn.textContent="Daftar Member"}
+    }
   }
 
   async function centralMemberLogin(u,p){
@@ -1091,23 +1105,96 @@ function downloadExcel(filename,headers,rows){
       const {data,error}=await window.supabaseClient.rpc("member_login",{p_username:u,p_password:p});
       if(error)throw error;
       return data||null;
-    }catch(err){console.error("Central member login:",err);return {success:false,message:"Koneksi ke Supabase gagal. Coba lagi."}}
+    }catch(err){
+      console.error("Central member login:",err);
+      return {success:false,message:"Koneksi ke Supabase gagal. Coba lagi."};
+    }
   }
 
-  async function centralAdminSync(password){
-    if(!window.supabaseClient)return false;
-    const ok=await ensureAdminAuth(password);
-    if(!ok)return false;
-    return await loadCentralMembers();
+  async function centralAdminLogin(password){
+    if(!window.supabaseClient)return {ok:false,message:"Koneksi Supabase belum siap."};
+    try{
+      await window.supabaseClient.auth.signOut();
+      const {data,error}=await window.supabaseClient.auth.signInWithPassword({
+        email:ADMIN_AUTH_EMAIL,
+        password
+      });
+      if(error||!data?.user){
+        return {ok:false,message:"Password Super Admin Supabase belum cocok."};
+      }
+      const {data:userData,error:userError}=await window.supabaseClient.auth.getUser();
+      if(userError||!userData?.user?.id){
+        await window.supabaseClient.auth.signOut();
+        return {ok:false,message:"Sesi Super Admin tidak dapat diverifikasi."};
+      }
+      if(String(userData.user.id)!=="af004c29-8504-4724-88c1-34369a125019"){
+        await window.supabaseClient.auth.signOut();
+        return {ok:false,message:"Akun ini bukan akun Super Admin."};
+      }
+      saveCentralSession();
+      const synced=await loadCentralMembers();
+      if(!synced){
+        await window.supabaseClient.auth.signOut();
+        return {ok:false,message:"Login berhasil, tetapi akses profiles belum tersedia."};
+      }
+      return {ok:true};
+    }catch(err){
+      console.error("Central admin login:",err);
+      return {ok:false,message:"Koneksi ke Supabase gagal. Coba lagi."};
+    }
+  }
+
+  window.umrohAdminResetPassword=async function(){
+    if(!window.supabaseClient){
+      msg("Koneksi database belum siap. Refresh lalu coba lagi.",false);
+      return;
+    }
+    try{
+      const redirectTo=window.location.origin+window.location.pathname;
+      const {error}=await window.supabaseClient.auth.resetPasswordForEmail(ADMIN_AUTH_EMAIL,{redirectTo});
+      if(error)throw error;
+      msg("Email reset password sudah dikirim ke email Super Admin. Buka email tersebut, buat password baru, lalu login kembali.",true);
+    }catch(err){
+      console.error("Admin password reset:",err);
+      msg("Gagal mengirim email reset password: "+(err?.message||"Coba lagi."),false);
+    }
+  };
+
+  if(window.supabaseClient && window.supabaseClient.auth){
+    window.supabaseClient.auth.onAuthStateChange(async function(event,session){
+      if(event!=="PASSWORD_RECOVERY" || !session)return;
+      try{
+        const newPassword=prompt("Buat password baru untuk Super Admin (minimal 8 karakter):");
+        if(!newPassword){msg("Reset password dibatalkan.",false);return}
+        if(newPassword.length<8){msg("Password minimal 8 karakter.",false);return}
+        const {error}=await window.supabaseClient.auth.updateUser({password:newPassword});
+        if(error)throw error;
+        const {data:userData}=await window.supabaseClient.auth.getUser();
+        if(String(userData?.user?.id)!=="af004c29-8504-4724-88c1-34369a125019"){
+          await window.supabaseClient.auth.signOut();
+          msg("Reset berhasil, tetapi akun tersebut bukan Super Admin.",false);
+          return;
+        }
+        currentRole="admin";
+        currentUser={name:"Super Admin",username:ADMIN_USER,roleLabel:"Super Admin"};
+        saveAuthSession();
+        enterApp();
+        showPage("adminDashboard");
+        const synced=await loadCentralMembers();
+        if(synced)renderAllAdmin();
+        else msg("Password berhasil diubah, tetapi data member belum bisa dimuat.",false);
+      }catch(err){
+        console.error("Admin password recovery:",err);
+        msg("Password belum berhasil diubah: "+(err?.message||"Coba ulangi proses reset."),false);
+      }
+    });
   }
 
   window.umrohCentralRefresh=async function(){
-    if(currentRole==="admin"){
-      const ok=await loadCentralMembers();
-      if(ok&&typeof renderAllAdmin==="function")renderAllAdmin();
-      return ok;
-    }
-    return false;
+    if(currentRole!=="admin")return false;
+    const ok=await loadCentralMembers();
+    if(ok&&typeof renderAllAdmin==="function")renderAllAdmin();
+    return ok;
   };
 
   const originalLogin=window.loginFormSubmit;
@@ -1116,32 +1203,39 @@ function downloadExcel(filename,headers,rows){
     const u=$("loginUser").value.trim(),p=$("loginPass").value;
 
     if(u===ADMIN_USER){
-      const stored=localStorage.getItem("superAdminPasswordV9")||"closing1000jamaah";
-      const localOk=(p==="closing1000jamaah" || await verifyPassword(p,stored));
-      if(localOk){
-        currentRole="admin";
-        currentUser={name:"Super Admin",username:ADMIN_USER,roleLabel:"Super Admin"};
-        saveAuthSession();enterApp();showPage("adminDashboard");
-        const synced=await centralAdminSync(p);
-        if(synced){
-          renderAllAdmin();
-        }else{
-          console.warn("Supabase Admin Auth belum tersambung; dashboard memakai data lokal.");
-        }
+      const result=await centralAdminLogin(p);
+      if(!result.ok){
+        msg((result.message||"Login Super Admin gagal.")+
+          '<br><button type="button" class="btnMini" style="margin-top:8px" onclick="umrohAdminResetPassword()">Kirim email reset password Super Admin</button>',false);
         return;
       }
-      msg("Username atau password salah.",false);return;
+      currentRole="admin";
+      currentUser={name:"Super Admin",username:ADMIN_USER,roleLabel:"Super Admin"};
+      saveAuthSession();
+      enterApp();
+      showPage("adminDashboard");
+      renderAllAdmin();
+      return;
     }
 
     const central=await centralMemberLogin(u,p);
     if(central){
       if(!central.success){
-        msg(central.message||"Username atau password salah.",false);return;
+        msg(central.message||"Username atau password salah.",false);
+        return;
       }
       const pr=central.profile||{};
-      currentUser={id:pr.id,name:pr.name,username:pr.username,wa:pr.wa||"",role:"member",status:pr.status,day:Number(pr.day||0),checks:{},sales:{},activityLog:[],leads:[],registeredAt:pr.registered_at?String(pr.registered_at).slice(0,10):"-",approvedAt:pr.approved_at?String(pr.approved_at).slice(0,10):""};
+      currentUser={
+        id:pr.id,name:pr.name,username:pr.username,wa:pr.wa||"",
+        role:"member",status:pr.status,day:Number(pr.day||0),
+        checks:{},sales:{},activityLog:[],leads:[],
+        registeredAt:pr.registered_at?String(pr.registered_at).slice(0,10):"-",
+        approvedAt:pr.approved_at?String(pr.approved_at).slice(0,10):""
+      };
       currentRole="member";
-      saveAuthSession();enterApp();showPage("memberDashboard");
+      saveAuthSession();
+      enterApp();
+      showPage("memberDashboard");
       setTimeout(()=>{try{showActivePopup(true)}catch(err){}},180);
       return;
     }
@@ -1152,26 +1246,42 @@ function downloadExcel(filename,headers,rows){
   window.approveMember=async function(id){
     if(!window.supabaseClient){alert("Database belum siap.");return}
     try{
-      const {data,error}=await window.supabaseClient.from("profiles").update({status:"approved",day:1,approved_at:new Date().toISOString()}).eq("id",id).eq("role","member").select("id");
+      const {data,error}=await window.supabaseClient
+        .from("profiles")
+        .update({status:"approved",day:1,approved_at:new Date().toISOString()})
+        .eq("id",id).eq("role","member")
+        .select("id");
       if(error)throw error;
-      if(!data?.length)throw new Error("Approval gagal. Pastikan Super Admin sudah terhubung ke Supabase Auth.");
-      await loadCentralMembers();renderAllAdmin();alert("Member berhasil di-approve.");
-    }catch(err){alert("Approval gagal: "+(err?.message||"Akses database belum terhubung."))}
+      if(!data?.length)throw new Error("Member tidak ditemukan atau akses Super Admin belum aktif.");
+      await loadCentralMembers();
+      renderAllAdmin();
+      alert("Member berhasil di-approve.");
+    }catch(err){
+      alert("Approval gagal: "+(err?.message||"Akses database belum terhubung."));
+    }
   };
 
   window.rejectMember=async function(id){
     if(!confirm("Hapus pendaftaran ini?"))return;
     try{
-      const {data,error}=await window.supabaseClient.from("profiles").delete().eq("id",id).eq("role","member").eq("status","pending").select("id");
+      const {data,error}=await window.supabaseClient
+        .from("profiles").delete()
+        .eq("id",id).eq("role","member").eq("status","pending")
+        .select("id");
       if(error)throw error;
-      if(!data?.length)throw new Error("Penghapusan gagal. Pastikan Super Admin sudah terhubung ke Supabase Auth.");
-      await loadCentralMembers();renderAllAdmin();
-    }catch(err){alert("Gagal menghapus: "+(err?.message||"Akses database belum terhubung."))}
+      if(!data?.length)throw new Error("Member tidak ditemukan atau akses Super Admin belum aktif.");
+      await loadCentralMembers();
+      renderAllAdmin();
+    }catch(err){
+      alert("Gagal menghapus: "+(err?.message||"Akses database belum terhubung."));
+    }
   };
 
   const originalRenderAllAdmin=window.renderAllAdmin;
   window.renderAllAdmin=async function(){
-    try{if(currentRole==="admin")await loadCentralMembers()}catch(e){console.warn(e)}
+    try{
+      if(currentRole==="admin")await loadCentralMembers();
+    }catch(e){console.warn(e)}
     return originalRenderAllAdmin.apply(this,arguments);
   };
 
