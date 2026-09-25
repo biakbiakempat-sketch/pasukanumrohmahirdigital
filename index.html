@@ -1111,9 +1111,15 @@ function downloadExcel(filename,headers,rows){
   window.__centralConfigSig={};
   // Central configuration is persisted directly to Supabase by put()/syncCentralConfig().
   setInterval(function(){if(currentRole==='member'&&!document.hidden)loadMemberCentral()},10000);
-  setTimeout(function(){
-    if(currentRole==='admin'){seedOrLoadAdminConfig();loadAdminCentral()}
-    else if(currentRole==='member')loadMemberCentral();
+  setTimeout(async function(){
+    try{
+      if(currentRole==='admin'){
+        if(typeof window.__umrohEnsureCentralConfig==='function')await window.__umrohEnsureCentralConfig();
+        if(typeof loadAdminCentral==='function')await loadAdminCentral();
+      }else if(currentRole==='member'){
+        if(typeof loadMemberCentral==='function')await loadMemberCentral();
+      }
+    }catch(e){console.error('Central bootstrap:',e)}
   },1200);
 })();
 </script>
@@ -1185,7 +1191,7 @@ function jumpMemberDay(day){if(day!==currentDay()){alert("Tampilan program mengi
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 
 /* Clean start: legacy member migration intentionally disabled. Supabase is the only member data source. */
-<\/script>
+</script>
 <style>
 #supabaseRecoveryScreen{position:fixed;inset:0;z-index:100000;background:linear-gradient(135deg,#080d55,#172477);display:none;place-items:center;padding:20px}
 #supabaseRecoveryScreen.show{display:grid}
