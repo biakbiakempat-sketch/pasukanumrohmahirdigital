@@ -453,7 +453,7 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 <div class="field"><label>Percakapan</label><input id="aConv" min="0" type="number" value="0"/></div>
 </div>
 <div class="three">
-<div class="field"><label>Lead Baru</label><input id="mLead" min="0" type="number" value="0"/></div>
+<div class="field"><label>Lead Baru</label><input id="activityLead" min="0" type="number" value="0"/></div>
 <div class="field"><label>Offer / Proposal</label><input id="aOffer" min="0" type="number" value="0"/></div>
 <div class="field"><label>Closing</label><input id="aClose" min="0" type="number" value="0"/></div>
 </div>
@@ -762,7 +762,7 @@ function showPage(page){
  window.scrollTo(0,0);
 }
 document.querySelectorAll(".navItem[data-page]").forEach(x=>x.addEventListener("click",()=>showPage(x.dataset.page)));
-$("activityDate").addEventListener("change",()=>{if(!currentUser)return;const r=(currentUser.activityLog||[]).find(x=>x.date===$("activityDate").value)||{};$("aJapri").value=r.japri||0;$("aFollow").value=r.follow||0;$("aConv").value=r.conv||0;$("mLead").value=r.lead||0;$("aOffer").value=r.offer||0;$("aClose").value=r.closing||0;$("aReferral").value=r.referral||0;$("aNotes").value=r.notes||""});
+$("activityDate").addEventListener("change",()=>{if(!currentUser)return;const r=(currentUser.activityLog||[]).find(x=>x.date===$("activityDate").value)||{};$("aJapri").value=r.japri||0;$("aFollow").value=r.follow||0;$("aConv").value=r.conv||0;$("activityLead").value=r.lead||0;$("aOffer").value=r.offer||0;$("aClose").value=r.closing||0;$("aReferral").value=r.referral||0;$("aNotes").value=r.notes||""});
 
 
 function renderMembers(){
@@ -1422,7 +1422,7 @@ function renderMemberActivity(){
  $("maJapri").textContent=t.japri;$("maFollow").textContent=t.follow;$("maConv").textContent=t.conv;$("maLead").textContent=t.lead;$("maOffer").textContent=t.offer;$("maClose").textContent=t.closing;
  const day=currentDay();$("activityDay").value=day;$("activityDayNotice").textContent="Hari program aktif: Hari "+day+". Aktivitas akan tercatat pada tanggal yang dipilih.";
  if(!$("activityDate").value)$("activityDate").value=isoToday();
- const d=currentUser.sales?.[day]||{};$("aJapri").value=d.japri||0;$("aFollow").value=d.follow||0;$("aConv").value=d.conv||0;$("mLead").value=d.lead||0;$("aOffer").value=d.offer||0;$("aClose").value=d.closing||0;$("aReferral").value=d.referral||0;$("aNotes").value=d.notes||"";
+ const d=currentUser.sales?.[day]||{};$("aJapri").value=d.japri||0;$("aFollow").value=d.follow||0;$("aConv").value=d.conv||0;$("activityLead").value=d.lead||0;$("aOffer").value=d.offer||0;$("aClose").value=d.closing||0;$("aReferral").value=d.referral||0;$("aNotes").value=d.notes||"";
  const entries=(currentUser.activityLog||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
  $("memberActivityEmpty").classList.toggle("hidden",entries.length>0);$("memberActivityTableWrap").classList.toggle("hidden",entries.length===0);
  $("memberActivityRows").innerHTML=entries.map(x=>`<tr><td>${esc(x.date||"")}</td><td>${x.day||""}</td><td>${x.japri||0}</td><td>${x.follow||0}</td><td>${x.conv||0}</td><td>${x.lead||0}</td><td>${x.offer||0}</td><td>${x.closing||0}</td><td>${x.referral||0}</td><td>${esc(x.notes||"")}</td></tr>`).join("");
@@ -1430,7 +1430,7 @@ function renderMemberActivity(){
 function saveActivity(){
  if(!currentUser)return;
  const day=currentDay(),date=$("activityDate").value||isoToday();
- const rec={id:Date.now(),date,day,japri:Number($("aJapri").value)||0,follow:Number($("aFollow").value)||0,conv:Number($("aConv").value)||0,lead:Number($("mLead").value)||0,offer:Number($("aOffer").value)||0,closing:Number($("aClose").value)||0,referral:Number($("aReferral").value)||0,notes:$("aNotes").value.trim()};
+ const rec={id:Date.now(),date,day,japri:Number($("aJapri").value)||0,follow:Number($("aFollow").value)||0,conv:Number($("aConv").value)||0,lead:Number($("activityLead").value)||0,offer:Number($("aOffer").value)||0,closing:Number($("aClose").value)||0,referral:Number($("aReferral").value)||0,notes:$("aNotes").value.trim()};
  currentUser.activityLog=currentUser.activityLog||[];
  const ix=currentUser.activityLog.findIndex(x=>x.date===date);
  if(ix>=0)currentUser.activityLog[ix]=rec;else currentUser.activityLog.push(rec);
