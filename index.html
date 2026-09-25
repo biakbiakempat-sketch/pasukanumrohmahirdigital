@@ -3128,10 +3128,9 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     try{
       const sb=window.supabaseClient;
       if(!sb)throw new Error('Koneksi Supabase belum siap.');
-      const {error}=await sb.from('program_configs').upsert({
-        config_key:'schedule',config_value:arr,updated_at:new Date().toISOString()
-      },{onConflict:'config_key'});
+      const {data,error}=await sb.rpc('admin_config_save',{p_config_key:'schedule',p_config_value:arr});
       if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Akses Super Admin ditolak.');
       window.__umrohCentralConfig.schedule=arr;
       closeScheduleForm();
       renderScheduleAdmin();
@@ -3490,5 +3489,38 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&currentRole==='member')setTimeout(loadAgain,100)});
   setTimeout(()=>{if(currentRole==='member')loadAgain()},900);
+})();
+</script>
+<!-- POPUP ONCE PER LOGIN FINAL V9 -->
+<script id="popupOncePerLoginFinalV9">
+(function(){
+  let shownUserId=null;
+  let wasMember=false;
+  const keyFor=u=>String(u?.id||u?.username||'');
+  const originalForce=window.forceMemberPopup;
+  window.forceMemberPopup=function(){
+    if(typeof currentRole==='undefined'||currentRole!=='member'||!currentUser)return false;
+    const id=keyFor(currentUser);
+    if(!wasMember || shownUserId!==id){
+      shownUserId=null;
+      wasMember=true;
+    }
+    if(shownUserId===id)return false;
+    const result=typeof originalForce==='function'?originalForce.apply(this,arguments):false;
+    if(result!==false){
+      shownUserId=id;
+      try{sessionStorage.setItem('pasukanUmrohPopupShownThisLogin','1')}catch(e){}
+    }
+    return result;
+  };
+  const tick=()=>{
+    if(typeof currentRole==='undefined'||currentRole!=='member'||!currentUser){
+      wasMember=false;
+      shownUserId=null;
+      return;
+    }
+    window.forceMemberPopup();
+  };
+  setInterval(tick,1000);
 })();
 </script>
