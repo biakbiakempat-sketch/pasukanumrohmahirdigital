@@ -2045,17 +2045,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   const oldShow=window.showPage;
   window.showPage=function(page){const r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;if(currentRole==='admin'&&(page==='adminDashboard'||page==='members'))setTimeout(adminRefresh,100);return r};
 
-  // Force a fresh member login after Phase A. Super Admin session is preserved.
-  setTimeout(function(){
-    try{
-      const s=JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY)||'null');
-      if(s?.role==='member'){
-        clearAuthSession();currentUser=null;currentRole=null;
-        $('app')?.classList.add('hidden');$('auth')?.classList.remove('hidden');authMode('login');msg('Sistem member sudah diperbarui. Silakan login kembali.',true);
-      }
-    }catch(e){}
-  },200);
-
   window.umrohMemberDbPhaseA={loadDbMembers};
 })();
 </script>
@@ -2658,7 +2647,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   window.renderIncomeMember=renderIncome;
 
   async function refreshFromSupabase(){
-    if(window.currentRole!=='admin')return;
+    if(currentRole!=='admin')return;
     const c=C();if(!c)return;
     try{
       const r=await c.rpc('admin_dashboard_snapshot');
@@ -2675,11 +2664,12 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
       const dbA=x=>({id:x.id,date:x.activity_date||'',day:Number(x.program_day||0),japri:Number(x.japri||0),follow:Number(x.follow_up||0),conv:Number(x.conversation||0),lead:Number(x.lead||0),offer:Number(x.offer||0),closing:Number(x.closing||0),referral:Number(x.referral||0),notes:x.notes||''});
       const dbL=x=>({id:x.id,date:x.lead_date||'',time:x.lead_time||'',name:x.name||'',city:x.city||'',contact:x.contact||'',source:x.source||'',response:x.response||'',plan:x.plan||'',funnel:x.funnel||'',closing:x.closing||'Belum Closing',closingDate:x.closing_date||'',fu1:x.fu1||'',fu1Response:x.fu1_response||'',fu2:x.fu2||'',fu2Response:x.fu2_response||'',fu3:x.fu3||'',fu3Response:x.fu3_response||'',noClose:x.no_close||'',cs:x.cs||'',note:x.note||'',score:Number(x.score||0)});
       const dbC=x=>({id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),pax:Number(x.pax||1),travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),date:x.closing_date||'',createdAt:x.created_at||''});
-      window.members=(Array.isArray(d.profiles)?d.profiles:[]).map(m=>{
+      members=(Array.isArray(d.profiles)?d.profiles:[]).map(m=>{
         const id=String(m.id),aa=(byA.get(id)||[]).map(dbA),ll=(byL.get(id)||[]).map(dbL),cc=(byC.get(id)||[]).map(dbC);
         const sales={};aa.forEach(a=>{if(a.day)sales[a.day]={...a}});
         return {id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',role:m.role||'member',status:m.status||'pending',day:Number(m.day||0),checks:{},sales,activityLog:aa,leads:ll,closingData:cc,registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null};
       });
+      window.members=members;
       ensureIncomePage();
       try{if(typeof window.renderAllAdmin==='function')window.renderAllAdmin()}catch(e){console.warn('admin render',e)}
       renderIncome();
@@ -2702,7 +2692,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     const target=document.getElementById('page-'+page);
     if(target)target.classList.add('active');
     document.querySelectorAll('.navItem[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
-    if(window.currentRole==='admin' && (page==='adminDashboard'||page==='members'||page==='activities'||page==='adminLeads'||page==='adminIncome'))setTimeout(refreshFromSupabase,30);
+    if(currentRole==='admin' && (page==='adminDashboard'||page==='members'||page==='activities'||page==='adminLeads'||page==='adminIncome'))setTimeout(refreshFromSupabase,30);
     window.scrollTo(0,0);
   };
 
@@ -2726,11 +2716,100 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   function boot(){
     ensureIncomePage();
     bindNav();
-    if(window.currentRole==='admin')setTimeout(refreshFromSupabase,80);
+    if(currentRole==='admin')setTimeout(refreshFromSupabase,80);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
-  document.addEventListener('visibilitychange',function(){if(!document.hidden&&window.currentRole==='admin')setTimeout(refreshFromSupabase,80)});
-  setInterval(function(){if(window.currentRole==='admin'&&!document.hidden)refreshFromSupabase()},5000);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&currentRole==='admin')setTimeout(refreshFromSupabase,80)});
+  setInterval(function(){if(currentRole==='admin'&&!document.hidden)refreshFromSupabase()},5000);
+})();
+</script>
+<script id="crossDeviceSessionAndSyncFixV2">
+(function(){
+  const C=()=>window.supabaseClient||null;
+  const AUTH_KEY=typeof AUTH_SESSION_KEY!=='undefined'?AUTH_SESSION_KEY:'pasukanUmrohAuthSessionV1';
+  const PAGE_KEY='pasukanUmrohCurrentPageV1';
+
+  function readAuth(){try{return JSON.parse(sessionStorage.getItem(AUTH_KEY)||'null')}catch(e){return null}}
+  function savePage(page){try{if(currentRole==='member'||currentRole==='admin')sessionStorage.setItem(PAGE_KEY,String(page||''))}catch(e){}}
+
+  const baseShow=window.showPage;
+  if(typeof baseShow==='function'&&!baseShow.__crossDeviceV2){
+    const wrapped=function(page){savePage(page);return baseShow.apply(this,arguments)};
+    wrapped.__crossDeviceV2=true;
+    window.showPage=wrapped;
+  }
+
+  async function restoreSession(){
+    const c=C();if(!c)return false;
+    const a=readAuth();if(!a)return false;
+
+    if(a.role==='admin'){
+      try{
+        const g=await c.auth.getSession(),user=g?.data?.session?.user;
+        if(!user)return false;
+        currentUser={id:user.id,name:user.user_metadata?.name||'Super Admin',username:'mahirdigitalumroh',roleLabel:'Super Admin',role:'super_admin',status:'approved'};
+        currentRole='admin';
+        if(typeof enterApp==='function')enterApp();
+        const page=sessionStorage.getItem(PAGE_KEY)||'adminDashboard';
+        if(typeof window.showPage==='function')window.showPage(page);
+        if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+        return true;
+      }catch(e){console.warn('Restore admin session:',e);return false}
+    }
+
+    if(a.role==='member'){
+      const token=window.umrohMemberSession?.get?.()||'';
+      if(!token)return false;
+      try{
+        const r=await c.rpc('member_session_get',{p_token:token});
+        if(r.error)throw r.error;
+        if(!r.data?.success)return false;
+        const p=r.data.profile||{};
+        currentUser={id:p.id,name:p.name||'',username:p.username||'',wa:p.wa||'',role:p.role||'member',status:p.status||'approved',day:Number(p.day||1),checks:{},sales:{},activityLog:[],leads:[],closingData:[],registeredAt:p.registered_at||'',approvedAt:p.approved_at||null};
+        currentRole='member';
+        members=[currentUser];window.members=members;
+        if(typeof enterApp==='function')enterApp();
+        const page=sessionStorage.getItem(PAGE_KEY)||'memberDashboard';
+        if(typeof window.showPage==='function')window.showPage(page);
+        if(typeof loadMemberCentral==='function')await loadMemberCentral();
+        return true;
+      }catch(e){console.warn('Restore member session:',e);return false}
+    }
+    return false;
+  }
+
+  async function memberRefresh(){
+    if(currentRole!=='member'||!currentUser)return;
+    try{
+      if(typeof loadMemberCentral==='function')await loadMemberCentral();
+      members=[currentUser];window.members=members;
+      if(typeof renderMember==='function')renderMember();
+    }catch(e){console.warn('Cross-device member refresh:',e)}
+  }
+
+  function boot(){
+    setTimeout(async function(){
+      if(currentRole==='admin'){
+        if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      }else if(!currentRole){
+        await restoreSession();
+      }else if(currentRole==='member'){
+        await memberRefresh();
+      }
+    },250);
+  }
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden)return;
+    if(currentRole==='admin'&&typeof window.finalAdminRefresh==='function')window.finalAdminRefresh();
+    if(currentRole==='member')memberRefresh();
+  });
+  setInterval(function(){
+    if(document.hidden)return;
+    if(currentRole==='admin'&&typeof window.finalAdminRefresh==='function')window.finalAdminRefresh();
+    if(currentRole==='member')memberRefresh();
+  },5000);
 })();
 </script>
 </body>
