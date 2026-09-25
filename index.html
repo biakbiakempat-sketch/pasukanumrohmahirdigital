@@ -2157,15 +2157,19 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     e.preventDefault();
     const u=$('loginUser').value.trim(),p=$('loginPass').value;
     if(u===ADMIN_USER){
-      const c=sb();if(!c){msg('Modul login belum termuat. Refresh halaman 1x.');return}
+      const c=sb();if(!c){msg('Modul login belum siap. Tunggu 1–2 detik lalu coba lagi.');return}
       try{
         const {data,error}=await c.auth.signInWithPassword({email:'biakbiakempat@gmail.com',password:p});
-        if(error||!data?.user){msg('Username atau password salah.');return}
-        const {data:profile,error:pe}=await c.from('profiles').select('*').eq('id',data.user.id).single();
-        if(pe||!profile){await c.auth.signOut();msg('Profil Super Admin belum ditemukan.');return}
-        currentUser={id:profile.id,name:profile.name||'Super Admin',username:profile.username||ADMIN_USER,roleLabel:'Super Admin'};
-        currentRole='admin';saveAuthSession();enterApp();showPage('adminDashboard');setTimeout(adminRefresh,50);
-      }catch(err){console.error(err);msg('Koneksi ke Supabase gagal. Coba lagi.')}
+        if(error||!data?.user){console.error('Super Admin Auth:',error);msg(error?.message||'Username atau password salah.');return}
+        // Super Admin is authorized by Supabase Auth. Do not depend on a profiles SELECT,
+        // because mobile browsers can hit a stricter RLS policy even after Auth succeeds.
+        currentUser={id:data.user.id,name:data.user.user_metadata?.name||'Super Admin',username:ADMIN_USER,roleLabel:'Super Admin',role:'super_admin',status:'approved'};
+        currentRole='admin';
+        saveAuthSession();
+        enterApp();
+        showPage('adminDashboard');
+        setTimeout(adminRefresh,50);
+      }catch(err){console.error('Super Admin login:',err);msg('Koneksi ke Supabase gagal. Periksa internet lalu coba lagi.')}
       return;
     }
     try{
