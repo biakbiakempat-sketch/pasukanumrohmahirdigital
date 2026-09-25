@@ -1378,59 +1378,7 @@ function downloadExcel(filename,headers,rows){
   };
 })();
 <\/script>
-<script id="finalMobileLoginFix">
-/* FINAL LOGIN FIX — direct form binding for mobile/desktop. */
-(function(){
-  function boot(){
-    const form=document.getElementById('loginForm');
-    if(!form || form.dataset.finalLoginFix==='1') return;
-    form.dataset.finalLoginFix='1';
-    const legacy=window.loginFormSubmit;
-    form.onsubmit=async function(e){
-      e.preventDefault();
-      e.stopPropagation();
-      const u=(document.getElementById('loginUser')?.value||'').trim();
-      const p=document.getElementById('loginPass')?.value||'';
-      const msgEl=document.getElementById('authMsg');
-      const show=function(t,ok){if(msgEl)msgEl.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+String(t)+'</div>';};
-      if(u!=='mahirdigitalumroh'){
-        if(typeof legacy==='function') return legacy(e);
-        show('Modul login belum siap. Refresh halaman lalu coba lagi.');
-        return false;
-      }
-      const c=window.supabaseClient;
-      if(!c || !c.auth || typeof c.auth.signInWithPassword!=='function'){
-        show('Koneksi login belum siap. Pastikan internet aktif, lalu refresh halaman.');
-        return false;
-      }
-      show('Sedang memverifikasi login...',true);
-      try{
-        const result=await Promise.race([
-          c.auth.signInWithPassword({email:'biakbiakempat@gmail.com',password:p}),
-          new Promise(function(_,reject){setTimeout(function(){reject(new Error('Waktu koneksi habis.'))},15000)})
-        ]);
-        const data=result?.data,error=result?.error;
-        if(error || !data?.user){
-          console.error('Super Admin login:',error);
-          show(error?.message || 'Username atau password salah.');
-          return false;
-        }
-        currentUser={id:data.user.id,name:data.user.user_metadata?.name||'Super Admin',username:'mahirdigitalumroh',roleLabel:'Super Admin',role:'super_admin',status:'approved'};
-        currentRole='admin';
-        if(typeof saveAuthSession==='function')saveAuthSession();
-        if(typeof enterApp==='function')enterApp();
-        if(typeof showPage==='function')showPage('adminDashboard');
-        return false;
-      }catch(err){
-        console.error('Final Super Admin login:',err);
-        show('Login gagal: '+(err?.message||'koneksi ke Supabase bermasalah'));
-        return false;
-      }
-    };
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
-})();
-</script>
+
 </body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
@@ -1502,7 +1450,7 @@ function jumpMemberDay(day){if(day!==currentDay()){alert("Tampilan program mengi
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 
 /* Clean start: legacy member migration intentionally disabled. Supabase is the only member data source. */
-</script>
+<\/script>
 <style>
 #supabaseRecoveryScreen{position:fixed;inset:0;z-index:100000;background:linear-gradient(135deg,#080d55,#172477);display:none;place-items:center;padding:20px}
 #supabaseRecoveryScreen.show{display:grid}
@@ -2413,5 +2361,5 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   else initMobileDropdown();
 })();
 </script>
-</body>
+<script id="finalMobileLoginFix">(function(){function boot(){const form=document.getElementById("loginForm");if(!form||form.dataset.finalLoginFix==="1")return;form.dataset.finalLoginFix="1";const legacy=window.loginFormSubmit;form.onsubmit=async function(e){e.preventDefault();e.stopPropagation();const u=(document.getElementById("loginUser")?.value||"").trim(),p=document.getElementById("loginPass")?.value||"",m=document.getElementById("authMsg"),show=function(t,ok){if(m)m.innerHTML="<div class=\"msg "+(ok?"ok":"err")+"\">"+String(t)+"</div>"};if(u!=="mahirdigitalumroh"){if(typeof legacy==="function")return legacy(e);show("Modul login belum siap. Refresh halaman lalu coba lagi.");return false}const c=window.supabaseClient;if(!c||!c.auth||typeof c.auth.signInWithPassword!=="function"){show("Koneksi login belum siap. Pastikan internet aktif, lalu refresh halaman.");return false}show("Sedang memverifikasi login...",true);try{const result=await Promise.race([c.auth.signInWithPassword({email:"biakbiakempat@gmail.com",password:p}),new Promise(function(_,reject){setTimeout(function(){reject(new Error("Waktu koneksi habis."))},15000)})]),data=result?.data,error=result?.error;if(error||!data?.user){console.error("Super Admin login:",error);show(error?.message||"Username atau password salah.");return false}currentUser={id:data.user.id,name:data.user.user_metadata?.name||"Super Admin",username:"mahirdigitalumroh",roleLabel:"Super Admin",role:"super_admin",status:"approved"};currentRole="admin";if(typeof saveAuthSession==="function")saveAuthSession();if(typeof enterApp==="function")enterApp();if(typeof showPage==="function")showPage("adminDashboard");return false}catch(err){console.error("Final Super Admin login:",err);show("Login gagal: "+(err?.message||"koneksi ke Supabase bermasalah"));return false}}}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot()})();</script></body>
 </html>
