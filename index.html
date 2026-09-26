@@ -3563,3 +3563,188 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(render,150)});
 })();
 </script>
+
+<!-- FINAL CROSS DEVICE HARD FIX V11 -->
+<style id="finalCrossDeviceHardFixV11">
+#page-members button,#page-members a,#page-members input,
+#memberChecks,#memberChecks *{pointer-events:auto!important}
+#page-members button,#memberChecks input[type="checkbox"]{cursor:pointer!important}
+#memberChecks{position:relative!important;z-index:200!important}
+#memberChecks .check{position:relative!important;z-index:201!important}
+#memberChecks input[type="checkbox"]{position:relative!important;z-index:202!important;width:18px!important;height:18px!important}
+#memberPopupOverlay{z-index:50000!important}
+#memberPopupOverlay.show{pointer-events:auto!important}
+</style>
+<script id="finalCrossDeviceHardFixV11">
+(function(){
+  const SB=()=>window.supabaseClient||null;
+  const TOK=()=>window.umrohMemberSession?.get?.()||'';
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  const today=()=>new Date().toISOString().slice(0,10);
+
+  /* 1) MEMBER CHECKLIST: one authoritative handler, always writes Supabase. */
+  let checklistBound=false;
+  async function saveCheck(index,checked,input){
+    if(currentRole!=='member'||!currentUser)return;
+    const day=typeof currentDay==='function'?currentDay():Math.max(1,Number(currentUser.day||1));
+    currentUser.checks=currentUser.checks||{};
+    currentUser.checks[day]=currentUser.checks[day]||{};
+    currentUser.checks[day][index]=!!checked;
+    const snapshot=JSON.parse(JSON.stringify(currentUser.checks[day]));
+    try{
+      const sb=SB(),token=TOK();
+      if(!sb||!token)throw new Error('Sesi member belum siap.');
+      const {data,error}=await sb.rpc('member_checklist_upsert',{
+        p_token:token,p_program_day:day,p_checks:snapshot
+      });
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Checklist gagal disimpan.');
+      if(input)input.checked=!!checked;
+      if(typeof renderMember==='function')renderMember();
+    }catch(e){
+      currentUser.checks[day][index]=!checked;
+      if(input)input.checked=!checked;
+      alert('Checklist gagal disimpan ke database: '+(e?.message||e));
+    }
+  }
+  function bindChecklist(){
+    const wrap=document.getElementById('memberChecks');if(!wrap)return;
+    wrap.querySelectorAll('input[type="checkbox"]').forEach((input,i)=>{
+      input.disabled=false;
+      input.dataset.finalCheckV11='1';
+      input.onchange=function(e){
+        e.stopPropagation();
+        saveCheck(i,this.checked,this);
+      };
+      input.onclick=function(e){e.stopPropagation()};
+    });
+    checklistBound=true;
+  }
+  document.addEventListener('change',function(e){
+    const input=e.target?.closest?.('#memberChecks input[type="checkbox"]');
+    if(!input||input.dataset.finalCheckV11==='1')return;
+    const inputs=[...document.querySelectorAll('#memberChecks input[type="checkbox"]')];
+    const i=inputs.indexOf(input);if(i<0)return;
+    e.stopPropagation();
+    saveCheck(i,input.checked,input);
+  },true);
+
+  /* 2) MEMBER SCHEDULE/WEBINAR: read the same central Supabase config. */
+  function scheduleData(){
+    const c=window.__umrohCentralConfig||{};
+    return Array.isArray(c.schedule)?c.schedule:[];
+  }
+  function renderMemberSchedule(){
+    if(currentRole!=='member'||!currentUser)return;
+    const root=document.getElementById('page-memberDashboard');if(!root)return;
+    let card=document.getElementById('memberScheduleWebinarCard');
+    if(!card){
+      card=document.createElement('div');
+      card.id='memberScheduleWebinarCard';
+      const kpi=root.querySelector('.kpi');
+      if(kpi?.parentNode)kpi.parentNode.insertBefore(card,kpi.nextSibling);
+      else root.insertBefore(card,root.firstChild);
+    }
+    const arr=scheduleData().slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+    const upcoming=arr.filter(x=>String(x.date||'')>=today());
+    const source=(upcoming.length?upcoming:arr).slice(0,6);
+    const webinar=source.filter(x=>/webinar|kajian|kelas|training/i.test(String(x.name||'')));
+    const shown=webinar.length?webinar:source;
+    card.innerHTML='<div class="panel"><h3>📅 Jadwal Webinar / Kegiatan</h3>'+
+      (shown.length
+        ?'<div class="swGrid">'+shown.map(x=>'<div class="swItem"><div class="swDate">'+esc(x.date)+'</div><div class="swName">'+esc(x.name||'Kegiatan')+'</div><div class="swMode">'+esc(x.mode||'')+'</div>'+(x.link?'<a class="swLink" target="_blank" rel="noopener" href="'+esc(x.link)+'">🔗 Buka Link</a>':'')+'</div>').join('')+'</div>'
+        :'<div class="notice">Belum ada jadwal webinar/kegiatan yang dijadwalkan oleh Super Admin.</div>')+
+      '</div>';
+  }
+
+  /* 3) POPUP: hard once-per-login lock. Existing timers can call this every second,
+        but after first display they become harmless. */
+  let popupShownFor='';
+  function loginKey(){
+    return String(currentUser?.id||currentUser?.username||'');
+  }
+  window.forceMemberPopup=function(){
+    if(currentRole!=='member'||!currentUser)return false;
+    const key=loginKey();if(!key)return false;
+    const lock='pasukanUmrohPopupShownThisLogin';
+    try{
+      if(sessionStorage.getItem(lock)==='1')return false;
+    }catch(e){}
+    if(popupShownFor===key)return false;
+    const cfg=window.__umrohCentralConfig||{};
+    const arr=Array.isArray(cfg.popups)?cfg.popups:[];
+    const x=arr.filter(v=>v&&v.active!==false).sort((a,b)=>Number(b.updatedAt||b.createdAt||b.id||0)-Number(a.updatedAt||a.createdAt||a.id||0))[0];
+    const ov=document.getElementById('memberPopupOverlay');if(!x||!ov)return false;
+    const img=document.getElementById('memberPopupImage'),title=document.getElementById('memberPopupTitle'),txt=document.getElementById('memberPopupText'),btn=document.getElementById('memberPopupButton');
+    if(x.image){img.src=x.image;img.style.display='block'}else{img.removeAttribute('src');img.style.display='none'}
+    title.textContent=x.title||'';title.style.display=x.title?'block':'none';
+    txt.textContent=x.text||'';txt.style.display=x.text?'block':'none';
+    if(x.button&&x.link){btn.textContent=x.button;btn.href=x.link;btn.style.display='inline-flex'}else btn.style.display='none';
+    ov.classList.add('show');
+    popupShownFor=key;
+    try{sessionStorage.setItem(lock,'1')}catch(e){}
+    return true;
+  };
+
+  /* 4) MEMBER RENDER: keep Supabase state + schedule + checklist bound. */
+  const prevRender=window.renderMember;
+  window.renderMember=function(){
+    try{if(typeof prevRender==='function')prevRender.apply(this,arguments)}catch(e){console.warn('renderMember:',e)}
+    setTimeout(function(){bindChecklist();renderMemberSchedule()},0);
+  };
+
+  /* 5) Refresh central config/activity when member becomes visible. */
+  async function refreshMember(){
+    if(currentRole!=='member'||!currentUser)return;
+    try{
+      if(typeof window.loadMemberCentral==='function')await window.loadMemberCentral();
+    }catch(e){console.warn('member central refresh:',e)}
+    bindChecklist();renderMemberSchedule();
+  }
+
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden&&currentRole==='member')setTimeout(refreshMember,100);
+  });
+  window.addEventListener('pageshow',function(){if(currentRole==='member')setTimeout(refreshMember,100)});
+  setTimeout(function(){if(currentRole==='member')refreshMember()},500);
+
+  /* 6) SUPER ADMIN: force all CRUD buttons to be clickable and route to
+        the existing Supabase RPC-backed functions. */
+  function bindAdminActions(){
+    if(currentRole!=='admin')return;
+    const root=document.getElementById('page-members');if(!root)return;
+    root.querySelectorAll('button').forEach(b=>{
+      const text=(b.textContent||'').trim().toLowerCase();
+      let action=b.dataset.adminAction||b.dataset.crudAction||'';
+      let id=b.dataset.id||'';
+      const oc=b.getAttribute('onclick')||'';
+      if(!action){
+        const m=oc.match(/(?:approveMember|rejectMember|adminEditMember|deleteMember|openModal)\\(([^)]+)\\)/);
+        if(m)id=id||String(m[1]).replace(/['"]+/g,'');
+        if(text.includes('approve'))action='approve';
+        else if(text==='tolak'||text.includes('tolak'))action='reject';
+        else if(text==='edit')action='edit';
+        else if(text==='hapus'||text.includes('hapus'))action='delete';
+      }
+      if(!action) return;
+      b.style.pointerEvents='auto';b.style.position='relative';b.style.zIndex='9999';b.disabled=false;
+      b.onclick=async function(e){
+        e.preventDefault();e.stopPropagation();
+        try{
+          if(action==='approve')await window.approveMember(id);
+          else if(action==='reject')await window.rejectMember(id);
+          else if(action==='edit')await window.adminEditMember(id);
+          else if(action==='delete')await window.deleteMember(id);
+        }catch(err){console.error('Super Admin CRUD:',err);alert(err?.message||err)}
+      };
+    });
+  }
+  const observer=new MutationObserver(function(){
+    if(currentRole==='member')bindChecklist();
+    if(currentRole==='admin')bindAdminActions();
+  });
+  const start=document.body;
+  if(start)observer.observe(start,{subtree:true,childList:true});
+  setTimeout(function(){bindChecklist();renderMemberSchedule();bindAdminActions()},250);
+})();
+</script>
