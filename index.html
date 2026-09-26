@@ -3748,3 +3748,161 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   setTimeout(function(){bindChecklist();renderMemberSchedule();bindAdminActions()},250);
 })();
 </script>
+
+<!-- FINAL MEMBER 10 MIN POPUP + CENTRAL SCHEDULE + ADMIN RIGHTS V12 -->
+<style id="finalMember10MinV12">
+#page-members button,#page-members input,#page-members select,#page-members textarea,#page-members a{pointer-events:auto!important}
+#page-members button{cursor:pointer!important;position:relative!important;z-index:10000!important}
+</style>
+<script id="finalMember10MinV12">
+(function(){
+  const TEN_MIN=10*60*1000;
+  const POP_TS='pasukanUmrohPopupLastShownAtV12';
+  const SB=()=>window.supabaseClient||null;
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  const key=()=>String(currentUser?.id||currentUser?.username||'');
+  function ts(){try{return Number(sessionStorage.getItem(POP_TS)||0)}catch(e){return 0}}
+  function setTs(v){try{sessionStorage.setItem(POP_TS,String(v))}catch(e){}}
+  function popupData(){const c=window.__umrohCentralConfig||{};return Array.isArray(c.popups)?c.popups.filter(x=>x&&x.active!==false).sort((a,b)=>Number(b.updatedAt||b.createdAt||b.id||0)-Number(a.updatedAt||a.createdAt||a.id||0))[0]:null}
+  function closePopup(){document.getElementById('memberPopupOverlay')?.classList.remove('show')}
+  function drawPopup(x){
+    const ov=document.getElementById('memberPopupOverlay');if(!x||!ov)return false;
+    const img=document.getElementById('memberPopupImage'),title=document.getElementById('memberPopupTitle'),txt=document.getElementById('memberPopupText'),btn=document.getElementById('memberPopupButton');
+    if(img){if(x.image){img.src=x.image;img.style.display='block'}else{img.removeAttribute('src');img.style.display='none'}}
+    if(title){title.textContent=x.title||'';title.style.display=x.title?'block':'none'}
+    if(txt){txt.textContent=x.text||'';txt.style.display=x.text?'block':'none'}
+    if(btn){if(x.button&&x.link){btn.textContent=x.button;btn.href=x.link;btn.style.display='inline-flex'}else btn.style.display='none'}
+    ov.classList.add('show');return true;
+  }
+  window.forceMemberPopup=function(){
+    if(currentRole!=='member'||!currentUser)return false;
+    const now=Date.now(),last=ts();
+    if(last && now-last<TEN_MIN){closePopup();return false}
+    const x=popupData();if(!x)return false;
+    if(drawPopup(x)){setTs(now);return true}
+    return false;
+  };
+
+  /* Override the legacy renderer chain so its old showActivePopup() cannot
+     reopen the popup every render. */
+  const previousRender=window.renderMember;
+  window.renderMember=function(){
+    try{if(typeof previousRender==='function')previousRender.apply(this,arguments)}catch(e){console.warn('member render chain:',e)}
+    setTimeout(function(){
+      bindChecklist();
+      renderSchedule();
+      if(currentRole==='member'&&currentUser){
+        const last=ts();
+        if(last && Date.now()-last<TEN_MIN) closePopup();
+        else window.forceMemberPopup();
+      }
+    },0);
+  };
+
+  /* Re-read schedule directly from Supabase after every central refresh.
+     This removes stale/empty in-memory config as the source of truth. */
+  async function loadScheduleFromSupabase(){
+    const sb=SB();if(!sb)return [];
+    try{
+      const {data,error}=await sb.from('program_configs').select('config_value').eq('config_key','schedule').maybeSingle();
+      if(error)throw error;
+      const arr=Array.isArray(data?.config_value)?data.config_value:[];
+      if(window.__umrohCentralConfig)window.__umrohCentralConfig.schedule=arr;
+      return arr;
+    }catch(e){console.warn('Schedule central load:',e);return Array.isArray(window.__umrohCentralConfig?.schedule)?window.__umrohCentralConfig.schedule:[]}
+  }
+  function renderSchedule(arr){
+    if(currentRole!=='member'||!currentUser)return;
+    const root=document.getElementById('page-memberDashboard');if(!root)return;
+    let card=document.getElementById('memberScheduleWebinarCard');
+    if(!card){card=document.createElement('div');card.id='memberScheduleWebinarCard';const k=root.querySelector('.kpi');if(k?.parentNode)k.parentNode.insertBefore(card,k.nextSibling);else root.prepend(card)}
+    arr=Array.isArray(arr)?arr.slice():[];
+    arr.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+    const today=new Date().toISOString().slice(0,10);
+    const upcoming=arr.filter(x=>String(x.date||'')>=today);
+    const shown=(upcoming.length?upcoming:arr).slice(0,6);
+    card.innerHTML='<div class="panel"><h3>📅 Jadwal Webinar / Kegiatan</h3>'+
+      (shown.length?'<div class="swGrid">'+shown.map(x=>'<div class="swItem"><div class="swDate">'+esc(x.date||'')+'</div><div class="swName">'+esc(x.name||'Kegiatan')+'</div><div class="swMode">'+esc(x.mode||'')+'</div>'+(x.link?'<a class="swLink" target="_blank" rel="noopener" href="'+esc(x.link)+'">🔗 Buka Link</a>':'')+'</div>').join('')+'</div>':'<div class="notice">Belum ada jadwal/webinar yang disimpan oleh Super Admin.</div>')+
+      '</div>';
+  }
+
+  async function refreshMemberCentralV12(){
+    if(currentRole!=='member'||!currentUser)return;
+    try{if(typeof window.loadMemberCentral==='function')await window.loadMemberCentral()}catch(e){console.warn('central member load:',e)}
+    const arr=await loadScheduleFromSupabase();
+    bindChecklist();renderSchedule(arr);
+  }
+
+  function bindChecklist(){
+    const wrap=document.getElementById('memberChecks');if(!wrap)return;
+    [...wrap.querySelectorAll('input[type="checkbox"]')].forEach((input,i)=>{
+      input.disabled=false;input.style.pointerEvents='auto';input.style.cursor='pointer';
+      input.dataset.finalCheckV12='1';
+      input.onchange=async function(e){
+        e.stopPropagation();
+        if(currentRole!=='member'||!currentUser)return;
+        const day=typeof currentDay==='function'?currentDay():Math.max(1,Number(currentUser.day||1));
+        currentUser.checks=currentUser.checks||{};currentUser.checks[day]=currentUser.checks[day]||{};
+        currentUser.checks[day][i]=!!this.checked;
+        const snapshot=JSON.parse(JSON.stringify(currentUser.checks[day]));
+        try{
+          const sb=SB(),token=window.umrohMemberSession?.get?.()||'';
+          if(!sb||!token)throw new Error('Sesi member belum siap.');
+          const {data,error}=await sb.rpc('member_checklist_upsert',{p_token:token,p_program_day:day,p_checks:snapshot});
+          if(error)throw error;if(!data?.success)throw new Error(data?.message||'Gagal menyimpan checklist.');
+        }catch(e){
+          currentUser.checks[day][i]=!this.checked;this.checked=!this.checked;
+          alert('Checklist gagal disimpan ke database: '+(e?.message||e));
+        }
+      };
+    });
+  }
+
+  /* Existing timers may call forceMemberPopup every second. It is now harmless,
+     and this timer only opens it when the 10-minute window has elapsed. */
+  setInterval(function(){
+    if(currentRole==='member'&&!document.hidden)window.forceMemberPopup();
+  },30000);
+
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden&&currentRole==='member'){
+      setTimeout(refreshMemberCentralV12,100);
+    }
+  });
+  window.addEventListener('pageshow',function(){if(currentRole==='member')setTimeout(refreshMemberCentralV12,100)});
+  setTimeout(function(){if(currentRole==='member')refreshMemberCentralV12()},700);
+
+  /* Super Admin CRUD: keep all existing Supabase-backed actions reachable,
+     even after the member list is re-rendered. */
+  function bindAdmin(){
+    if(currentRole!=='admin')return;
+    const root=document.getElementById('page-members');if(!root)return;
+    root.querySelectorAll('button').forEach(b=>{
+      const label=(b.textContent||'').trim().toLowerCase();
+      let action=b.dataset.adminAction||b.dataset.crudAction||'';
+      let id=b.dataset.id||'';
+      const oc=b.getAttribute('onclick')||'';
+      if(!action){
+        const m=oc.match(/(?:approveMember|rejectMember|adminEditMember|deleteMember)\(([^)]+)\)/);
+        if(m)id=id||String(m[1]).replace(/['"]/g,'');
+        if(label.includes('approve'))action='approve';
+        else if(label.includes('tolak'))action='reject';
+        else if(label==='edit')action='edit';
+        else if(label.includes('hapus'))action='delete';
+      }
+      if(!action)continue;
+      b.disabled=false;b.style.pointerEvents='auto';b.onclick=async function(e){
+        e.preventDefault();e.stopPropagation();
+        try{
+          if(action==='approve')await window.approveMember(id);
+          if(action==='reject')await window.rejectMember(id);
+          if(action==='edit')await window.adminEditMember(id);
+          if(action==='delete')await window.deleteMember(id);
+        }catch(err){console.error(err);alert(err?.message||err)}
+      };
+    });
+  }
+  new MutationObserver(function(){if(currentRole==='admin')bindAdmin();if(currentRole==='member')bindChecklist()}).observe(document.body,{subtree:true,childList:true});
+  setTimeout(bindAdmin,500);
+})();
+</script>
