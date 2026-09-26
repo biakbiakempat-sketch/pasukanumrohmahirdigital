@@ -2658,17 +2658,19 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
       const activities=Array.isArray(d.activities)?d.activities:[];
       const leads=Array.isArray(d.leads)?d.leads:[];
       const closings=Array.isArray(d.closings)?d.closings:[];
-      const byA=new Map(),byL=new Map(),byC=new Map();
+      const checklists=Array.isArray(d.checklists)?d.checklists:[];
+      const byA=new Map(),byL=new Map(),byC=new Map(),byK=new Map();
       activities.forEach(x=>{const k=String(x.member_id);if(!byA.has(k))byA.set(k,[]);byA.get(k).push(x)});
       leads.forEach(x=>{const k=String(x.member_id);if(!byL.has(k))byL.set(k,[]);byL.get(k).push(x)});
       closings.forEach(x=>{const k=String(x.member_id);if(!byC.has(k))byC.set(k,[]);byC.get(k).push(x)});
+      checklists.forEach(x=>{const k=String(x.member_id);if(!byK.has(k))byK.set(k,{});byK.get(k)[String(x.program_day)]=JSON.parse(JSON.stringify(x.checks||{}));});
       const dbA=x=>({id:x.id,date:x.activity_date||'',day:Number(x.program_day||0),japri:Number(x.japri||0),follow:Number(x.follow_up||0),conv:Number(x.conversation||0),lead:Number(x.lead||0),offer:Number(x.offer||0),closing:Number(x.closing||0),referral:Number(x.referral||0),notes:x.notes||''});
       const dbL=x=>({id:x.id,date:x.lead_date||'',time:x.lead_time||'',name:x.name||'',city:x.city||'',contact:x.contact||'',source:x.source||'',response:x.response||'',plan:x.plan||'',funnel:x.funnel||'',closing:x.closing||'Belum Closing',closingDate:x.closing_date||'',fu1:x.fu1||'',fu1Response:x.fu1_response||'',fu2:x.fu2||'',fu2Response:x.fu2_response||'',fu3:x.fu3||'',fu3Response:x.fu3_response||'',noClose:x.no_close||'',cs:x.cs||'',note:x.note||'',score:Number(x.score||0)});
       const dbC=x=>({id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),pax:Number(x.pax||1),travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),date:x.closing_date||'',createdAt:x.created_at||''});
       members=(Array.isArray(d.profiles)?d.profiles:[]).map(m=>{
         const id=String(m.id),aa=(byA.get(id)||[]).map(dbA),ll=(byL.get(id)||[]).map(dbL),cc=(byC.get(id)||[]).map(dbC);
         const sales={};aa.forEach(a=>{if(a.day)sales[a.day]={...a}});
-        return {id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',role:m.role||'member',status:m.status||'pending',day:Number(m.day||0),checks:{},sales,activityLog:aa,leads:ll,closingData:cc,registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null};
+        return {id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',role:m.role||'member',status:m.status||'pending',day:Number(m.day||0),checks:byK.get(id)||{},sales,activityLog:aa,leads:ll,closingData:cc,registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null};
       });
       window.members=members;
       ensureIncomePage();
@@ -4452,3 +4454,85 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 })();
 </script>
 
+
+<!-- FINAL CROSS-DEVICE HARDENING V16 -->
+<style id="crossDeviceHardeningV16">
+#page-program #memberFinishDayV16{position:relative;z-index:1000!important;pointer-events:auto!important;cursor:pointer!important;touch-action:manipulation!important}
+#page-program .memberTaskV15 input{position:relative;z-index:1001!important;pointer-events:auto!important;cursor:pointer!important;touch-action:manipulation!important}
+</style>
+<script id="crossDeviceHardeningV16">
+(function(){
+'use strict';
+const S=()=>window.supabaseClient||null,T=()=>window.umrohMemberSession?.get?.()||'',C=()=>window.__umrohCentralConfig||(window.__umrohCentralConfig={});
+const esc=v=>typeof esc2==='function'?esc2(v):String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+const pct=(m,d)=>{
+ const x=C().checklist?.[String(d)]||C().checklist?.[d]||{},ts=Array.isArray(x.tasks)?x.tasks:[],st=m?.checks?.[String(d)]||m?.checks?.[d]||{};
+ return ts.length?Math.round(ts.reduce((n,_,i)=>n+(st[i]===true?1:0),0)/ts.length*100):0;
+};
+
+window.__finishMemberDayV16=async function(){
+ if(window.__memberFinishBusyV16)return;
+ if(currentRole!=='member'||!currentUser){alert('Sesi member belum siap. Silakan login kembali.');return}
+ const sb=S(),token=T(),oldDay=Math.max(1,Number(currentUser.day||1));
+ if(!sb||!token){alert('Sesi member belum siap. Silakan login kembali.');return}
+ const btn=document.getElementById('memberFinishDayV16');
+ window.__memberFinishBusyV16=true;if(btn){btn.disabled=true;btn.textContent='Menyimpan progress ke database...'}
+ try{
+  const r=await sb.rpc('member_day_complete',{p_token:token});
+  if(r.error)throw r.error;
+  if(!r.data?.success)throw new Error(r.data?.message||'Hari berikutnya belum dapat dibuka.');
+  currentUser.day=Number(r.data.day||oldDay);
+  if(typeof loadMemberCentral==='function')await loadMemberCentral();
+  currentUser.day=Number(r.data.day||currentUser.day||oldDay);
+  if(typeof window.__memberChecklistRenderV16==='function')window.__memberChecklistRenderV16();
+  alert(Number(r.data.day)>oldDay?'Hari '+oldDay+' selesai. Hari '+Number(r.data.day)+' sekarang terbuka dan tersimpan di Supabase.':'Program 60 hari selesai.');
+ }catch(e){console.error('member_day_complete V16',e);alert('Gagal membuka hari berikutnya: '+(e?.message||e))}
+ finally{window.__memberFinishBusyV16=false}
+};
+
+function renderChecklistV16(){
+ if(currentRole!=='member'||!currentUser)return;
+ const root=document.getElementById('page-program');if(!root)return;
+ const d=Math.max(1,Number(currentUser.day||1)),cfg=C().checklist?.[String(d)]||C().checklist?.[d]||{},ts=Array.isArray(cfg.tasks)?cfg.tasks:[],st=currentUser.checks?.[String(d)]||currentUser.checks?.[d]||{},p=ts.length?Math.round(ts.reduce((n,_,i)=>n+(st[i]===true?1:0),0)/ts.length*100):0;
+ root.innerHTML='<div class="title"><div><h2>☑ Checklist & SOP Program</h2><p>Data checklist tersimpan terpusat di Supabase.</p></div></div>'+
+ '<div class="panel memberChecklistV15"><div class="memberDayNavV15">'+Array.from({length:60},(_,i)=>{const n=i+1;return '<button type="button" class="'+(n===d?'active ':'')+(n<d?'done':'')+'" '+(n===d?'':'disabled')+'>'+n+'</button>'}).join('')+'</div>'+
+ '<div class="notice"><b>Hari '+d+'/60</b> • Progress checklist: <b>'+p+'%</b></div>'+
+ '<div style="margin-top:10px">'+(ts.length?ts.map((t,i)=>'<label class="memberTaskV15"><input type="checkbox" '+(st[i]===true?'checked':'')+' data-v16-check="'+i+'"><div><b>'+esc(t)+'</b></div></label>').join(''):'<div class="empty">Belum ada tugas checklist untuk Hari '+d+'.</div>')+'</div>'+
+ '<button id="memberFinishDayV16" type="button" class="btn" style="width:100%;margin-top:14px" '+(p<100||d>=60?'disabled':'')+'>Selesaikan Hari Ini & Buka Hari Berikutnya →</button>'+
+ '<div class="notice" style="margin-top:10px">'+(p>=100?(d<60?'Checklist 100%. Hari berikutnya siap dibuka.':'Program 60 hari selesai.'):'Checklist harus 100% untuk membuka hari berikutnya.')+'</div></div>';
+ root.querySelectorAll('[data-v16-check]').forEach(input=>input.addEventListener('change',()=>window.__memberCheckV15(Number(input.dataset.v16Check),input.checked)));
+ document.getElementById('memberFinishDayV16')?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();window.__finishMemberDayV16()});
+ window.__memberChecklistRenderV16=renderChecklistV16;
+}
+window.__memberChecklistRenderV16=renderChecklistV16;
+document.addEventListener('click',e=>{if(e.target?.closest?.('#memberFinishDayV16')){e.preventDefault();e.stopPropagation();window.__finishMemberDayV16()}},true);
+
+const oldShowV16=window.showPage;
+window.showPage=function(page){const r=typeof oldShowV16==='function'?oldShowV16.apply(this,arguments):undefined;if(currentRole==='member'&&page==='program')setTimeout(renderChecklistV16,80);return r};
+
+const oldAdminBridge=window.umrohAdminRefreshBridge;
+window.umrohAdminRefreshBridge=async function(){
+ if(typeof oldAdminBridge==='function')await oldAdminBridge();
+ if(currentRole!=='admin'||!S())return;
+ const r=await S().rpc('admin_dashboard_snapshot');if(r.error||!r.data?.success)return;
+ const map={};(r.data.checklists||[]).forEach(x=>{map[String(x.member_id)]=map[String(x.member_id)]||{};map[String(x.member_id)][String(x.program_day)]=x.checks||{}});
+ (window.members||members||[]).forEach(m=>m.checks=map[String(m.id)]||{});
+ window.members=members;if(typeof window.renderMembers==='function')window.renderMembers();
+};
+
+window.renderMembers=function(){
+ const body=document.getElementById('memberRows');if(!body)return;
+ const q=(document.getElementById('memberSearch')?.value||'').toLowerCase().trim(),rows=(window.members||members||[]).filter(m=>(String(m.name||'')+' '+String(m.username||'')+' '+String(m.wa||'')).toLowerCase().includes(q)).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+ const idArg=id=>JSON.stringify(String(id));
+ body.innerHTML=rows.length?rows.map(m=>{
+  const d=Math.max(1,Number(m.day||1)),cp=pct(m,d),dayPct=Math.round(Math.max(0,Math.min(60,Number(m.day||0)))/60*100),id=idArg(m.id);
+  return '<tr data-member-id="'+esc(m.id)+'" style="cursor:pointer"><td><b>'+esc(m.name)+'</b></td><td>'+esc(m.username)+'</td><td><a target="_blank" href="'+(typeof waUrl==='function'?waUrl(m.wa):'#')+'" onclick="event.stopPropagation()">'+esc(m.wa)+'</a></td><td><span class="status '+(m.status==='approved'?'active':'pending')+'">'+(m.status==='approved'?'AKTIF':'PENDING')+'</span></td><td>'+esc(m.registeredAt||'-')+'</td><td>'+Number(m.day||0)+'/60</td><td><b>Hari '+dayPct+'%</b><br><span class="small">Checklist H'+d+': '+cp+'%</span><div class="pctBar"><span style="width:'+cp+'%"></span></div></td><td>'+totalLead(m)+'</td><td>'+totalClosing(m)+'</td><td><button class="btnMini" onclick="event.stopPropagation();window.adminEditMember('+id+')">Edit</button> <button class="btnMini" style="background:#fff0f0;color:#a33" onclick="event.stopPropagation();window.deleteMember('+id+')">Hapus</button></td></tr>';
+ }).join(''):'<tr><td colspan="10"><div class="empty">Belum ada member yang terdaftar.</div></td></tr>';
+};
+document.addEventListener('click',e=>{const tr=e.target?.closest?.('#memberRows tr[data-member-id]');if(tr&&!e.target.closest('button,a')&&typeof window.adminEditMember==='function')window.adminEditMember(tr.dataset.memberId)},true);
+
+setInterval(async()=>{if(currentRole==='member'&&!document.hidden&&!window.__memberFinishBusyV16){try{await loadMemberCentral();if(document.getElementById('page-program')?.classList.contains('active'))renderChecklistV16()}catch(e){}}},5000);
+setInterval(async()=>{if(currentRole==='admin'&&!document.hidden&&typeof window.umrohAdminRefreshBridge==='function'){try{await window.umrohAdminRefreshBridge()}catch(e){}}},5000);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{if(currentRole==='member'&&document.getElementById('page-program')?.classList.contains('active'))renderChecklistV16()},120));else setTimeout(()=>{if(currentRole==='member'&&document.getElementById('page-program')?.classList.contains('active'))renderChecklistV16()},120);
+})();
+</script>
