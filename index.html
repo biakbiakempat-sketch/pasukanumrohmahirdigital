@@ -3906,3 +3906,245 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   setTimeout(bindAdmin,500);
 })();
 </script>
+
+
+<!-- FINAL AUTHORITATIVE SUPABASE CENTRAL + MEMBER SYNC V13 -->
+<script id="finalAuthoritativeSupabaseV13">
+(function(){
+  'use strict';
+  const SB=()=>window.supabaseClient||null;
+  const TEN_MIN=10*60*1000;
+  const LEGACY={
+    pasukanUmrohSettingsV9:'settings',
+    pasukanUmrohScheduleV9:'schedule',
+    pasukanUmrohMaterialsV9:'materials',
+    pasukanUmrohRewardsV9:'rewards',
+    pasukanUmrohChecklistV9:'checklist',
+    pasukanUmrohInfoBarsV12:'info_bars',
+    pasukanUmrohPopupsV12:'popups'
+  };
+  const canon=k=>LEGACY[k]||k;
+  const clone=v=>{try{return JSON.parse(JSON.stringify(v))}catch(e){return v}};
+  const central=()=>window.__umrohCentralConfig||(window.__umrohCentralConfig={settings:null,schedule:null,materials:null,rewards:null,checklist:null,info_bars:null,popups:null});
+  async function saveCentral(key,value){
+    if(currentRole!=='admin')throw new Error('Hanya Super Admin yang dapat mengubah pengaturan pusat.');
+    const c=SB();if(!c)throw new Error('Koneksi Supabase belum siap.');
+    const k=canon(key),v=clone(value);
+    central()[k]=v;
+    const {data,error}=await c.rpc('admin_config_save',{p_config_key:k,p_config_value:v});
+    if(error)throw error;
+    if(!data?.success)throw new Error(data?.message||'Gagal menyimpan konfigurasi.');
+    return v;
+  }
+  window.__umrohSetCentralConfig=saveCentral;
+
+  // Make the checklist itself come from the same central Supabase config as Super Admin.
+  window.tasksForDay=function(day){
+    const c=central().checklist;
+    if(c&&c[day]&&Array.isArray(c[day].tasks))return c[day].tasks;
+    if(typeof window.daySpecific!=='undefined' && typeof window.commonBase!=='undefined'){
+      const special=window.daySpecific?.[day]||[],common=window.commonBase||[];
+      return day===1?special.slice():[...common.filter(x=>!special.includes(x)),...special];
+    }
+    return [];
+  };
+
+  // Super Admin: schedule is saved to canonical program_configs.schedule.
+  window.saveScheduleItem=async function(){
+    const name=$('schName')?.value.trim()||'',date=$('schDate')?.value||'',mode=$('schMode')?.value||'Online',link=$('schLink')?.value.trim()||'',id=Number($('schId')?.value)||0;
+    if(!name||!date){alert('Nama kegiatan dan tanggal wajib diisi.');return}
+    const arr=Array.isArray(central().schedule)?clone(central().schedule):[];
+    if(id){const x=arr.find(a=>Number(a.id)===id);if(x){x.name=name;x.date=date;x.mode=mode;x.link=link}else arr.push({id,name,date,mode,link})}
+    else arr.push({id:Date.now(),name,date,mode,link});
+    try{await saveCentral('schedule',arr);closeScheduleForm();renderScheduleAdmin();if(typeof renderInfoBars==='function')renderInfoBars();alert('Jadwal disimpan ke Supabase.');}
+    catch(e){alert('Gagal menyimpan jadwal ke Supabase: '+(e?.message||e))}
+  };
+  window.deleteScheduleItem=async function(id){
+    if(!confirm('Hapus jadwal ini?'))return;
+    try{await saveCentral('schedule',(central().schedule||[]).filter(x=>Number(x.id)!==Number(id)));renderScheduleAdmin();if(typeof renderInfoBars==='function')renderInfoBars();}
+    catch(e){alert('Gagal menghapus jadwal: '+(e?.message||e))}
+  };
+
+  // Super Admin: Info Bar and Pop Up are also canonical central config.
+  window.saveInfoBarItem=async function(){
+    const title=$('ibTitle')?.value.trim()||'',text=$('ibText')?.value.trim()||'',active=$('ibActive')?.value==='1',id=Number($('ibId')?.value)||0;
+    if(!title||!text){alert('Judul dan isi Info Bar wajib diisi.');return}
+    const arr=Array.isArray(central().info_bars)?clone(central().info_bars):[];
+    if(id){const x=arr.find(a=>Number(a.id)===id);if(x){x.title=title;x.text=text;x.active=active;x.updatedAt=Date.now()}}
+    else arr.push({id:Date.now(),title,text,active,createdAt:Date.now(),updatedAt:Date.now()});
+    try{await saveCentral('info_bars',arr);closeInfoBarForm();renderInfoBarAdmin();renderInfoBars();alert('Info Bar disimpan ke Supabase.');}
+    catch(e){alert('Gagal menyimpan Info Bar: '+(e?.message||e))}
+  };
+  window.deleteInfoBarItem=async function(id){
+    if(!confirm('Hapus Info Bar ini?'))return;
+    try{await saveCentral('info_bars',(central().info_bars||[]).filter(x=>Number(x.id)!==Number(id)));renderInfoBarAdmin();renderInfoBars();}
+    catch(e){alert('Gagal menghapus Info Bar: '+(e?.message||e))}
+  };
+
+  function popupRatio(r){return r==='A4'?210/297:r==='4:5'?0.8:1}
+  window.savePopupItem=async function(){
+    const title=$('popTitle')?.value.trim()||'',text=$('popText')?.value.trim()||'',button=$('popButton')?.value.trim()||'',link=$('popLink')?.value.trim()||'',active=$('popActive')?.value==='1',ratio=$('popRatio')?.value||'1:1',id=Number($('popId')?.value)||0;
+    const file=$('popImage')?.files?.[0],arr=Array.isArray(central().popups)?clone(central().popups):[],existing=id?arr.find(a=>Number(a.id)===id):null;
+    if(!existing&&!file){alert('Desain Pop Up wajib diupload.');return}
+    const commit=async image=>{
+      const now=Date.now();
+      if(existing){Object.assign(existing,{title,text,button,link,active,ratio,updatedAt:now});if(image)existing.image=image}
+      else arr.push({id:now,title,text,button,link,active,ratio,image,createdAt:now,updatedAt:now});
+      try{await saveCentral('popups',arr);closePopupForm();renderPopupAdmin();alert('Pop Up disimpan ke Supabase.');}
+      catch(e){alert('Gagal menyimpan Pop Up: '+(e?.message||e))}
+    };
+    if(!file){await commit(existing?.image||null);return}
+    if(!/^image\/(jpeg|png|jpg)$/i.test(file.type)){alert('File harus JPG, JPEG, atau PNG.');return}
+    const reader=new FileReader();
+    reader.onload=e=>commit(e.target.result);
+    reader.readAsDataURL(file);
+  };
+  window.deletePopupItem=async function(id){
+    if(!confirm('Hapus Pop Up ini?'))return;
+    try{await saveCentral('popups',(central().popups||[]).filter(x=>Number(x.id)!==Number(id)));renderPopupAdmin();}
+    catch(e){alert('Gagal menghapus Pop Up: '+(e?.message||e))}
+  };
+
+  // Program settings, materials, rewards, and checklist editor all use canonical keys.
+  window.saveProgramSettings=async function(){
+    const v={programName:$('setProgramName')?.value.trim()||'Pasukan Umroh Mahir Digital',duration:Number($('setDuration')?.value)||60,unlock:Number($('setUnlock')?.value)||100};
+    try{await saveCentral('settings',v);renderSettings();alert('Pengaturan program disimpan ke Supabase.');}
+    catch(e){alert('Gagal menyimpan pengaturan: '+(e?.message||e))}
+  };
+  window.saveChecklistDay=async function(d){
+    const c=clone(central().checklist||{}),day=c[d];if(!day)return;
+    day.tasks=(day.tasks||[]).map((_,j)=>{const e=$('sop_'+d+'_'+j);return e?e.value.trim():''}).filter(Boolean);
+    try{await saveCentral('checklist',c);renderChecklistAdmin();if(currentRole==='member')renderMember();alert('Checklist Hari '+d+' disimpan ke Supabase.');}
+    catch(e){alert('Gagal menyimpan checklist: '+(e?.message||e))}
+  };
+  window.addChecklistTask=async function(d){
+    const c=clone(central().checklist||{});c[d]=c[d]||{active:true,tasks:[]};const v=prompt('Tugas baru untuk Hari '+d+':');if(!v?.trim())return;c[d].tasks.push(v.trim());
+    try{await saveCentral('checklist',c);renderChecklistAdmin();}
+    catch(e){alert('Gagal menyimpan checklist: '+(e?.message||e))}
+  };
+  window.deleteChecklistTask=async function(d,j){
+    const c=clone(central().checklist||{});if(!c[d])return;c[d].tasks.splice(j,1);
+    try{await saveCentral('checklist',c);renderChecklistAdmin();}
+    catch(e){alert('Gagal menghapus tugas: '+(e?.message||e))}
+  };
+  window.toggleChecklistDay=async function(d){
+    const c=clone(central().checklist||{});c[d]=c[d]||{active:true,tasks:[]};c[d].active=!c[d].active;
+    try{await saveCentral('checklist',c);renderChecklistAdmin();if(currentRole==='member')renderMember();}
+    catch(e){alert('Gagal mengubah status hari: '+(e?.message||e))}
+  };
+  window.deleteChecklistDay=async function(d){
+    if(!confirm('Hapus/nonaktifkan seluruh Hari '+d+'?'))return;
+    const c=clone(central().checklist||{});c[d]={active:false,tasks:[]};
+    try{await saveCentral('checklist',c);renderChecklistAdmin();if(currentRole==='member')renderMember();}
+    catch(e){alert('Gagal menghapus hari: '+(e?.message||e))}
+  };
+
+  // Popup is controlled centrally and never by legacy one-second timers.
+  const popupStamp='pasukanUmrohPopupLastShownAtV13';
+  function popupData(){return (central().popups||[]).filter(x=>x&&x.active!==false).sort((a,b)=>Number(b.updatedAt||b.createdAt||b.id||0)-Number(a.updatedAt||a.createdAt||a.id||0))[0]||null}
+  function showPopup(){
+    if(currentRole!=='member'||!currentUser)return false;
+    let last=0;try{last=Number(sessionStorage.getItem(popupStamp)||0)}catch(e){}
+    if(last&&Date.now()-last<TEN_MIN){document.getElementById('memberPopupOverlay')?.classList.remove('show');return false}
+    const x=popupData(),ov=document.getElementById('memberPopupOverlay');if(!x||!ov)return false;
+    const img=$('memberPopupImage'),title=$('memberPopupTitle'),txt=$('memberPopupText'),btn=$('memberPopupButton');
+    if(img){if(x.image){img.src=x.image;img.style.display='block'}else{img.removeAttribute('src');img.style.display='none'}}
+    if(title){title.textContent=x.title||'';title.style.display=x.title?'block':'none'}
+    if(txt){txt.textContent=x.text||'';txt.style.display=x.text?'block':'none'}
+    if(btn){if(x.button&&x.link){btn.textContent=x.button;btn.href=x.link;btn.style.display='inline-flex'}else btn.style.display='none'}
+    ov.classList.add('show');try{sessionStorage.setItem(popupStamp,String(Date.now()))}catch(e){}
+    return true;
+  }
+  window.forceMemberPopup=showPopup;
+  window.showActivePopup=showPopup;
+
+  // One authoritative checklist handler. Clicking a checkbox always persists to Supabase.
+  window.toggleCheck=async function(i,val){
+    if(currentRole!=='member'||!currentUser)return;
+    const day=typeof currentDay==='function'?currentDay():Math.max(1,Number(currentUser.day||1));
+    currentUser.checks=currentUser.checks||{};currentUser.checks[day]=currentUser.checks[day]||{};
+    const next=!!val,old=currentUser.checks[day][i];
+    currentUser.checks[day][i]=next;
+    try{
+      const token=window.umrohMemberSession?.get?.()||'';if(!SB()||!token)throw new Error('Sesi member belum siap.');
+      const {data,error}=await SB().rpc('member_checklist_upsert',{p_token:token,p_program_day:day,p_checks:clone(currentUser.checks[day])});
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Checklist gagal disimpan.');
+      renderMember();
+    }catch(e){
+      currentUser.checks[day][i]=old;
+      const inputs=[...document.querySelectorAll('#memberChecks input[type="checkbox"]')];if(inputs[i])inputs[i].checked=!!old;
+      alert('Checklist gagal disimpan ke database: '+(e?.message||e));
+    }
+  };
+
+  // Force the final "complete day" action to use the server-side member_day_update RPC.
+  window.finishMemberDay=async function(){
+    if(currentRole!=='member'||!currentUser)return;
+    const day=typeof currentDay==='function'?currentDay():Math.max(1,Number(currentUser.day||1));
+    const tasks=window.tasksForDay(day)||[],st=currentUser.checks?.[day]||{};
+    const pct=tasks.length?Math.round(tasks.filter((_,i)=>st[i]===true).length/tasks.length*100):100;
+    const unlock=Number(central().settings?.unlock||100),duration=Number(central().settings?.duration||60);
+    if(pct<unlock){alert('Checklist Hari '+day+' baru '+pct+'%. Minimal '+unlock+'% untuk membuka hari berikutnya.');return}
+    if(day>=duration){alert('Program '+duration+' hari selesai.');return}
+    try{
+      const token=window.umrohMemberSession?.get?.()||'';if(!SB()||!token)throw new Error('Sesi member belum siap.');
+      const {data,error}=await SB().rpc('member_day_update',{p_token:token,p_day:day+1});
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Gagal memperbarui hari.');
+      currentUser.day=day+1;
+      await (window.loadMemberCentral?window.loadMemberCentral():Promise.resolve());
+      if(typeof window.showPage==='function')window.showPage('memberDashboard');
+    }catch(e){alert('Gagal membuka hari berikutnya: '+(e?.message||e))}
+  };
+
+  // Make all Super Admin controls use the Supabase-backed handlers, even after re-render.
+  function bindAdmin(){
+    if(currentRole!=='admin')return;
+    const root=document.getElementById('page-members');if(!root)return;
+    root.querySelectorAll('button').forEach(b=>{
+      if(b.dataset.v13bound==='1')return;
+      const label=(b.textContent||'').trim().toLowerCase(),oc=b.getAttribute('onclick')||'';
+      let action=b.dataset.adminAction||b.dataset.crudAction||'',id=b.dataset.id||'';
+      if(!action){
+        const m=oc.match(/(?:approveMember|rejectMember|adminEditMember|deleteMember|openModal)\(([^)]+)\)/);
+        if(m)id=id||String(m[1]).replace(/['"]/g,'');
+        if(label.includes('approve'))action='approve';
+        else if(label.includes('tolak'))action='reject';
+        else if(label==='edit')action='edit';
+        else if(label.includes('hapus'))action='delete';
+      }
+      if(!action)continue;
+      b.dataset.v13bound='1';b.disabled=false;b.style.pointerEvents='auto';b.style.cursor='pointer';
+      b.addEventListener('click',async e=>{
+        e.preventDefault();e.stopImmediatePropagation();
+        try{
+          if(action==='approve')await window.approveMember(id);
+          else if(action==='reject')await window.rejectMember(id);
+          else if(action==='edit')await window.adminEditMember(id);
+          else if(action==='delete')await window.deleteMember(id);
+        }catch(err){console.error('V13 admin action',err);alert(err?.message||err)}
+      },true);
+    });
+  }
+
+  // Pull central config before rendering member UI, so settings from another device arrive here.
+  async function refreshMember(){
+    if(currentRole!=='member'||!currentUser)return;
+    try{
+      if(typeof window.loadMemberCentral==='function')await window.loadMemberCentral();
+      const c=central();
+      const {data,error}=await SB().from('program_configs').select('config_key,config_value').in('config_key',['settings','schedule','info_bars','popups','checklist','materials','rewards']);
+      if(!error)(data||[]).forEach(r=>{c[r.config_key]=r.config_value});
+      if(typeof window.renderMember==='function')window.renderMember();
+      if(typeof window.renderInfoBars==='function')window.renderInfoBars();
+    }catch(e){console.warn('V13 member refresh',e)}
+  }
+
+  function boot(){
+    if(currentRole==='member')setTimeout(refreshMember,250);
+    if(currentRole==='admin')setTimeout(bindAdmin,250);
+  }
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){if(currentRole==='member')setTimeout(refreshMember,100);if(currentRole==='admin')setTimeout(bindAdmin,100)}});
+  setInterval(()=>{if(document.hidden)return;if(currentRole==='member')showPopup();if(currentRole==='admin')bindAdmin()},30000);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
