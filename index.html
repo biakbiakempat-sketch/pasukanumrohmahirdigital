@@ -4148,3 +4148,184 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
 </script>
+
+
+<!-- FINAL SUPABASE ADMIN RIGHTS + CONFIG RPC V14 -->
+<script id="finalSupabaseAdminV14">
+(function(){
+  'use strict';
+  const S=()=>window.supabaseClient||null;
+  const C=()=>window.__umrohCentralConfig||(window.__umrohCentralConfig={});
+  const cp=v=>{try{return JSON.parse(JSON.stringify(v))}catch(e){return v}};
+  async function adminSave(key,value){
+    const sb=S();if(!sb)throw new Error('Koneksi Supabase belum siap.');
+    if(currentRole!=='admin')throw new Error('Super Admin belum login.');
+    const {data,error}=await sb.rpc('admin_config_save_v2',{p_config_key:key,p_config_value:cp(value)});
+    if(error)throw error;
+    if(!data?.success)throw new Error(data?.message||'Akses Super Admin ditolak.');
+    C()[key]=cp(value);
+    return value;
+  }
+  window.__umrohAdminSaveConfigV14=adminSave;
+
+  // All central admin configuration writes use one non-overloaded RPC.
+  window.saveScheduleItem=async function(){
+    const name=$('schName')?.value.trim()||'',date=$('schDate')?.value||'',mode=$('schMode')?.value||'Online',link=$('schLink')?.value.trim()||'',raw=$('schId')?.value||'';
+    if(!name||!date){alert('Nama kegiatan dan tanggal wajib diisi.');return}
+    const arr=Array.isArray(C().schedule)?cp(C().schedule):[],idx=arr.findIndex(x=>String(x.id)===String(raw));
+    const item={id:raw||String(Date.now()),name,date,mode,link};
+    if(idx>=0)arr[idx]=item;else arr.push(item);
+    try{await adminSave('schedule',arr);closeScheduleForm();if(typeof renderScheduleAdmin==='function')renderScheduleAdmin();if(typeof renderInfoBars==='function')renderInfoBars();alert('Jadwal berhasil disimpan ke Supabase.')}
+    catch(e){console.error(e);alert('Gagal menyimpan jadwal: '+(e?.message||e))}
+  };
+  window.deleteScheduleItem=async function(id){
+    if(!confirm('Hapus jadwal ini?'))return;
+    try{await adminSave('schedule',(C().schedule||[]).filter(x=>String(x.id)!==String(id)));if(typeof renderScheduleAdmin==='function')renderScheduleAdmin();if(typeof renderInfoBars==='function')renderInfoBars()}
+    catch(e){alert('Gagal menghapus jadwal: '+(e?.message||e))}
+  };
+
+  window.saveInfoBarItem=async function(){
+    const title=$('ibTitle')?.value.trim()||'',text=$('ibText')?.value.trim()||'',active=$('ibActive')?.value==='1',raw=$('ibId')?.value||'';
+    if(!title||!text){alert('Judul dan isi Info Bar wajib diisi.');return}
+    const arr=Array.isArray(C().info_bars)?cp(C().info_bars):[],idx=arr.findIndex(x=>String(x.id)===String(raw));
+    const item={id:raw||String(Date.now()),title,text,active,updatedAt:Date.now()};
+    if(idx>=0)arr[idx]={...arr[idx],...item};else arr.push({...item,createdAt:Date.now()});
+    try{await adminSave('info_bars',arr);closeInfoBarForm();renderInfoBarAdmin();renderInfoBars();alert('Info Bar berhasil disimpan ke Supabase.')}
+    catch(e){console.error(e);alert('Gagal menyimpan Info Bar: '+(e?.message||e))}
+  };
+  window.deleteInfoBarItem=async function(id){
+    if(!confirm('Hapus Info Bar ini?'))return;
+    try{await adminSave('info_bars',(C().info_bars||[]).filter(x=>String(x.id)!==String(id)));renderInfoBarAdmin();renderInfoBars()}
+    catch(e){alert('Gagal menghapus Info Bar: '+(e?.message||e))}
+  };
+
+  window.savePopupItem=async function(){
+    const title=$('popTitle')?.value.trim()||'',text=$('popText')?.value.trim()||'',button=$('popButton')?.value.trim()||'',link=$('popLink')?.value.trim()||'',active=$('popActive')?.value==='1',ratio=$('popRatio')?.value||'1:1',raw=$('popId')?.value||'',file=$('popImage')?.files?.[0];
+    const arr=Array.isArray(C().popups)?cp(C().popups):[],existing=arr.find(x=>String(x.id)===String(raw));
+    if(!existing&&!file){alert('Desain Pop Up wajib diupload.');return}
+    const commit=async image=>{
+      const item={id:raw||String(Date.now()),title,text,button,link,active,ratio,updatedAt:Date.now()};
+      if(image)item.image=image;
+      const idx=arr.findIndex(x=>String(x.id)===String(raw));
+      if(idx>=0)arr[idx]={...arr[idx],...item};else arr.push({...item,createdAt:Date.now()});
+      try{await adminSave('popups',arr);closePopupForm();renderPopupAdmin();alert('Pop Up berhasil disimpan ke Supabase.')}
+      catch(e){alert('Gagal menyimpan Pop Up: '+(e?.message||e))}
+    };
+    if(!file){await commit(existing?.image||null);return}
+    if(!/^image\/(jpeg|png|jpg)$/i.test(file.type)){alert('File harus JPG, JPEG, atau PNG.');return}
+    const reader=new FileReader();reader.onload=e=>commit(e.target.result);reader.readAsDataURL(file);
+  };
+  window.deletePopupItem=async function(id){
+    if(!confirm('Hapus Pop Up ini?'))return;
+    try{await adminSave('popups',(C().popups||[]).filter(x=>String(x.id)!==String(id)));renderPopupAdmin()}
+    catch(e){alert('Gagal menghapus Pop Up: '+(e?.message||e))}
+  };
+
+  // Master settings/checklist/materials/rewards are also centralized in Supabase.
+  window.saveProgramSettings=async function(){
+    const v={programName:$('setProgramName')?.value.trim()||'Pasukan Umroh Mahir Digital',duration:Number($('setDuration')?.value)||60,unlock:Number($('setUnlock')?.value)||100};
+    try{await adminSave('settings',v);renderSettings();alert('Pengaturan program disimpan ke Supabase.')}catch(e){alert('Gagal menyimpan pengaturan: '+(e?.message||e))}
+  };
+  window.saveChecklistDay=async function(d){
+    const c=cp(C().checklist||{}),day=c[d];if(!day)return;
+    day.tasks=(day.tasks||[]).map((_,j)=>{const e=$('sop_'+d+'_'+j);return e?e.value.trim():''}).filter(Boolean);
+    try{await adminSave('checklist',c);renderChecklistAdmin();alert('Checklist Hari '+d+' disimpan ke Supabase.')}catch(e){alert('Gagal menyimpan checklist: '+(e?.message||e))}
+  };
+  window.addChecklistTask=async function(d){
+    const c=cp(C().checklist||{});c[d]=c[d]||{active:true,tasks:[]};const v=prompt('Tugas baru untuk Hari '+d+':');if(!v?.trim())return;c[d].tasks.push(v.trim());
+    try{await adminSave('checklist',c);renderChecklistAdmin()}catch(e){alert('Gagal menyimpan checklist: '+(e?.message||e))}
+  };
+  window.deleteChecklistTask=async function(d,j){
+    const c=cp(C().checklist||{});if(!c[d])return;c[d].tasks.splice(j,1);
+    try{await adminSave('checklist',c);renderChecklistAdmin()}catch(e){alert('Gagal menghapus tugas: '+(e?.message||e))}
+  };
+  window.toggleChecklistDay=async function(d){
+    const c=cp(C().checklist||{});c[d]=c[d]||{active:true,tasks:[]};c[d].active=!c[d].active;
+    try{await adminSave('checklist',c);renderChecklistAdmin()}catch(e){alert('Gagal mengubah hari: '+(e?.message||e))}
+  };
+  window.deleteChecklistDay=async function(d){
+    if(!confirm('Nonaktifkan seluruh Hari '+d+'?'))return;
+    const c=cp(C().checklist||{});c[d]={active:false,tasks:[]};
+    try{await adminSave('checklist',c);renderChecklistAdmin()}catch(e){alert('Gagal menghapus hari: '+(e?.message||e))}
+  };
+
+  // Fix overloaded reject RPC and keep approve/edit/delete on the Supabase-backed admin handlers.
+  window.approveMember=async function(id){
+    try{
+      if(currentRole!=='admin')throw new Error('Super Admin belum login.');
+      const {data,error}=await S().rpc('member_approve',{p_member_id:String(id)});
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Approval gagal.');
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();else if(typeof window.umrohAdminRefreshBridge==='function')await window.umrohAdminRefreshBridge();
+      alert('Member berhasil di-approve.');
+    }catch(e){console.error(e);alert('Gagal approve member: '+(e?.message||e))}
+  };
+  window.rejectMember=async function(id){
+    if(!confirm('Tolak/hapus pendaftaran member ini?'))return;
+    try{
+      if(currentRole!=='admin')throw new Error('Super Admin belum login.');
+      const {data,error}=await S().rpc('admin_member_reject_v2',{p_member_id:String(id)});
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Penolakan gagal.');
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();else if(typeof window.umrohAdminRefreshBridge==='function')await window.umrohAdminRefreshBridge();
+      alert('Member berhasil ditolak/dihapus.');
+    }catch(e){console.error(e);alert('Gagal menolak member: '+(e?.message||e))}
+  };
+
+  // Material/reward editor writes to the same central keys instead of browser-only storage.
+  window.addRewardPrompt=async function(){
+    const day=Number(prompt('Milestone hari berapa? (contoh 15)'));if(!day)return;
+    const name=prompt('Nama reward/benefit:');if(!name)return;
+    const desc=prompt('Deskripsi:')||'';const rs=Array.isArray(C().rewards)?cp(C().rewards):[];
+    rs.push({id:Date.now(),day,name,desc});rs.sort((a,b)=>a.day-b.day);
+    try{await adminSave('rewards',rs);renderRewards()}catch(e){alert('Gagal menyimpan reward: '+(e?.message||e))}
+  };
+  window.editRewardPrompt=async function(id){
+    const rs=Array.isArray(C().rewards)?cp(C().rewards):[],r=rs.find(x=>Number(x.id)===Number(id));if(!r)return;
+    const name=prompt('Nama reward/benefit:',r.name);if(name===null)return;const desc=prompt('Deskripsi:',r.desc||'');if(desc===null)return;
+    r.name=name;r.desc=desc;
+    try{await adminSave('rewards',rs);renderRewards()}catch(e){alert('Gagal menyimpan reward: '+(e?.message||e))}
+  };
+  window.deleteReward=async function(id){
+    if(!confirm('Hapus reward ini?'))return;
+    try{await adminSave('rewards',(C().rewards||[]).filter(x=>Number(x.id)!==Number(id)));renderRewards()}catch(e){alert('Gagal menghapus reward: '+(e?.message||e))}
+  };
+  window.addMaterialPrompt=async function(){
+    const name=prompt('Nama materi:');if(!name)return;const desc=prompt('Deskripsi:')||'';const ms=Array.isArray(C().materials)?cp(C().materials):[];
+    ms.push({id:Date.now(),name,desc,links:[]});
+    try{await adminSave('materials',ms);renderAdminMaterials()}catch(e){alert('Gagal menyimpan materi: '+(e?.message||e))}
+  };
+  window.editMaterialPrompt=async function(id){
+    const ms=Array.isArray(C().materials)?cp(C().materials):[],m=ms.find(x=>Number(x.id)===Number(id));if(!m)return;
+    const name=prompt('Nama materi:',m.name);if(name===null)return;const desc=prompt('Deskripsi:',m.desc||'');if(desc===null)return;m.name=name;m.desc=desc;
+    try{await adminSave('materials',ms);renderAdminMaterials()}catch(e){alert('Gagal menyimpan materi: '+(e?.message||e))}
+  };
+  window.addMaterialLinkPrompt=async function(id){
+    const ms=Array.isArray(C().materials)?cp(C().materials):[],m=ms.find(x=>Number(x.id)===Number(id));if(!m)return;
+    const name=prompt('Nama button/link:');if(!name)return;const url=prompt('URL:');if(!url)return;m.links=m.links||[];m.links.push({name,url});
+    try{await adminSave('materials',ms);renderAdminMaterials()}catch(e){alert('Gagal menyimpan link: '+(e?.message||e))}
+  };
+  window.editMaterialLinkPrompt=async function(id,i){
+    const ms=Array.isArray(C().materials)?cp(C().materials):[],m=ms.find(x=>Number(x.id)===Number(id)),l=m?.links?.[i];if(!l)return;
+    const name=prompt('Nama button/link:',l.name||'');if(name===null)return;const url=prompt('URL:',l.url||'');if(url===null)return;l.name=name;l.url=url;
+    try{await adminSave('materials',ms);renderAdminMaterials()}catch(e){alert('Gagal menyimpan link: '+(e?.message||e))}
+  };
+  window.deleteMaterial=async function(id){
+    if(!confirm('Hapus materi ini?'))return;
+    try{await adminSave('materials',(C().materials||[]).filter(x=>Number(x.id)!==Number(id)));renderAdminMaterials()}catch(e){alert('Gagal menghapus materi: '+(e?.message||e))}
+  };
+  window.deleteMaterialLink=async function(id,i){
+    const ms=Array.isArray(C().materials)?cp(C().materials):[],m=ms.find(x=>Number(x.id)===Number(id));if(!m)return;
+    if(!confirm('Hapus link ini?'))return;m.links=m.links||[];m.links.splice(i,1);
+    try{await adminSave('materials',ms);renderAdminMaterials()}catch(e){alert('Gagal menghapus link: '+(e?.message||e))}
+  };
+
+  // Ensure admin controls are not disabled/blocked by legacy layers.
+  function unlockAdminUI(){
+    if(currentRole!=='admin')return;
+    document.querySelectorAll('#page-members button,#page-adminDashboard button,#page-settings button,#page-checklists button,#page-materials button,#page-rewards button,#page-schedule button,#page-info button').forEach(b=>{
+      b.disabled=false;b.style.pointerEvents='auto';b.style.cursor='pointer';
+    });
+  }
+  setInterval(unlockAdminUI,1000);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',unlockAdminUI);else unlockAdminUI();
+})();
+</script>
