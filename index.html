@@ -4329,3 +4329,126 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',unlockAdminUI);else unlockAdminUI();
 })();
 </script>
+
+
+<!-- FINAL MEMBER CHECKLIST MENU + CENTRAL SOP V15 -->
+<style id="memberChecklistMenuV15">
+#page-program .memberChecklistV15{margin-top:12px}
+#page-program .memberDayNavV15{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;margin-bottom:12px}
+#page-program .memberDayNavV15 button{border:0;border-radius:8px;padding:8px 4px;font-weight:800;cursor:pointer;background:#edf2f8;color:#334}
+#page-program .memberDayNavV15 button.active{background:#214f82;color:#fff}
+#page-program .memberDayNavV15 button.done{background:#0bbf7a;color:#fff}
+#page-program .memberTaskV15{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #edf0f5}
+#page-program .memberTaskV15 input{width:20px;height:20px;flex:0 0 auto;cursor:pointer}
+@media(max-width:720px){#page-program .memberDayNavV15{grid-template-columns:repeat(6,minmax(0,1fr))}}
+</style>
+<script id="memberChecklistMenuV15">
+(function(){
+  'use strict';
+  const S=()=>window.supabaseClient||null;
+  const C=()=>window.__umrohCentralConfig||(window.__umrohCentralConfig={});
+  const esc=v=>typeof esc2==='function'?esc2(v):String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  const memberTasks=day=>{
+    const c=C().checklist;
+    const x=c&&typeof c==='object'?c[String(day)]||c[day]:null;
+    return Array.isArray(x?.tasks)?x.tasks.filter(Boolean):[];
+  };
+  const fallback=day=>typeof tasksForDay==='function'?tasksForDay(day):[];
+  const tasks=day=>memberTasks(day).length?memberTasks(day):fallback(day);
+  const dayNow=()=>Math.max(1,Number(currentUser?.day||1));
+  const checks=day=>{currentUser.checks=currentUser.checks||{};currentUser.checks[day]=currentUser.checks[day]||{};return currentUser.checks[day]};
+  function pct(day){
+    const ts=tasks(day),st=checks(day);
+    return ts.length?Math.round(ts.filter((_,i)=>st[i]===true).length/ts.length*100):100;
+  }
+  async function saveCheck(i,val){
+    const d=dayNow(),st=checks(d),old=st[i];
+    st[i]=!!val;
+    try{
+      const token=window.umrohMemberSession?.get?.()||'';
+      if(!S()||!token)throw new Error('Sesi member belum siap.');
+      const r=await S().rpc('member_checklist_upsert',{p_token:token,p_program_day:d,p_checks:JSON.parse(JSON.stringify(st))});
+      if(r.error)throw r.error;
+      if(!r.data?.success)throw new Error(r.data?.message||'Checklist gagal disimpan.');
+      renderProgram();
+      const m=document.getElementById('mCheck');if(m)m.textContent=pct(d)+'%';
+    }catch(e){
+      st[i]=old;
+      renderProgram();
+      alert('Checklist gagal disimpan ke database: '+(e?.message||e));
+    }
+  }
+  function renderProgram(){
+    if(currentRole!=='member'||!currentUser)return;
+    const root=document.getElementById('page-program');if(!root)return;
+    const d=dayNow(),ts=tasks(d),st=checks(d);
+    root.innerHTML=
+      '<div class="title"><div><h2>☑ Checklist & SOP Program</h2><p>Hari berikutnya terbuka setelah checklist hari sebelumnya 100%.</p></div></div>'+
+      '<div class="panel memberChecklistV15">'+
+      '<div class="memberDayNavV15">'+Array.from({length:60},(_,i)=>{
+        const n=i+1,active=n===d,done=n<d;
+        return '<button type="button" class="'+(active?'active ':'')+(done?'done':'')+'" '+(n<=d?'onclick="window.__openMemberDayV15('+n+')"':'disabled')+'>'+n+'</button>';
+      }).join('')+'</div>'+
+      '<div class="notice"><b>Hari '+d+'/60</b> • Progress checklist: <b>'+pct(d)+'%</b></div>'+
+      '<div style="margin-top:10px">'+(ts.length?ts.map((t,i)=>'<label class="memberTaskV15"><input type="checkbox" '+(st[i]===true?'checked':'')+' onchange="window.__memberCheckV15('+i+',this.checked)"><div><b>'+esc(t)+'</b></div></label>').join(''):'<div class="empty">Belum ada tugas checklist untuk Hari '+d+'.</div>')+'</div>'+
+      '<button type="button" class="btn" onclick="window.__finishMemberDayV15()" style="width:100%;margin-top:14px">Selesaikan Hari Ini & Buka Hari Berikutnya →</button>'+
+      '<div class="notice" style="margin-top:10px">Checklist harus 100% untuk membuka hari berikutnya.</div>'+
+      '</div>';
+  }
+  window.__memberCheckV15=saveCheck;
+  window.__openMemberDayV15=function(n){
+    if(currentRole!=='member'||!currentUser)return;
+    if(n!==dayNow()){alert('Hari '+n+' belum terbuka. Selesaikan Hari '+dayNow()+' sampai 100% terlebih dahulu.');return}
+    renderProgram();
+  };
+  window.__finishMemberDayV15=async function(){
+    if(currentRole!=='member'||!currentUser)return;
+    const d=dayNow(),ts=tasks(d),st=checks(d);
+    if(pct(d)<100){alert('Checklist Hari '+d+' baru '+pct(d)+'%. Lengkapi sampai 100% terlebih dahulu.');return}
+    if(d>=60){alert('Program 60 hari selesai.');return}
+    try{
+      const token=window.umrohMemberSession?.get?.()||'';
+      if(!S()||!token)throw new Error('Sesi member belum siap.');
+      const r=await S().rpc('member_day_update',{p_token:token,p_day:d+1});
+      if(r.error)throw r.error;
+      if(!r.data?.success)throw new Error(r.data?.message||'Gagal membuka hari berikutnya.');
+      currentUser.day=d+1;
+      if(typeof loadMemberCentral==='function')await loadMemberCentral();
+      renderProgram();
+      alert('Hari '+d+' selesai. Hari '+(d+1)+' sekarang terbuka.');
+    }catch(e){alert('Gagal membuka hari berikutnya: '+(e?.message||e))}
+  };
+  // Make the existing member menu explicitly point to the real checklist page.
+  function fixMenu(){
+    const item=document.querySelector('#memberNav .navItem[data-page="program"]');
+    if(item){
+      item.textContent='☑  Checklist & SOP';
+      item.style.pointerEvents='auto';
+      item.style.cursor='pointer';
+      item.onclick=function(e){e.preventDefault();e.stopPropagation();window.showPage('program');};
+    }
+  }
+  const oldShow=window.showPage;
+  window.showPage=function(page){
+    const r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;
+    fixMenu();
+    if(currentRole==='member'&&page==='program'){
+      setTimeout(async()=>{
+        try{if(typeof loadMemberCentral==='function')await loadMemberCentral()}catch(e){}
+        renderProgram();
+      },60);
+    }
+    return r;
+  };
+  const oldRender=window.renderMember;
+  window.renderMember=function(){
+    const r=typeof oldRender==='function'?oldRender.apply(this,arguments):undefined;
+    fixMenu();
+    if(currentRole==='member'&&document.getElementById('page-program')?.classList.contains('active'))setTimeout(renderProgram,0);
+    return r;
+  };
+  function boot(){fixMenu();if(currentRole==='member'&&document.getElementById('page-program')?.classList.contains('active'))renderProgram()}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
+
