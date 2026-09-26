@@ -4505,6 +4505,11 @@ function renderChecklistV16(){
  window.__memberChecklistRenderV16=renderChecklistV16;
 }
 window.__memberChecklistRenderV16=renderChecklistV16;
+const oldMemberCheckV15=window.__memberCheckV15;
+window.__memberCheckV15=async function(i,val){
+  if(typeof oldMemberCheckV15==='function')await oldMemberCheckV15(i,val);
+  renderChecklistV16();
+};
 document.addEventListener('click',e=>{if(e.target?.closest?.('#memberFinishDayV16')){e.preventDefault();e.stopPropagation();window.__finishMemberDayV16()}},true);
 
 const oldShowV16=window.showPage;
@@ -4512,12 +4517,7 @@ window.showPage=function(page){const r=typeof oldShowV16==='function'?oldShowV16
 
 const oldAdminBridge=window.umrohAdminRefreshBridge;
 window.umrohAdminRefreshBridge=async function(){
- if(typeof oldAdminBridge==='function')await oldAdminBridge();
- if(currentRole!=='admin'||!S())return;
- const r=await S().rpc('admin_dashboard_snapshot');if(r.error||!r.data?.success)return;
- const map={};(r.data.checklists||[]).forEach(x=>{map[String(x.member_id)]=map[String(x.member_id)]||{};map[String(x.member_id)][String(x.program_day)]=x.checks||{}});
- (window.members||members||[]).forEach(m=>m.checks=map[String(m.id)]||{});
- window.members=members;if(typeof window.renderMembers==='function')window.renderMembers();
+  if(typeof oldAdminBridge==='function')await oldAdminBridge();
 };
 
 window.renderMembers=function(){
