@@ -4701,16 +4701,18 @@ setInterval(async()=>{
 <script id="scalingRealtimeV18">
 (function(){
 'use strict';
+window.__centralSyncV18Primary=true;
 const SB=()=>window.supabaseClient||null;
 let adminChannelV18=null;
 let adminRefreshTimerV18=null;
 
+let adminLastRefreshV18=0;
 function scheduleAdminRefreshV18(){
   if(currentRole!=='admin')return;
   clearTimeout(adminRefreshTimerV18);
   adminRefreshTimerV18=setTimeout(async()=>{
     try{
-      if(typeof window.umrohAdminRefreshBridge==='function')await window.umrohAdminRefreshBridge();
+      if(typeof window.__adminForceRefreshV18==='function')await window.__adminForceRefreshV18();
     }catch(e){console.warn('Admin realtime refresh V18:',e)}
   },500);
 }
@@ -4729,6 +4731,19 @@ function startAdminRealtimeV18(){
       if(error)console.warn('Admin Realtime V18:',error);
     });
 }
+
+const baseAdminBridgeV18=window.umrohAdminRefreshBridge;
+window.__adminForceRefreshV18=async function(){
+  if(typeof baseAdminBridgeV18!=='function')return;
+  adminLastRefreshV18=Date.now();
+  return baseAdminBridgeV18();
+};
+window.umrohAdminRefreshBridge=async function(){
+  if(currentRole!=='admin'||typeof baseAdminBridgeV18!=='function')return;
+  if(Date.now()-adminLastRefreshV18<30000)return;
+  adminLastRefreshV18=Date.now();
+  return baseAdminBridgeV18();
+};
 
 const oldEnterV18=window.enterApp;
 window.enterApp=function(){
