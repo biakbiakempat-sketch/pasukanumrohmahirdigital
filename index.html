@@ -997,7 +997,7 @@ function downloadExcel(filename,headers,rows){
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(start,800));
   else setTimeout(start,800);
 })();
-</script>
+<\/script>
 </body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
