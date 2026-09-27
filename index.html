@@ -1007,7 +1007,7 @@ function renderClosingRecordsV20(){
   const box=ensureClosingRecordsV20();
   const body=document.getElementById('memberClosingRecordsBodyV20');
   if(!box||!body)return;
-  const rows=Array.isArray(window.currentUser?.closingData)?window.currentUser.closingData.slice():[];
+  const rows=Array.isArray(currentUser?.closingData)?currentUser.closingData.slice():[];
   rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
   if(!rows.length){
     body.innerHTML='<div class="empty">Belum ada closing tersimpan.</div>';
@@ -1030,7 +1030,7 @@ function renderClosingRecordsV20(){
 }
 
 async function refreshClosingRecordsV20(){
-  if(window.currentRole!=='member'||!window.currentUser)return;
+  if(currentRole!=='member'||!window.currentUser)return;
   const sb=S(),token=T();
   if(!sb||!token){renderClosingRecordsV20();return}
   try{
