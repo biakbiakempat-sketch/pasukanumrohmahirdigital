@@ -4537,3 +4537,110 @@ setInterval(async()=>{if(currentRole==='admin'&&!document.hidden&&typeof window.
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{if(currentRole==='member'&&document.getElementById('page-program')?.classList.contains('active'))renderChecklistV16()},120));else setTimeout(()=>{if(currentRole==='member'&&document.getElementById('page-program')?.classList.contains('active'))renderChecklistV16()},120);
 })();
 </script>
+
+
+<!-- FINAL MEMBER DAY + CROSS-DEVICE SYNC V17 -->
+<script id="memberDayCrossDeviceV17">
+(function(){
+'use strict';
+const SB=()=>window.supabaseClient||null;
+const TOK=()=>window.umrohMemberSession?.get?.()||'';
+const clone=v=>JSON.parse(JSON.stringify(v||{}));
+
+async function refreshMemberFromServerV17(){
+  const sb=SB(), token=TOK();
+  if(!sb||!token||currentRole!=='member'||!currentUser)return false;
+  const r=await sb.rpc('member_session_get',{p_token:token});
+  if(r.error)throw r.error;
+  if(!r.data?.success)throw new Error(r.data?.message||'Sesi member tidak valid.');
+  const p=r.data.profile||{};
+  currentUser.id=p.id;
+  currentUser.name=p.name||currentUser.name||'';
+  currentUser.username=p.username||currentUser.username||'';
+  currentUser.wa=p.wa||currentUser.wa||'';
+  currentUser.status=p.status||currentUser.status||'approved';
+  currentUser.day=Math.max(1,Number(p.day||1));
+  if(typeof saveAuthSession==='function')saveAuthSession();
+  return true;
+}
+
+window.__finishMemberDayV17=async function(){
+  if(window.__memberFinishBusyV17)return;
+  if(currentRole!=='member'||!currentUser){alert('Sesi member belum siap. Silakan login kembali.');return}
+  const sb=SB(),token=TOK();
+  if(!sb||!token){alert('Sesi member belum siap. Silakan login kembali.');return}
+
+  const oldDay=Math.max(1,Number(currentUser.day||1));
+  const cfg=window.__umrohCentralConfig?.checklist||{};
+  const dayCfg=cfg[String(oldDay)]||cfg[oldDay]||{};
+  const tasks=Array.isArray(dayCfg.tasks)?dayCfg.tasks:[];
+  const checks=currentUser.checks?.[String(oldDay)]||currentUser.checks?.[oldDay]||{};
+  const done=tasks.reduce((n,_,i)=>n+(checks[i]===true?1:0),0);
+  const pct=tasks.length?Math.round(done/tasks.length*100):0;
+  if(oldDay>=60){alert('Program 60 hari selesai.');return}
+  if(pct<100){alert('Checklist Hari '+oldDay+' baru '+pct+'%. Lengkapi sampai 100% terlebih dahulu.');return}
+
+  const btn=document.getElementById('memberFinishDayV16');
+  window.__memberFinishBusyV17=true;
+  if(btn){btn.disabled=true;btn.textContent='Menyimpan progress ke database...';}
+
+  try{
+    let result=null;
+    const primary=await sb.rpc('member_day_complete',{p_token:token});
+    if(!primary.error && primary.data?.success){
+      result=primary.data;
+    }else{
+      console.warn('member_day_complete V17 gagal, mencoba fallback member_day_update',primary.error||primary.data);
+      const fallback=await sb.rpc('member_day_update',{p_token:token,p_day:oldDay+1});
+      if(fallback.error)throw fallback.error;
+      if(!fallback.data?.success)throw new Error(fallback.data?.message||primary.data?.message||'Gagal membuka hari berikutnya.');
+      result={success:true,day:oldDay+1,previous_day:oldDay};
+    }
+
+    await refreshMemberFromServerV17();
+    if(Number(currentUser.day)!==Number(result.day)){
+      throw new Error('Database belum mengonfirmasi perubahan Hari '+oldDay+' ke Hari '+result.day+'.');
+    }
+
+    if(typeof window.loadMemberCentral==='function')await window.loadMemberCentral();
+    currentUser.day=Number(result.day);
+    if(typeof window.__memberChecklistRenderV16==='function')window.__memberChecklistRenderV16();
+    if(typeof window.renderMemberDashboardMilestones==='function')window.renderMemberDashboardMilestones();
+
+    alert('Hari '+oldDay+' selesai. Hari '+Number(result.day)+' sekarang terbuka dan tersimpan di Supabase.');
+  }catch(e){
+    console.error('Member day V17:',e);
+    alert('Gagal membuka hari berikutnya: '+(e?.message||e));
+    try{
+      await refreshMemberFromServerV17();
+      if(typeof window.__memberChecklistRenderV16==='function')window.__memberChecklistRenderV16();
+    }catch(_){}
+  }finally{
+    window.__memberFinishBusyV17=false;
+    const b=document.getElementById('memberFinishDayV16');
+    if(b)b.disabled=false;
+  }
+};
+
+// Replace every V16 finish call, including legacy inline/capture handlers.
+window.__finishMemberDayV16=window.__finishMemberDayV17;
+
+const oldShowV17=window.showPage;
+window.showPage=function(page){
+  const r=typeof oldShowV17==='function'?oldShowV17.apply(this,arguments):undefined;
+  if(currentRole==='member'&&page==='program')setTimeout(()=>{if(typeof window.__memberChecklistRenderV16==='function')window.__memberChecklistRenderV16()},80);
+  return r;
+};
+
+// Server-authoritative polling: profile/day + checklist are never sourced from localStorage.
+setInterval(async()=>{
+  if(currentRole==='member'&&!document.hidden&&!window.__memberFinishBusyV17){
+    try{
+      await refreshMemberFromServerV17();
+      if(typeof window.loadMemberCentral==='function')await window.loadMemberCentral();
+      if(document.getElementById('page-program')?.classList.contains('active')&&typeof window.__memberChecklistRenderV16==='function')window.__memberChecklistRenderV16();
+    }catch(e){console.warn('Member server sync V17:',e)}
+  }
+},5000);
+})();
+</script>
