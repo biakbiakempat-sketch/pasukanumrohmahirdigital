@@ -2807,6 +2807,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
       if(r.error)throw r.error;
       const d=r.data||{};
       if(!d.success)throw new Error(d.message||'Snapshot admin gagal');
+      const profiles=Array.isArray(d.profiles)?d.profiles:[];
       const activities=Array.isArray(d.activities)?d.activities:[];
       const leads=Array.isArray(d.leads)?d.leads:[];
       const closings=Array.isArray(d.closings)?d.closings:[];
