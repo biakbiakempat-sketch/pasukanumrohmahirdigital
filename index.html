@@ -962,7 +962,43 @@ function xlsEscape(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&
 function downloadExcel(filename,headers,rows){
  const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table>
 
-\n</body></html>`;
+\n<script id="adminRealtimeCanonicalV23">
+(function(){
+  'use strict';
+  const SB=()=>window.supabaseClient||null;
+  let channel=null;
+  function refresh(){
+    try{if(window.currentRole==='admin'&&typeof window.adminRefresh==='function')window.adminRefresh();}catch(e){console.warn('Admin realtime refresh:',e)}
+  }
+  function start(){
+    const sb=SB();
+    if(!sb||window.currentRole!=='admin'||channel)return;
+    channel=sb.channel('pasukan-umroh-admin-sync-v23')
+      .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},refresh)
+      .on('postgres_changes',{event:'*',schema:'public',table:'member_checklists'},refresh)
+      .on('postgres_changes',{event:'*',schema:'public',table:'member_leads'},refresh)
+      .on('postgres_changes',{event:'*',schema:'public',table:'member_closings'},refresh)
+      .on('postgres_changes',{event:'*',schema:'public',table:'sales_activities'},refresh)
+      .subscribe((status,error)=>console.log('Admin Realtime V23:',status,error||''));
+  }
+  const oldEnter=window.enterApp;
+  window.enterApp=function(){
+    const r=typeof oldEnter==='function'?oldEnter.apply(this,arguments):undefined;
+    setTimeout(start,500);
+    return r;
+  };
+  const oldLogout=window.logout;
+  window.logout=async function(){
+    try{if(channel&&SB())await SB().removeChannel(channel)}catch(e){}
+    channel=null;
+    return typeof oldLogout==='function'?oldLogout.apply(this,arguments):undefined;
+  };
+  setInterval(()=>{if(window.currentRole==='admin')start()},5000);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(start,800));
+  else setTimeout(start,800);
+})();
+</script>
+</body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
 
@@ -2416,7 +2452,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   // Re-check server state whenever the app becomes visible.
   document.addEventListener('visibilitychange',function(){if(!document.hidden&&currentRole==='member')setTimeout(safeReload,150)});
   // Super Admin sees new member/lead/closing changes without manually refreshing the page.
-  setInterval(function(){if(currentRole==='admin'&&typeof adminRefresh==='function')adminRefresh()},5000);
+  setInterval(function(){if(currentRole==='admin'&&!document.hidden&&typeof adminRefresh==='function')adminRefresh()},30000);
 })();
 </script>
 <script id="approvalSyncFinalFix">
