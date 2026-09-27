@@ -963,7 +963,121 @@ function xlsEscape(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&
 function downloadExcel(filename,headers,rows){
  const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table>
 
-\n</body></html>`;
+\n
+<!-- MEMBER CLOSING RECORDS V20: central Supabase list + mobile-safe records -->
+<style id="memberClosingRecordsV20">
+#memberClosingRecordsV20{margin-top:12px}
+#memberClosingRecordsV20 .closingRecordV20{
+  border:1px solid var(--line,#dfe5ec);border-radius:14px;padding:12px;margin:9px 0;
+  background:#fff;box-shadow:0 2px 8px rgba(20,40,80,.04)
+}
+#memberClosingRecordsV20 .crHead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+#memberClosingRecordsV20 .crName{font-weight:900;color:var(--navy,#172554);font-size:15px}
+#memberClosingRecordsV20 .crDate{font-size:12px;color:#687386;white-space:nowrap}
+#memberClosingRecordsV20 .crGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}
+#memberClosingRecordsV20 .crItem{background:#f7f9fc;border-radius:9px;padding:8px}
+#memberClosingRecordsV20 .crLabel{font-size:10px;color:#788397;text-transform:uppercase;font-weight:800}
+#memberClosingRecordsV20 .crValue{font-size:13px;color:#172554;font-weight:700;margin-top:2px;word-break:break-word}
+#memberClosingRecordsV20 .crActions{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+@media(max-width:600px){#memberClosingRecordsV20 .crGrid{grid-template-columns:1fr 1fr}}
+</style>
+<script id="memberClosingRecordsV20">
+(function(){
+'use strict';
+const S=()=>window.supabaseClient||null;
+const T=()=>window.umrohMemberSession?.get?.()||'';
+const escV20=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+const moneyV20=n=>Number(n||0).toLocaleString('id-ID');
+
+function ensureClosingRecordsV20(){
+  const page=document.getElementById('page-memberClosing');
+  if(!page)return null;
+  let box=document.getElementById('memberClosingRecordsV20');
+  if(box)return box;
+  box=document.createElement('div');
+  box.id='memberClosingRecordsV20';
+  box.className='panel';
+  box.innerHTML='<div class="toolbar"><div><h3 style="margin:0">📋 DAFTAR CLOSING</h3><span class="small">Setiap closing yang tersimpan di Supabase akan muncul di sini.</span></div></div><div id="memberClosingRecordsBodyV20"></div>';
+  const table=page.querySelector('.tableWrap')?.closest('.panel');
+  if(table) table.insertAdjacentElement('afterend',box); else page.appendChild(box);
+  return box;
+}
+
+function renderClosingRecordsV20(){
+  const box=ensureClosingRecordsV20();
+  const body=document.getElementById('memberClosingRecordsBodyV20');
+  if(!box||!body)return;
+  const rows=Array.isArray(window.currentUser?.closingData)?window.currentUser.closingData.slice():[];
+  rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  if(!rows.length){
+    body.innerHTML='<div class="empty">Belum ada closing tersimpan.</div>';
+    return;
+  }
+  body.innerHTML=rows.map(x=>{
+    const id=JSON.stringify(String(x.id));
+    return '<div class="closingRecordV20">'+
+      '<div class="crHead"><div class="crName">'+escV20(x.name||'-')+'</div><div class="crDate">'+escV20(x.date||'-')+'</div></div>'+
+      '<div class="crGrid">'+
+      '<div class="crItem"><div class="crLabel">Invoice</div><div class="crValue">'+Number(x.invoice||0)+'</div></div>'+
+      '<div class="crItem"><div class="crLabel">Pax</div><div class="crValue">'+Number(x.pax||0)+'</div></div>'+
+      '<div class="crItem"><div class="crLabel">Travel</div><div class="crValue">'+escV20(x.travel||'-')+'</div></div>'+
+      '<div class="crItem"><div class="crLabel">Paket</div><div class="crValue">'+escV20(x.package||'-')+'</div></div>'+
+      '<div class="crItem"><div class="crLabel">Omset</div><div class="crValue">Rp '+moneyV20(x.omset)+'</div></div>'+
+      '</div>'+
+      '<div class="crActions"><button class="btnMini" onclick="editClosing('+id+')">Edit</button><button class="btnMini danger" onclick="deleteClosing('+id+')">Hapus</button></div>'+
+      '</div>';
+  }).join('');
+}
+
+async function refreshClosingRecordsV20(){
+  if(window.currentRole!=='member'||!window.currentUser)return;
+  const sb=S(),token=T();
+  if(!sb||!token){renderClosingRecordsV20();return}
+  try{
+    const r=await sb.rpc('member_dashboard_snapshot',{p_token:token});
+    if(r.error)throw r.error;
+    if(r.data?.success){
+      const map=x=>({id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),pax:Number(x.pax||1),travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),date:x.closing_date||'',createdAt:x.created_at||''});
+      window.currentUser.closingData=(r.data.closings||[]).map(map);
+    }
+  }catch(e){console.warn('Closing V20 snapshot:',e)}
+  renderClosingRecordsV20();
+  if(typeof window.renderMemberClosing==='function')window.renderMemberClosing();
+}
+
+const oldRenderMemberV20=window.renderMember;
+window.renderMember=function(){
+  try{if(typeof oldRenderMemberV20==='function')oldRenderMemberV20.apply(this,arguments)}catch(e){}
+  setTimeout(renderClosingRecordsV20,0);
+};
+
+const oldShowV20=window.showPage;
+window.showPage=function(page){
+  const r=typeof oldShowV20==='function'?oldShowV20.apply(this,arguments):undefined;
+  if(page==='memberClosing'&&window.currentRole==='member'){
+    setTimeout(refreshClosingRecordsV20,80);
+  }
+  return r;
+};
+
+const oldSaveV20=window.saveClosing;
+window.saveClosing=async function(){
+  const result=typeof oldSaveV20==='function'?oldSaveV20.apply(this,arguments):undefined;
+  if(result&&typeof result.then==='function')await result;
+  setTimeout(refreshClosingRecordsV20,120);
+};
+
+const oldDeleteV20=window.deleteClosing;
+window.deleteClosing=async function(id){
+  const result=typeof oldDeleteV20==='function'?oldDeleteV20.apply(this,arguments):undefined;
+  if(result&&typeof result.then==='function')await result;
+  setTimeout(refreshClosingRecordsV20,120);
+};
+
+document.addEventListener('DOMContentLoaded',()=>setTimeout(ensureClosingRecordsV20,500));
+})();
+</script>
+</body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
 
