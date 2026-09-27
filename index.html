@@ -1181,44 +1181,6 @@ else setTimeout(startAdminRealtimeV22,700);
   async function loadAdminCentral(){
     if(currentRole!=='admin'||!S())return;
     try{
-      const [pr,ar,lr,cr,cfg]=await Promise.all([
-        S().from('profiles').select('id,name,username,wa,role,status,day,registered_at,approved_at').eq('role','member').order('name',{ascending:true}),
-        S().from('sales_activities').select('*').order('activity_date',{ascending:false}),
-        S().from('member_leads').select('*').order('lead_date',{ascending:false}),
-        S().from('member_closings').select('*').order('closing_date',{ascending:false}),
-        S().rpc('admin_config_get')
-      ]);
-      if(pr.error)throw pr.error;
-      if(ar.error)throw ar.error;
-      if(lr.error)throw lr.error;
-      if(cr.error)throw cr.error;
-
-      const activityBy=new Map(), leadBy=new Map(), closingBy=new Map();
-      (ar.data||[]).forEach(x=>{const k=String(x.member_id);if(!activityBy.has(k))activityBy.set(k,[]);activityBy.get(k).push(x)});
-      (lr.data||[]).forEach(x=>{const k=String(x.member_id);if(!leadBy.has(k))leadBy.set(k,[]);leadBy.get(k).push(x)});
-      (cr.data||[]).forEach(x=>{const k=String(x.member_id);if(!closingBy.has(k))closingBy.set(k,[]);closingBy.get(k).push(x)});
-
-      members=(pr.data||[]).map(m=>{
-        const id=String(m.id);
-        const x={id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',role:m.role||'member',
-          status:m.status||'pending',day:Number(m.day||0),checks:{},sales:{},activityLog:[],
-          leads:[],closingData:[],registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null};
-        x.activityLog=(activityBy.get(id)||[]).map(dbToActivity);
-        x.sales={};x.activityLog.forEach(a=>{if(a.day)x.sales[a.day]={...a}});
-        x.leads=(leadBy.get(id)||[]).map(dbToLead);
-        x.closingData=(closingBy.get(id)||[]).map(dbToClosing);
-        return x;
-      });
-      if(cfg?.data?.success){
-        const cc=cfg.data.configs||{};
-        Object.keys(cc).forEach(k=>{if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=cc[k]});
-      }
-      if(typeof renderAllAdmin==='function')renderAllAdmin();
-    }catch(e){console.error('Phase 3 admin load:',e)}
-  };
-  async function loadAdminCentral(){
-    if(currentRole!=='admin'||!S())return;
-    try{
       const {data,error}=await S().rpc('admin_dashboard_snapshot');
       if(error)throw error;
       if(!data?.success)throw new Error(data?.message||'Snapshot admin gagal dimuat.');
