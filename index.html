@@ -2803,57 +2803,102 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     if(currentRole!=='admin')return;
     const c=C();if(!c)return;
     try{
-      // SECURITY DEFINER snapshot is the primary admin data path.
-      // This avoids depending on direct profiles SELECT/RLS behavior in a mobile browser.
-      // The snapshot itself authorizes through is_super_admin() and reads all central tables.
-      const snap=await c.rpc('admin_dashboard_snapshot');
-      const d0={profiles:[],activities:[],leads:[],closings:[],checklists:[]};
-      if(!snap.error && snap.data?.success){
-        d0.profiles=Array.isArray(snap.data.profiles)?snap.data.profiles:[];
-        d0.activities=Array.isArray(snap.data.activities)?snap.data.activities:[];
-        d0.leads=Array.isArray(snap.data.leads)?snap.data.leads:[];
-        d0.closings=Array.isArray(snap.data.closings)?snap.data.closings:[];
-        d0.checklists=Array.isArray(snap.data.checklists)?snap.data.checklists:[];
-      }else{
-        // If the RPC is temporarily unavailable, direct table reads are only a fallback.
-        console.warn('Admin snapshot unavailable; using direct-table fallback:',snap.error||snap.data?.message||'unavailable');
-        const pr=await c.from('profiles').select('id,name,username,wa,role,status,day,registered_at,approved_at').eq('role','member').order('name',{ascending:true});
-        if(pr.error)throw pr.error;
-        d0.profiles=Array.isArray(pr.data)?pr.data:[];
-        const [ar,lr,cr]=await Promise.all([
-          c.from('sales_activities').select('*').order('activity_date',{ascending:false}),
-          c.from('member_leads').select('*').order('lead_date',{ascending:false}),
-          c.from('member_closings').select('*').order('closing_date',{ascending:false})
-        ]);
-        if(!ar.error)d0.activities=ar.data||[];
-        if(!lr.error)d0.leads=lr.data||[];
-        if(!cr.error)d0.closings=cr.data||[];
-      }
+      // MEMBER REGISTRY: direct Supabase table read is the first and independent step.
+      // This is intentionally the same path that was stable in V16: a failure in
+      // activities/leads/closings/checklists must NEVER hide the member registry.
+      const pr=await c.from('profiles')
+        .select('id,name,username,wa,role,status,day,registered_at,approved_at')
+        .eq('role','member')
+        .order('name',{ascending:true});
+      if(pr.error)throw pr.error;
 
-      const activities=d0.activities,leads=d0.leads,closings=d0.closings,checklists=d0.checklists;
+      const profiles=Array.isArray(pr.data)?pr.data:[];
+      const emptyBy=new Map();
+      members=profiles.map(m=>({
+        id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',
+        role:m.role||'member',status:m.status||'pending',day:Number(m.day||0),
+        checks:{},sales:{},activityLog:[],leads:[],closingData:[],
+        registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null
+      }));
+      window.members=members;
+
+      // Render immediately. Member count/approval list must not wait for any
+      // secondary table or RPC.
+      ensureIncomePage();
+      try{if(typeof window.renderAllAdmin==='function')window.renderAllAdmin()}catch(e){console.warn('Initial admin member render:',e)}
+
+      // Secondary central data is loaded independently. A failure here must not
+      // overwrite/empty the already-loaded member registry.
+      const [ar,lr,cr,kr,cfg]=await Promise.all([
+        c.from('sales_activities').select('*').order('activity_date',{ascending:false}),
+        c.from('member_leads').select('*').order('lead_date',{ascending:false}),
+        c.from('member_closings').select('*').order('closing_date',{ascending:false}),
+        c.from('member_checklists').select('*').order('updated_at',{ascending:false}),
+        c.rpc('admin_config_get')
+      ]);
+
+      const activities=ar.error?[]:(ar.data||[]);
+      const leads=lr.error?[]:(lr.data||[]);
+      const closings=cr.error?[]:(cr.data||[]);
+      const checklists=kr.error?[]:(kr.data||[]);
+      if(ar.error)console.warn('Admin activities sync:',ar.error);
+      if(lr.error)console.warn('Admin leads sync:',lr.error);
+      if(cr.error)console.warn('Admin closings sync:',cr.error);
+      if(kr.error)console.warn('Admin checklist sync:',kr.error);
+      if(cfg.error)console.warn('Admin config sync:',cfg.error);
+
       const byA=new Map(),byL=new Map(),byC=new Map(),byK=new Map();
       activities.forEach(x=>{const k=String(x.member_id);if(!byA.has(k))byA.set(k,[]);byA.get(k).push(x)});
       leads.forEach(x=>{const k=String(x.member_id);if(!byL.has(k))byL.set(k,[]);byL.get(k).push(x)});
       closings.forEach(x=>{const k=String(x.member_id);if(!byC.has(k))byC.set(k,[]);byC.get(k).push(x)});
-      checklists.forEach(x=>{const k=String(x.member_id);if(!byK.has(k))byK.set(k,{});byK.get(k)[String(x.program_day)]=JSON.parse(JSON.stringify(x.checks||{}));});
-      const dbA=x=>({id:x.id,date:x.activity_date||'',day:Number(x.program_day||0),japri:Number(x.japri||0),follow:Number(x.follow_up||0),conv:Number(x.conversation||0),lead:Number(x.lead||0),offer:Number(x.offer||0),closing:Number(x.closing||0),referral:Number(x.referral||0),notes:x.notes||''});
-      const dbL=x=>({id:x.id,date:x.lead_date||'',time:x.lead_time||'',name:x.name||'',city:x.city||'',contact:x.contact||'',source:x.source||'',response:x.response||'',plan:x.plan||'',funnel:x.funnel||'',closing:x.closing||'Belum Closing',closingDate:x.closing_date||'',fu1:x.fu1||'',fu1Response:x.fu1_response||'',fu2:x.fu2||'',fu2Response:x.fu2_response||'',fu3:x.fu3||'',fu3Response:x.fu3_response||'',noClose:x.no_close||'',cs:x.cs||'',note:x.note||'',score:Number(x.score||0)});
-      const dbC=x=>({id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),pax:Number(x.pax||1),travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),date:x.closing_date||'',createdAt:x.created_at||''});
-      members=d0.profiles.map(m=>{
-        const id=String(m.id),aa=(byA.get(id)||[]).map(dbA),ll=(byL.get(id)||[]).map(dbL),cc=(byC.get(id)||[]).map(dbC);
-        const sales={};aa.forEach(a=>{if(a.day)sales[a.day]={...a}});
-        return {id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',role:m.role||'member',status:m.status||'pending',day:Number(m.day||0),checks:byK.get(id)||{},sales,activityLog:aa,leads:ll,closingData:cc,registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null};
+      checklists.forEach(x=>{
+        const k=String(x.member_id);
+        if(!byK.has(k))byK.set(k,{});
+        byK.get(k)[String(x.program_day)]=JSON.parse(JSON.stringify(x.checks||{}));
+      });
+
+      const dbA=x=>({id:x.id,date:x.activity_date||'',day:Number(x.program_day||0),
+        japri:Number(x.japri||0),follow:Number(x.follow_up||0),conv:Number(x.conversation||0),
+        lead:Number(x.lead||0),offer:Number(x.offer||0),closing:Number(x.closing||0),
+        referral:Number(x.referral||0),notes:x.notes||''});
+      const dbL=x=>({id:x.id,date:x.lead_date||'',time:x.lead_time||'',name:x.name||'',
+        city:x.city||'',contact:x.contact||'',source:x.source||'',response:x.response||'',
+        plan:x.plan||'',funnel:x.funnel||'',closing:x.closing||'Belum Closing',
+        closingDate:x.closing_date||'',fu1:x.fu1||'',fu1Response:x.fu1_response||'',
+        fu2:x.fu2||'',fu2Response:x.fu2_response||'',fu3:x.fu3||'',
+        fu3Response:x.fu3_response||'',noClose:x.no_close||'',cs:x.cs||'',
+        note:x.note||'',score:Number(x.score||0)});
+      const dbC=x=>({id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),
+        pax:Number(x.pax||1),travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),
+        date:x.closing_date||'',createdAt:x.created_at||''});
+
+      members=members.map(m=>{
+        const id=String(m.id);
+        const aa=(byA.get(id)||[]).map(dbA);
+        const ll=(byL.get(id)||[]).map(dbL);
+        const cc=(byC.get(id)||[]).map(dbC);
+        const sales={};
+        aa.forEach(a=>{if(a.day)sales[a.day]={...a}});
+        return {...m,checks:byK.get(id)||{},sales,activityLog:aa,leads:ll,closingData:cc};
       });
       window.members=members;
-      ensureIncomePage();
-      try{if(typeof window.renderAllAdmin==='function')window.renderAllAdmin()}catch(e){console.warn('admin render',e)}
-      renderIncome();
+
+      if(!cfg.error&&cfg.data?.success&&cfg.data.configs){
+        const ccfg=cfg.data.configs||{};
+        Object.keys(ccfg).forEach(k=>{
+          if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=ccfg[k];
+        });
+      }
+
+      try{if(typeof window.renderAllAdmin==='function')window.renderAllAdmin()}catch(e){console.warn('Final admin render:',e)}
+      try{renderIncome()}catch(e){}
     }catch(e){
       console.error('Final admin Supabase sync:',e);
+      // Do not replace a previously loaded member registry with [] on error.
       ensureIncomePage();
       try{if(typeof window.renderMembers==='function')window.renderMembers()}catch(_){}
       try{if(typeof window.renderApproval==='function')window.renderApproval()}catch(_){}
-      renderIncome();
+      try{renderIncome()}catch(_){}
     }
   }
   window.umrohAdminRefreshBridge=refreshFromSupabase;
