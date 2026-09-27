@@ -2697,23 +2697,23 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     if(currentRole!=='admin')return;
     const c=C();if(!c)return;
     try{
-      // Profiles are the authoritative member registry. Read them independently
-      // so a transient snapshot/RPC problem can never make the member list appear empty.
-      const pr=await c.from('profiles').select('id,name,username,wa,role,status,day,registered_at,approved_at').eq('role','member').order('name',{ascending:true});
-      if(pr.error)throw pr.error;
-      const d0={profiles:Array.isArray(pr.data)?pr.data:[],activities:[],leads:[],closings:[],checklists:[]};
-
-      // Snapshot supplies checklist state and the same central business data used
-      // by the member dashboard. If it is temporarily unavailable, keep the
-      // member registry visible and fall back to the readable activity tables.
+      // SECURITY DEFINER snapshot is the primary admin data path.
+      // This avoids depending on direct profiles SELECT/RLS behavior in a mobile browser.
+      // The snapshot itself authorizes through is_super_admin() and reads all central tables.
       const snap=await c.rpc('admin_dashboard_snapshot');
+      const d0={profiles:[],activities:[],leads:[],closings:[],checklists:[]};
       if(!snap.error && snap.data?.success){
+        d0.profiles=Array.isArray(snap.data.profiles)?snap.data.profiles:[];
         d0.activities=Array.isArray(snap.data.activities)?snap.data.activities:[];
         d0.leads=Array.isArray(snap.data.leads)?snap.data.leads:[];
         d0.closings=Array.isArray(snap.data.closings)?snap.data.closings:[];
         d0.checklists=Array.isArray(snap.data.checklists)?snap.data.checklists:[];
       }else{
-        console.warn('Admin snapshot fallback:',snap.error||snap.data?.message||'unavailable');
+        // If the RPC is temporarily unavailable, direct table reads are only a fallback.
+        console.warn('Admin snapshot unavailable; using direct-table fallback:',snap.error||snap.data?.message||'unavailable');
+        const pr=await c.from('profiles').select('id,name,username,wa,role,status,day,registered_at,approved_at').eq('role','member').order('name',{ascending:true});
+        if(pr.error)throw pr.error;
+        d0.profiles=Array.isArray(pr.data)?pr.data:[];
         const [ar,lr,cr]=await Promise.all([
           c.from('sales_activities').select('*').order('activity_date',{ascending:false}),
           c.from('member_leads').select('*').order('lead_date',{ascending:false}),
