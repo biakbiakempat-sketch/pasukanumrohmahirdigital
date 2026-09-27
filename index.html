@@ -1197,6 +1197,143 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 else setTimeout(refreshClosingListV21,500);
 })();
 </script>
+
+<!-- FINAL CLOSING TABLE + ADMIN REALTIME V22 -->
+<style id="closingRealtimeV22">
+#page-memberClosing .closingTableV22{margin-top:0}
+#page-memberClosing .closingTableV22 .tableWrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+#page-memberClosing .closingTableV22 table{min-width:760px}
+</style>
+<script id="closingRealtimeV22">
+(function(){
+'use strict';
+const SB=()=>window.supabaseClient||null;
+const TOK=()=>window.umrohMemberSession?.get?.()||'';
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+const money=n=>Number(n||0).toLocaleString('id-ID');
+
+function renderClosingTableV22(){
+  if(window.currentRole!=='member')return;
+  const body=document.getElementById('myClosingRows');
+  if(!body)return;
+  const rows=Array.isArray(window.currentUser?.closingData)?window.currentUser.closingData.slice():[];
+  rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  body.innerHTML=rows.length?rows.map(x=>{
+    const id=JSON.stringify(String(x.id));
+    return '<tr>'+
+      '<td>'+esc(x.date||'-')+'</td>'+
+      '<td><b>'+esc(x.name||'-')+'</b></td>'+
+      '<td>'+Number(x.invoice||0)+'</td>'+
+      '<td>'+Number(x.pax||0)+'</td>'+
+      '<td>'+esc(x.travel||'-')+'</td>'+
+      '<td>'+esc(x.package||'-')+'</td>'+
+      '<td>Rp '+money(x.omset)+'</td>'+
+      '<td><button class="btnMini" type="button" onclick="editClosing('+id+')">Edit</button> <button class="btnMini danger" type="button" onclick="deleteClosing('+id+')">Hapus</button></td>'+
+      '</tr>';
+  }).join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+  const table=body.closest('.panel');
+  if(table)table.classList.add('closingTableV22');
+  // The older V20/V21 cards duplicate this data; the original table is now authoritative.
+  ['memberClosingRecordsV20','memberClosingRecordsV21'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.remove();
+  });
+}
+
+async function refreshClosingV22(){
+  if(window.currentRole!=='member'||!window.currentUser)return;
+  const sb=SB(),token=TOK();
+  if(!sb||!token){renderClosingTableV22();return}
+  try{
+    const r=await sb.rpc('member_dashboard_snapshot',{p_token:token});
+    if(r.error)throw r.error;
+    if(r.data?.success){
+      window.currentUser.closingData=(r.data.closings||[]).map(x=>({
+        id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),pax:Number(x.pax||1),
+        travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),
+        date:x.closing_date||'',createdAt:x.created_at||''
+      }));
+    }
+  }catch(e){console.warn('Closing V22 sync:',e)}
+  renderClosingTableV22();
+}
+
+const baseRender=window.renderMember;
+window.renderMember=function(){
+  try{if(typeof baseRender==='function')baseRender.apply(this,arguments)}catch(e){}
+  setTimeout(renderClosingTableV22,0);
+};
+const baseShow=window.showPage;
+window.showPage=function(page){
+  const r=typeof baseShow==='function'?baseShow.apply(this,arguments):undefined;
+  if(page==='memberClosing'&&window.currentRole==='member')setTimeout(refreshClosingV22,100);
+  return r;
+};
+const baseSave=window.saveClosing;
+window.saveClosing=async function(){
+  try{
+    if(typeof baseSave==='function'){
+      const r=baseSave.apply(this,arguments);
+      if(r&&typeof r.then==='function')await r;
+    }
+  }finally{setTimeout(refreshClosingV22,150)}
+};
+const baseDelete=window.deleteClosing;
+window.deleteClosing=async function(id){
+  try{
+    if(typeof baseDelete==='function'){
+      const r=baseDelete.apply(this,arguments);
+      if(r&&typeof r.then==='function')await r;
+    }
+  }finally{setTimeout(refreshClosingV22,150)}
+};
+
+// Member keeps Supabase as source of truth. Other member devices are picked up
+// by the normal central snapshot; this closing view refreshes every 12 seconds.
+setInterval(function(){
+  if(window.currentRole==='member'&&!document.hidden&&document.getElementById('page-memberClosing')?.classList.contains('active')){
+    refreshClosingV22();
+  }
+},12000);
+
+function startAdminRealtimeV22(){
+  const sb=SB();
+  if(!sb||window.currentRole!=='admin'||window.__adminRealtimeV22)return;
+  window.__adminRealtimeV22=true;
+  const ch=sb.channel('pasukan-umroh-admin-sync-v22')
+    .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>window.__adminForceRefreshV22?.())
+    .on('postgres_changes',{event:'*',schema:'public',table:'member_checklists'},()=>window.__adminForceRefreshV22?.())
+    .on('postgres_changes',{event:'*',schema:'public',table:'member_leads'},()=>window.__adminForceRefreshV22?.())
+    .on('postgres_changes',{event:'*',schema:'public',table:'member_closings'},()=>window.__adminForceRefreshV22?.())
+    .on('postgres_changes',{event:'*',schema:'public',table:'sales_activities'},()=>window.__adminForceRefreshV22?.())
+    .subscribe((status,error)=>{
+      console.log('Admin Realtime V22:',status,error||'');
+    });
+  window.__adminRealtimeChannelV22=ch;
+}
+window.__adminForceRefreshV22=async function(){
+  if(window.currentRole!=='admin')return;
+  try{
+    if(typeof window.umrohAdminRefreshBridge==='function')await window.umrohAdminRefreshBridge();
+    else if(typeof window.loadAdminCentral==='function')await window.loadAdminCentral();
+  }catch(e){console.warn('Admin V22 refresh:',e)}
+};
+const oldEnter=window.enterApp;
+window.enterApp=function(){
+  const r=typeof oldEnter==='function'?oldEnter.apply(this,arguments):undefined;
+  setTimeout(startAdminRealtimeV22,300);
+  return r;
+};
+const oldLogout=window.logout;
+window.logout=async function(){
+  try{if(window.__adminRealtimeChannelV22&&SB())await SB().removeChannel(window.__adminRealtimeChannelV22)}catch(e){}
+  window.__adminRealtimeChannelV22=null;window.__adminRealtimeV22=false;
+  return typeof oldLogout==='function'?oldLogout.apply(this,arguments):undefined;
+};
+setInterval(()=>{if(window.currentRole==='admin')startAdminRealtimeV22()},5000);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(startAdminRealtimeV22,700));
+else setTimeout(startAdminRealtimeV22,700);
+})();
+</script>
 </body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
