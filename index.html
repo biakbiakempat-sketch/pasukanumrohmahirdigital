@@ -2701,6 +2701,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
       if(r.error)throw r.error;
       const d=r.data||{};
       if(!d.success)throw new Error(d.message||'Snapshot admin gagal');
+      const profiles=Array.isArray(d.profiles)?d.profiles:[];
       const activities=Array.isArray(d.activities)?d.activities:[];
       const leads=Array.isArray(d.leads)?d.leads:[];
       const closings=Array.isArray(d.closings)?d.closings:[];
@@ -2711,7 +2712,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
       const dbA=x=>({id:x.id,date:x.activity_date||'',day:Number(x.program_day||0),japri:Number(x.japri||0),follow:Number(x.follow_up||0),conv:Number(x.conversation||0),lead:Number(x.lead||0),offer:Number(x.offer||0),closing:Number(x.closing||0),referral:Number(x.referral||0),notes:x.notes||''});
       const dbL=x=>({id:x.id,date:x.lead_date||'',time:x.lead_time||'',name:x.name||'',city:x.city||'',contact:x.contact||'',source:x.source||'',response:x.response||'',plan:x.plan||'',funnel:x.funnel||'',closing:x.closing||'Belum Closing',closingDate:x.closing_date||'',fu1:x.fu1||'',fu1Response:x.fu1_response||'',fu2:x.fu2||'',fu2Response:x.fu2_response||'',fu3:x.fu3||'',fu3Response:x.fu3_response||'',noClose:x.no_close||'',cs:x.cs||'',note:x.note||'',score:Number(x.score||0)});
       const dbC=x=>({id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),pax:Number(x.pax||1),travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),date:x.closing_date||'',createdAt:x.created_at||''});
-      window.members=(Array.isArray(d.profiles)?d.profiles:[]).map(m=>{
+      window.members=profiles.map(m=>{
         const id=String(m.id),aa=(byA.get(id)||[]).map(dbA),ll=(byL.get(id)||[]).map(dbL),cc=(byC.get(id)||[]).map(dbC);
         const sales={};aa.forEach(a=>{if(a.day)sales[a.day]={...a}});
         return {id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',role:m.role||'member',status:m.status||'pending',day:Number(m.day||0),checks:{},sales,activityLog:aa,leads:ll,closingData:cc,registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null};
