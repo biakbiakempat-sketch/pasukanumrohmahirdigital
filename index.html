@@ -1009,35 +1009,34 @@ function downloadExcel(filename,headers,rows){
   async function loadMemberCentral(){
     if(currentRole!=='member'||!currentUser||!token()||!S())return;
     try{
-      const [leadR,closeR,actR,cfgR]=await Promise.all([
-        S().rpc('member_leads_list',{p_token:token()}),
-        S().rpc('member_closings_list',{p_token:token()}),
-        S().rpc('member_activity_list',{p_token:token()}),
-        S().rpc('member_config_get',{p_token:token()})
-      ]);
-      if(leadR.error)throw leadR.error;
-      if(closeR.error)throw closeR.error;
-      if(actR.error)throw actR.error;
-      if(!leadR.data?.success)throw new Error(leadR.data?.message||'Lead gagal dimuat');
-      if(!closeR.data?.success)throw new Error(closeR.data?.message||'Closing gagal dimuat');
-      if(!actR.data?.success)throw new Error(actR.data?.message||'Aktivitas gagal dimuat');
-      currentUser.leads=(leadR.data.rows||[]).map(dbToLead);
-      currentUser.closingData=(closeR.data.rows||[]).map(dbToClosing);
-      currentUser.activityLog=(actR.data.rows||[]).map(dbToActivity);
+      const {data,error}=await S().rpc('member_dashboard_snapshot',{p_token:token()});
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Data member gagal dimuat');
+
+      const p=data.profile||{};
+      currentUser.id=p.id||currentUser.id;
+      currentUser.name=p.name||currentUser.name||'';
+      currentUser.username=p.username||currentUser.username||'';
+      currentUser.wa=p.wa||currentUser.wa||'';
+      currentUser.status=p.status||currentUser.status||'approved';
+      currentUser.day=Math.max(1,Number(p.day||1));
+      currentUser.registeredAt=p.registered_at||currentUser.registeredAt||'';
+      currentUser.approvedAt=p.approved_at||currentUser.approvedAt||null;
+
+      currentUser.leads=(data.leads||[]).map(dbToLead);
+      currentUser.closingData=(data.closings||[]).map(dbToClosing);
+      currentUser.activityLog=(data.activities||[]).map(dbToActivity);
       currentUser.sales={};
       currentUser.activityLog.forEach(x=>{if(x.day)currentUser.sales[x.day]={...x}});
-      if(cfgR.data?.success){
-        const c=cfgR.data.configs||{};
-        Object.keys(c).forEach(k=>{if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=c[k]});
-      }
-      const day=currentDay();
-      const ck=await S().rpc('member_checklist_get',{p_token:token(),p_program_day:day});
-      if(!ck.error&&ck.data?.success){
-        currentUser.checks=currentUser.checks||{};
-        currentUser.checks[day]=ck.data.checks||{};
+      currentUser.checks=data.checklist||{};
+
+      if(data.configs){
+        Object.keys(data.configs).forEach(k=>{
+          if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=data.configs[k];
+        });
       }
       if(typeof renderMember==='function')renderMember();
-    }catch(e){console.warn('Phase 3 member load:',e)}
+    }catch(e){console.warn('Central member snapshot:',e)}
   }
 
   async function loadAdminCentral(){
@@ -1078,6 +1077,57 @@ function downloadExcel(filename,headers,rows){
       if(typeof renderAllAdmin==='function')renderAllAdmin();
     }catch(e){console.error('Phase 3 admin load:',e)}
   };
+  async function loadAdminCentral(){
+    if(currentRole!=='admin'||!S())return;
+    try{
+      const {data,error}=await S().rpc('admin_dashboard_snapshot');
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Snapshot admin gagal dimuat.');
+
+      const profiles=Array.isArray(data.profiles)?data.profiles:[];
+      const activities=Array.isArray(data.activities)?data.activities:[];
+      const leads=Array.isArray(data.leads)?data.leads:[];
+      const closings=Array.isArray(data.closings)?data.closings:[];
+      const checklists=Array.isArray(data.checklists)?data.checklists:[];
+      const byA=new Map(),byL=new Map(),byC=new Map(),byK=new Map();
+
+      activities.forEach(x=>{
+        const k=String(x.member_id);if(!byA.has(k))byA.set(k,[]);byA.get(k).push(x);
+      });
+      leads.forEach(x=>{
+        const k=String(x.member_id);if(!byL.has(k))byL.set(k,[]);byL.get(k).push(x);
+      });
+      closings.forEach(x=>{
+        const k=String(x.member_id);if(!byC.has(k))byC.set(k,[]);byC.get(k).push(x);
+      });
+      checklists.forEach(x=>{
+        const k=String(x.member_id);if(!byK.has(k))byK.set(k,{});
+        byK.get(k)[String(x.program_day)]=JSON.parse(JSON.stringify(x.checks||{}));
+      });
+
+      members=profiles.map(m=>{
+        const id=String(m.id);
+        const x={
+          id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',role:m.role||'member',
+          status:m.status||'pending',day:Number(m.day||0),checks:byK.get(id)||{},sales:{},
+          activityLog:[],leads:[],closingData:[],
+          registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null
+        };
+        x.activityLog=(byA.get(id)||[]).map(dbToActivity);
+        x.sales={};x.activityLog.forEach(a=>{if(a.day)x.sales[a.day]={...a}});
+        x.leads=(byL.get(id)||[]).map(dbToLead);
+        x.closingData=(byC.get(id)||[]).map(dbToClosing);
+        return x;
+      });
+
+      if(data.configs){
+        const cc=data.configs||{};
+        Object.keys(cc).forEach(k=>{if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=cc[k]});
+      }
+      if(typeof renderAllAdmin==='function')renderAllAdmin();
+    }catch(e){console.error('Central admin snapshot:',e)}
+  };
+
   window.renderAllAdmin=function(){
     try{renderAdminDashboard()}catch(e){}
     try{renderMembers()}catch(e){}
@@ -4642,5 +4692,77 @@ setInterval(async()=>{
     }catch(e){console.warn('Member server sync V17:',e)}
   }
 },5000);
+})();
+</script>
+
+
+<!-- SCALING + REALTIME SYNC V18 -->
+<script id="scalingRealtimeV18">
+(function(){
+'use strict';
+const SB=()=>window.supabaseClient||null;
+let adminChannelV18=null;
+let adminRefreshTimerV18=null;
+
+function scheduleAdminRefreshV18(){
+  if(currentRole!=='admin')return;
+  clearTimeout(adminRefreshTimerV18);
+  adminRefreshTimerV18=setTimeout(async()=>{
+    try{
+      if(typeof window.umrohAdminRefreshBridge==='function')await window.umrohAdminRefreshBridge();
+    }catch(e){console.warn('Admin realtime refresh V18:',e)}
+  },500);
+}
+
+function startAdminRealtimeV18(){
+  const sb=SB();
+  if(!sb||currentRole!=='admin'||adminChannelV18)return;
+  adminChannelV18=sb.channel('pasukan-umroh-admin-sync-v18')
+    .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},scheduleAdminRefreshV18)
+    .on('postgres_changes',{event:'*',schema:'public',table:'member_checklists'},scheduleAdminRefreshV18)
+    .on('postgres_changes',{event:'*',schema:'public',table:'member_leads'},scheduleAdminRefreshV18)
+    .on('postgres_changes',{event:'*',schema:'public',table:'member_closings'},scheduleAdminRefreshV18)
+    .on('postgres_changes',{event:'*',schema:'public',table:'sales_activities'},scheduleAdminRefreshV18)
+    .subscribe((status,error)=>{
+      if(status==='SUBSCRIBED')console.log('Admin Realtime V18: SUBSCRIBED');
+      if(error)console.warn('Admin Realtime V18:',error);
+    });
+}
+
+const oldEnterV18=window.enterApp;
+window.enterApp=function(){
+  const r=typeof oldEnterV18==='function'?oldEnterV18.apply(this,arguments):undefined;
+  setTimeout(startAdminRealtimeV18,250);
+  return r;
+};
+
+const oldLogoutV18=window.logout;
+window.logout=async function(){
+  try{if(adminChannelV18&&SB())await SB().removeChannel(adminChannelV18)}catch(e){}
+  adminChannelV18=null;
+  return typeof oldLogoutV18==='function'?oldLogoutV18.apply(this,arguments):undefined;
+};
+
+// Fallback only: Realtime is primary for Super Admin. This is deliberately slow
+// so 300 members do not create a polling storm.
+setInterval(()=>{
+  if(currentRole==='admin'&&!document.hidden){
+    scheduleAdminRefreshV18();
+  }
+},30000);
+
+// Member uses one server snapshot per sync cycle instead of four+RPC calls.
+// 12s keeps cross-device data reasonably fresh without hammering Supabase.
+setInterval(async()=>{
+  if(currentRole==='member'&&!document.hidden&&!window.__memberFinishBusyV17){
+    try{
+      if(typeof window.loadMemberCentral==='function')await window.loadMemberCentral();
+      if(typeof window.__memberChecklistRenderV16==='function'&&document.getElementById('page-program')?.classList.contains('active'))window.__memberChecklistRenderV16();
+    }catch(e){console.warn('Member snapshot sync V18:',e)}
+  }
+},12000);
+
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(startAdminRealtimeV18,500));
+else setTimeout(startAdminRealtimeV18,500);
 })();
 </script>
