@@ -1101,7 +1101,7 @@ setInterval(()=>{if(window.currentRole==='admin')startAdminRealtimeV22()},5000);
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(startAdminRealtimeV22,700));
 else setTimeout(startAdminRealtimeV22,700);
 })();
-</script>
+<\/script>
 </body></html>`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
@@ -4044,7 +4044,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
         else if(label==='edit')action='edit';
         else if(label.includes('hapus'))action='delete';
       }
-      if(!action)continue;
+      if(!action)return;
       b.disabled=false;b.style.pointerEvents='auto';b.onclick=async function(e){
         e.preventDefault();e.stopPropagation();
         try{
@@ -4266,7 +4266,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
         else if(label==='edit')action='edit';
         else if(label.includes('hapus'))action='delete';
       }
-      if(!action)continue;
+      if(!action)return;
       b.dataset.v13bound='1';b.disabled=false;b.style.pointerEvents='auto';b.style.cursor='pointer';
       b.addEventListener('click',async e=>{
         e.preventDefault();e.stopImmediatePropagation();
