@@ -4782,3 +4782,168 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 else setTimeout(startAdminRealtimeV18,500);
 })();
 </script>
+
+
+<!-- FINAL MEMBER WRITE + DAY ADVANCE V19 -->
+<style id="memberWriteV19">
+#page-program #memberFinishDayV16{
+  position:relative!important;
+  z-index:10000!important;
+  pointer-events:auto!important;
+  touch-action:manipulation!important;
+}
+#memberDayV19Status{
+  margin-top:10px;
+  padding:11px 14px;
+  border-radius:10px;
+  background:#e8f8f2;
+  color:#187451;
+  font-size:13px;
+}
+</style>
+<script id="memberWriteV19">
+(function(){
+  'use strict';
+  const S=()=>window.supabaseClient||null;
+  const T=()=>window.umrohMemberSession?.get?.()||'';
+  let busy=false;
+
+  function status(msg,ok){
+    const b=document.getElementById('memberDayV19Status');
+    if(!b)return;
+    b.textContent=msg||'';
+    b.style.display=msg?'block':'none';
+    b.style.background=ok===false?'#fff0f0':'#e8f8f2';
+    b.style.color=ok===false?'#a52c2c':'#187451';
+  }
+
+  async function syncMemberV19(){
+    if(typeof window.loadMemberCentral==='function')await window.loadMemberCentral();
+    if(typeof window.__memberChecklistRenderV16==='function')window.__memberChecklistRenderV16();
+    if(typeof window.renderMemberDashboardMilestones==='function')window.renderMemberDashboardMilestones();
+  }
+
+  window.__finishMemberDayV19=async function(){
+    if(busy)return;
+    if(currentRole!=='member'||!currentUser){
+      alert('Sesi member belum siap. Silakan login kembali.');
+      return;
+    }
+    const sb=S(),token=T();
+    if(!sb||!token){
+      alert('Sesi member belum siap. Silakan login kembali.');
+      return;
+    }
+
+    busy=true;
+    window.__memberFinishBusyV17=true;
+    const btn=document.getElementById('memberFinishDayV16');
+    if(btn){btn.disabled=true;btn.textContent='Menyimpan progress ke database...';}
+    status('Memeriksa checklist dan menyimpan progress ke Supabase...',true);
+
+    try{
+      // Server is authoritative: it validates 100% and advances the member day atomically.
+      const r=await sb.rpc('member_day_complete_v19',{p_token:token});
+      if(r.error)throw r.error;
+      if(!r.data?.success)throw new Error(r.data?.message||'Hari berikutnya belum dapat dibuka.');
+
+      const nextDay=Number(r.data.day||0);
+      if(!nextDay)throw new Error('Database tidak mengembalikan nomor hari berikutnya.');
+
+      // Read the database again immediately. No localStorage is used as source of truth.
+      const snap=await sb.rpc('member_dashboard_snapshot',{p_token:token});
+      if(snap.error)throw snap.error;
+      if(!snap.data?.success)throw new Error(snap.data?.message||'Gagal membaca progress terbaru dari Supabase.');
+
+      const serverDay=Number(snap.data?.profile?.day||0);
+      if(serverDay!==nextDay)throw new Error('Supabase belum mengonfirmasi perubahan ke Hari '+nextDay+'. Server membaca Hari '+serverDay+'.');
+
+      currentUser.day=serverDay;
+      currentUser.checks=snap.data.checklist||{};
+      currentUser.leads=(snap.data.leads||[]).map(typeof dbToLead==='function'?dbToLead:(x=>x));
+      currentUser.closingData=(snap.data.closings||[]).map(typeof dbToClosing==='function'?dbToClosing:(x=>x));
+      currentUser.activityLog=(snap.data.activities||[]).map(typeof dbToActivity==='function'?dbToActivity:(x=>x));
+
+      await syncMemberV19();
+      status('Berhasil. Hari '+(serverDay-1)+' selesai dan Hari '+serverDay+' sudah tersimpan di Supabase.',true);
+      alert('Hari '+(serverDay-1)+' selesai. Hari '+serverDay+' sekarang terbuka dan tersimpan di Supabase.');
+    }catch(e){
+      console.error('Member Day V19:',e);
+      status('Gagal menyimpan progress: '+(e?.message||e),false);
+      alert('Gagal membuka hari berikutnya: '+(e?.message||e));
+      try{await syncMemberV19()}catch(_){}
+    }finally{
+      busy=false;
+      window.__memberFinishBusyV17=false;
+      const b=document.getElementById('memberFinishDayV16');
+      if(b)b.disabled=false;
+      // renderChecklist may recreate the button after sync; make it actionable again.
+      setTimeout(bindFinishV19,50);
+    }
+  };
+
+  // All legacy finish entry points now use the same server-authoritative V19 path.
+  window.__finishMemberDayV17=window.__finishMemberDayV19;
+  window.__finishMemberDayV16=window.__finishMemberDayV19;
+  window.__finishMemberDayV15=window.__finishMemberDayV19;
+  window.finishMemberDay=window.__finishMemberDayV19;
+
+  function ensureStatus(){
+    const btn=document.getElementById('memberFinishDayV16');
+    if(!btn)return;
+    let box=document.getElementById('memberDayV19Status');
+    if(!box){
+      box=document.createElement('div');
+      box.id='memberDayV19Status';
+      box.style.display='none';
+      btn.parentNode.insertBefore(box,btn.nextSibling);
+    }
+  }
+
+  function bindFinishV19(){
+    const btn=document.getElementById('memberFinishDayV16');
+    if(!btn)return;
+    ensureStatus();
+    btn.disabled=false;
+    btn.style.pointerEvents='auto';
+    btn.style.touchAction='manipulation';
+    if(btn.dataset.v19bound==='1')return;
+    btn.dataset.v19bound='1';
+    btn.onclick=function(e){
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      window.__finishMemberDayV19();
+    };
+  }
+
+  // Capture phase wins over older V15/V16/V17 handlers and prevents duplicate legacy calls.
+  document.addEventListener('click',function(e){
+    const btn=e.target?.closest?.('#memberFinishDayV16');
+    if(!btn)return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    window.__finishMemberDayV19();
+  },true);
+
+  const oldRender=window.__memberChecklistRenderV16;
+  window.__memberChecklistRenderV16=function(){
+    const r=typeof oldRender==='function'?oldRender.apply(this,arguments):undefined;
+    setTimeout(bindFinishV19,0);
+    return r;
+  };
+
+  const oldShow=window.showPage;
+  window.showPage=function(page){
+    const r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;
+    if(currentRole==='member'&&page==='program')setTimeout(bindFinishV19,120);
+    return r;
+  };
+
+  setInterval(function(){
+    if(currentRole==='member'&&document.getElementById('page-program')?.classList.contains('active'))bindFinishV19();
+  },1000);
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(bindFinishV19,300));
+  else setTimeout(bindFinishV19,300);
+})();
+</script>
