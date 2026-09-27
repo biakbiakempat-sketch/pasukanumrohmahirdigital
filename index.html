@@ -586,8 +586,15 @@ async function verifyPassword(password,stored){
   let diff=0;for(let i=0;i<actual.length;i++)diff|=actual[i]^expected[i];
   return diff===0;
 }
-function saveAuthSession(){try{sessionStorage.setItem(AUTH_SESSION_KEY,JSON.stringify({role:currentRole,userId:currentUser?.id||null,username:currentUser?.username||"",at:Date.now()}))}catch(e){}}
-function clearAuthSession(){try{sessionStorage.removeItem(AUTH_SESSION_KEY)}catch(e){}}
+function saveAuthSession(){
+  const v=JSON.stringify({role:currentRole,userId:currentUser?.id||null,username:currentUser?.username||"",at:Date.now()});
+  try{sessionStorage.setItem(AUTH_SESSION_KEY,v)}catch(e){}
+  try{localStorage.setItem(AUTH_SESSION_KEY,v)}catch(e){}
+}
+function clearAuthSession(){
+  try{sessionStorage.removeItem(AUTH_SESSION_KEY)}catch(e){}
+  try{localStorage.removeItem(AUTH_SESSION_KEY)}catch(e){}
+}
 function restoreAuthSession(){
   try{
     const x=JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY)||"null");if(!x)return false;
@@ -754,7 +761,7 @@ function enterApp(){
  if(currentRole==="admin")renderAllAdmin();else renderMember();
  saveAuthSession();
 }
-async function logout(){try{await supabaseClient.auth.signOut()}catch(e){console.warn("Supabase signout:",e)}clearAuthSession();currentUser=null;currentRole=null;$("app").classList.add("hidden");$("auth").classList.remove("hidden");authMode("login");$("loginForm").reset()}
+async function logout(){try{await supabaseClient.auth.signOut()}catch(e){console.warn("Supabase signout:",e)}clearAuthSession();try{window.umrohMemberSession?.clear?.()}catch(e){};try{sessionStorage.removeItem(PAGE_KEY);localStorage.removeItem(PAGE_KEY)}catch(e){};currentUser=null;currentRole=null;$("app").classList.add("hidden");$("auth").classList.remove("hidden");authMode("login");$("loginForm").reset()}
 function showPage(page){
  document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$("page-"+page).classList.add("active");
  document.querySelectorAll(".navItem[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===page));
@@ -2102,9 +2109,18 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 (function(){
   const TOKEN_KEY='pasukanUmrohMemberSessionTokenV1';
   const sessionApi={
-    get:function(){try{return sessionStorage.getItem(TOKEN_KEY)||''}catch(e){return ''}},
-    set:function(v){try{if(v)sessionStorage.setItem(TOKEN_KEY,v);else sessionStorage.removeItem(TOKEN_KEY)}catch(e){}},
-    clear:function(){try{sessionStorage.removeItem(TOKEN_KEY)}catch(e){}}
+    get:function(){
+      try{const v=sessionStorage.getItem(TOKEN_KEY);if(v)return v}catch(e){}
+      try{return localStorage.getItem(TOKEN_KEY)||''}catch(e){return ''}
+    },
+    set:function(v){
+      try{if(v)sessionStorage.setItem(TOKEN_KEY,v);else sessionStorage.removeItem(TOKEN_KEY)}catch(e){}
+      try{if(v)localStorage.setItem(TOKEN_KEY,v);else localStorage.removeItem(TOKEN_KEY)}catch(e){}
+    },
+    clear:function(){
+      try{sessionStorage.removeItem(TOKEN_KEY)}catch(e){}
+      try{localStorage.removeItem(TOKEN_KEY)}catch(e){}
+    }
   };
   window.umrohMemberSession=sessionApi;
 
