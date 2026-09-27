@@ -1162,7 +1162,7 @@ function downloadExcel(filename,headers,rows){
   window.umrohAdminRefreshBridge=loadAdminCentral;
   window.__centralConfigSig={};
   // Central configuration is persisted directly to Supabase by put()/syncCentralConfig().
-  setInterval(function(){if(currentRole==='member'&&!document.hidden)loadMemberCentral()},10000);
+  setInterval(function(){if(!window.__centralSyncV18Primary&&currentRole==='member'&&!document.hidden)loadMemberCentral()},10000);
   setTimeout(async function(){
     try{
       if(currentRole==='admin'){
@@ -4197,7 +4197,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     if(currentRole==='admin')setTimeout(bindAdmin,250);
   }
   document.addEventListener('visibilitychange',()=>{if(!document.hidden){if(currentRole==='member')setTimeout(refreshMember,100);if(currentRole==='admin')setTimeout(bindAdmin,100)}});
-  setInterval(()=>{if(document.hidden)return;if(currentRole==='member')showPopup();if(currentRole==='admin')bindAdmin()},30000);
+  setInterval(()=>{if(window.__centralSyncV18Primary)return;if(document.hidden)return;if(currentRole==='member')showPopup();if(currentRole==='admin')bindAdmin()},30000);
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
 </script>
@@ -4583,7 +4583,7 @@ window.renderMembers=function(){
 document.addEventListener('click',e=>{const tr=e.target?.closest?.('#memberRows tr[data-member-id]');if(tr&&!e.target.closest('button,a')&&typeof window.adminEditMember==='function')window.adminEditMember(tr.dataset.memberId)},true);
 
 setInterval(async()=>{if(currentRole==='member'&&!document.hidden&&!window.__memberFinishBusyV16){try{await loadMemberCentral();if(document.getElementById('page-program')?.classList.contains('active'))renderChecklistV16()}catch(e){}}},5000);
-setInterval(async()=>{if(currentRole==='admin'&&!document.hidden&&typeof window.umrohAdminRefreshBridge==='function'){try{await window.umrohAdminRefreshBridge()}catch(e){}}},5000);
+setInterval(async()=>{if(!window.__centralSyncV18Primary&&currentRole==='admin'&&!document.hidden&&typeof window.umrohAdminRefreshBridge==='function'){try{await window.umrohAdminRefreshBridge()}catch(e){}}},5000);
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{if(currentRole==='member'&&document.getElementById('page-program')?.classList.contains('active'))renderChecklistV16()},120));else setTimeout(()=>{if(currentRole==='member'&&document.getElementById('page-program')?.classList.contains('active'))renderChecklistV16()},120);
 })();
 </script>
@@ -4593,6 +4593,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <script id="memberDayCrossDeviceV17">
 (function(){
 'use strict';
+window.__centralSyncV18Primary=true;
 const SB=()=>window.supabaseClient||null;
 const TOK=()=>window.umrohMemberSession?.get?.()||'';
 const clone=v=>JSON.parse(JSON.stringify(v||{}));
