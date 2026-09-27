@@ -979,10 +979,10 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&
 const money=n=>Number(n||0).toLocaleString('id-ID');
 
 function renderClosingTableV22(){
-  if(window.currentRole!=='member')return;
+  if(currentRole!=='member')return;
   const body=document.getElementById('myClosingRows');
   if(!body)return;
-  const rows=Array.isArray(window.currentUser?.closingData)?window.currentUser.closingData.slice():[];
+  const rows=Array.isArray(currentUser?.closingData)?currentUser.closingData.slice():[];
   rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
   body.innerHTML=rows.length?rows.map(x=>{
     const id=JSON.stringify(String(x.id));
@@ -1006,14 +1006,14 @@ function renderClosingTableV22(){
 }
 
 async function refreshClosingV22(){
-  if(window.currentRole!=='member'||!window.currentUser)return;
+  if(currentRole!=='member'||!currentUser)return;
   const sb=SB(),token=TOK();
   if(!sb||!token){renderClosingTableV22();return}
   try{
     const r=await sb.rpc('member_dashboard_snapshot',{p_token:token});
     if(r.error)throw r.error;
     if(r.data?.success){
-      window.currentUser.closingData=(r.data.closings||[]).map(x=>({
+      currentUser.closingData=(r.data.closings||[]).map(x=>({
         id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),pax:Number(x.pax||1),
         travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),
         date:x.closing_date||'',createdAt:x.created_at||''
@@ -1031,7 +1031,7 @@ window.renderMember=function(){
 const baseShow=window.showPage;
 window.showPage=function(page){
   const r=typeof baseShow==='function'?baseShow.apply(this,arguments):undefined;
-  if(page==='memberClosing'&&window.currentRole==='member')setTimeout(refreshClosingV22,100);
+  if(page==='memberClosing'&&currentRole==='member')setTimeout(refreshClosingV22,100);
   return r;
 };
 const baseSave=window.saveClosing;
@@ -1056,14 +1056,14 @@ window.deleteClosing=async function(id){
 // Member keeps Supabase as source of truth. Other member devices are picked up
 // by the normal central snapshot; this closing view refreshes every 12 seconds.
 setInterval(function(){
-  if(window.currentRole==='member'&&!document.hidden&&document.getElementById('page-memberClosing')?.classList.contains('active')){
+  if(currentRole==='member'&&!document.hidden&&document.getElementById('page-memberClosing')?.classList.contains('active')){
     refreshClosingV22();
   }
 },12000);
 
 function startAdminRealtimeV22(){
   const sb=SB();
-  if(!sb||window.currentRole!=='admin'||window.__adminRealtimeV22)return;
+  if(!sb||currentRole!=='admin'||window.__adminRealtimeV22)return;
   window.__adminRealtimeV22=true;
   const ch=sb.channel('pasukan-umroh-admin-sync-v22')
     .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>window.__adminForceRefreshV22?.())
@@ -1077,7 +1077,7 @@ function startAdminRealtimeV22(){
   window.__adminRealtimeChannelV22=ch;
 }
 window.__adminForceRefreshV22=async function(){
-  if(window.currentRole!=='admin')return;
+  if(currentRole!=='admin')return;
   try{
     // Call the actual final central loader directly. Older V18 bridge may have
     // captured an earlier/empty bridge before Phase 3 initialized.
@@ -1097,7 +1097,7 @@ window.logout=async function(){
   window.__adminRealtimeChannelV22=null;window.__adminRealtimeV22=false;
   return typeof oldLogout==='function'?oldLogout.apply(this,arguments):undefined;
 };
-setInterval(()=>{if(window.currentRole==='admin')startAdminRealtimeV22()},5000);
+setInterval(()=>{if(currentRole==='admin')startAdminRealtimeV22()},5000);
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(startAdminRealtimeV22,700));
 else setTimeout(startAdminRealtimeV22,700);
 })();
@@ -2803,23 +2803,23 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     if(currentRole!=='admin')return;
     const c=C();if(!c)return;
     try{
-      // Profiles are the authoritative member registry. Read them independently
-      // so a transient snapshot/RPC problem can never make the member list appear empty.
-      const pr=await c.from('profiles').select('id,name,username,wa,role,status,day,registered_at,approved_at').eq('role','member').order('name',{ascending:true});
-      if(pr.error)throw pr.error;
-      const d0={profiles:Array.isArray(pr.data)?pr.data:[],activities:[],leads:[],closings:[],checklists:[]};
-
-      // Snapshot supplies checklist state and the same central business data used
-      // by the member dashboard. If it is temporarily unavailable, keep the
-      // member registry visible and fall back to the readable activity tables.
+      // SECURITY DEFINER snapshot is the primary admin data path.
+      // This avoids depending on direct profiles SELECT/RLS behavior in a mobile browser.
+      // The snapshot itself authorizes through is_super_admin() and reads all central tables.
       const snap=await c.rpc('admin_dashboard_snapshot');
+      const d0={profiles:[],activities:[],leads:[],closings:[],checklists:[]};
       if(!snap.error && snap.data?.success){
+        d0.profiles=Array.isArray(snap.data.profiles)?snap.data.profiles:[];
         d0.activities=Array.isArray(snap.data.activities)?snap.data.activities:[];
         d0.leads=Array.isArray(snap.data.leads)?snap.data.leads:[];
         d0.closings=Array.isArray(snap.data.closings)?snap.data.closings:[];
         d0.checklists=Array.isArray(snap.data.checklists)?snap.data.checklists:[];
       }else{
-        console.warn('Admin snapshot fallback:',snap.error||snap.data?.message||'unavailable');
+        // If the RPC is temporarily unavailable, direct table reads are only a fallback.
+        console.warn('Admin snapshot unavailable; using direct-table fallback:',snap.error||snap.data?.message||'unavailable');
+        const pr=await c.from('profiles').select('id,name,username,wa,role,status,day,registered_at,approved_at').eq('role','member').order('name',{ascending:true});
+        if(pr.error)throw pr.error;
+        d0.profiles=Array.isArray(pr.data)?pr.data:[];
         const [ar,lr,cr]=await Promise.all([
           c.from('sales_activities').select('*').order('activity_date',{ascending:false}),
           c.from('member_leads').select('*').order('lead_date',{ascending:false}),
