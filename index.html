@@ -1313,8 +1313,10 @@ function startAdminRealtimeV22(){
 window.__adminForceRefreshV22=async function(){
   if(window.currentRole!=='admin')return;
   try{
-    if(typeof window.umrohAdminRefreshBridge==='function')await window.umrohAdminRefreshBridge();
-    else if(typeof window.loadAdminCentral==='function')await window.loadAdminCentral();
+    // Call the actual final central loader directly. Older V18 bridge may have
+    // captured an earlier/empty bridge before Phase 3 initialized.
+    if(typeof window.loadAdminCentral==='function')await window.loadAdminCentral();
+    else if(typeof window.umrohAdminRefreshBridge==='function')await window.umrohAdminRefreshBridge();
   }catch(e){console.warn('Admin V22 refresh:',e)}
 };
 const oldEnter=window.enterApp;
