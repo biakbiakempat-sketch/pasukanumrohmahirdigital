@@ -1987,7 +1987,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     members=(data||[]).map(profileMap);
     return members;
   }
-  async function adminRefresh(){if(currentRole!=='admin')return;try{if(typeof window.umrohAdminRefreshBridge==='function'){await window.umrohAdminRefreshBridge();return}await loadDbMembers();if(typeof renderAllAdmin==='function')renderAllAdmin()}catch(e){console.error('DB member refresh',e)}}
+  async function adminRefresh(){if(currentRole!=='admin')return;try{if(typeof window.finalAdminRefresh==='function'){await window.finalAdminRefresh();return}if(typeof window.umrohAdminRefreshBridge==='function'){await window.umrohAdminRefreshBridge();return}if(typeof loadAdminCentral==='function')await loadAdminCentral()}catch(e){console.error('Authoritative admin refresh',e)}}
 
   window.loginFormSubmit=async function(e){
     e.preventDefault();
@@ -2685,104 +2685,21 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 
   async function refreshFromSupabase(){
     if(currentRole!=='admin')return;
-    const c=C();if(!c)return;
     try{
-      // MEMBER REGISTRY: direct Supabase table read is the first and independent step.
-      // This is intentionally the same path that was stable in V16: a failure in
-      // activities/leads/closings/checklists must NEVER hide the member registry.
-      const pr=await c.from('profiles')
-        .select('id,name,username,wa,role,status,day,registered_at,approved_at')
-        .eq('role','member')
-        .order('name',{ascending:true});
-      if(pr.error)throw pr.error;
-
-      const profiles=Array.isArray(pr.data)?pr.data:[];
-      const emptyBy=new Map();
-      members=profiles.map(m=>({
-        id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',
-        role:m.role||'member',status:m.status||'pending',day:Number(m.day||0),
-        checks:{},sales:{},activityLog:[],leads:[],closingData:[],
-        registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null
-      }));
-      window.members=members;
-
-      // Render immediately. Member count/approval list must not wait for any
-      // secondary table or RPC.
-      ensureIncomePage();
-      try{if(typeof window.renderAllAdmin==='function')window.renderAllAdmin()}catch(e){console.warn('Initial admin member render:',e)}
-
-      // Secondary central data is loaded independently. A failure here must not
-      // overwrite/empty the already-loaded member registry.
-      const [ar,lr,cr,kr,cfg]=await Promise.all([
-        c.from('sales_activities').select('*').order('activity_date',{ascending:false}),
-        c.from('member_leads').select('*').order('lead_date',{ascending:false}),
-        c.from('member_closings').select('*').order('closing_date',{ascending:false}),
-        c.from('member_checklists').select('*').order('updated_at',{ascending:false}),
-        c.rpc('admin_config_get')
-      ]);
-
-      const activities=ar.error?[]:(ar.data||[]);
-      const leads=lr.error?[]:(lr.data||[]);
-      const closings=cr.error?[]:(cr.data||[]);
-      const checklists=kr.error?[]:(kr.data||[]);
-      if(ar.error)console.warn('Admin activities sync:',ar.error);
-      if(lr.error)console.warn('Admin leads sync:',lr.error);
-      if(cr.error)console.warn('Admin closings sync:',cr.error);
-      if(kr.error)console.warn('Admin checklist sync:',kr.error);
-      if(cfg.error)console.warn('Admin config sync:',cfg.error);
-
-      const byA=new Map(),byL=new Map(),byC=new Map(),byK=new Map();
-      activities.forEach(x=>{const k=String(x.member_id);if(!byA.has(k))byA.set(k,[]);byA.get(k).push(x)});
-      leads.forEach(x=>{const k=String(x.member_id);if(!byL.has(k))byL.set(k,[]);byL.get(k).push(x)});
-      closings.forEach(x=>{const k=String(x.member_id);if(!byC.has(k))byC.set(k,[]);byC.get(k).push(x)});
-      checklists.forEach(x=>{
-        const k=String(x.member_id);
-        if(!byK.has(k))byK.set(k,{});
-        byK.get(k)[String(x.program_day)]=JSON.parse(JSON.stringify(x.checks||{}));
-      });
-
-      const dbA=x=>({id:x.id,date:x.activity_date||'',day:Number(x.program_day||0),
-        japri:Number(x.japri||0),follow:Number(x.follow_up||0),conv:Number(x.conversation||0),
-        lead:Number(x.lead||0),offer:Number(x.offer||0),closing:Number(x.closing||0),
-        referral:Number(x.referral||0),notes:x.notes||''});
-      const dbL=x=>({id:x.id,date:x.lead_date||'',time:x.lead_time||'',name:x.name||'',
-        city:x.city||'',contact:x.contact||'',source:x.source||'',response:x.response||'',
-        plan:x.plan||'',funnel:x.funnel||'',closing:x.closing||'Belum Closing',
-        closingDate:x.closing_date||'',fu1:x.fu1||'',fu1Response:x.fu1_response||'',
-        fu2:x.fu2||'',fu2Response:x.fu2_response||'',fu3:x.fu3||'',
-        fu3Response:x.fu3_response||'',noClose:x.no_close||'',cs:x.cs||'',
-        note:x.note||'',score:Number(x.score||0)});
-      const dbC=x=>({id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),
-        pax:Number(x.pax||1),travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),
-        date:x.closing_date||'',createdAt:x.created_at||''});
-
-      members=members.map(m=>{
-        const id=String(m.id);
-        const aa=(byA.get(id)||[]).map(dbA);
-        const ll=(byL.get(id)||[]).map(dbL);
-        const cc=(byC.get(id)||[]).map(dbC);
-        const sales={};
-        aa.forEach(a=>{if(a.day)sales[a.day]={...a}});
-        return {...m,checks:byK.get(id)||{},sales,activityLog:aa,leads:ll,closingData:cc};
-      });
-      window.members=members;
-
-      if(!cfg.error&&cfg.data?.success&&cfg.data.configs){
-        const ccfg=cfg.data.configs||{};
-        Object.keys(ccfg).forEach(k=>{
-          if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=ccfg[k];
-        });
+      if(typeof loadAdminCentral==='function'){
+        await loadAdminCentral();
+        if(typeof ensureIncomePage==='function')ensureIncomePage();
+        if(typeof renderIncomeMember==='function')renderIncomeMember();
+        return;
       }
-
-      try{if(typeof window.renderAllAdmin==='function')window.renderAllAdmin()}catch(e){console.warn('Final admin render:',e)}
-      try{renderIncome()}catch(e){}
+      throw new Error('Authoritative admin loader belum siap.');
     }catch(e){
-      console.error('Final admin Supabase sync:',e);
-      // Do not replace a previously loaded member registry with [] on error.
-      ensureIncomePage();
-      try{if(typeof window.renderMembers==='function')window.renderMembers()}catch(_){}
-      try{if(typeof window.renderApproval==='function')window.renderApproval()}catch(_){}
-      try{renderIncome()}catch(_){}
+      console.error('Authoritative admin Supabase sync:',e);
+      // Never replace already-loaded central data with empty arrays on a transient failure.
+      try{if(typeof ensureIncomePage==='function')ensureIncomePage()}catch(_){}
+      try{if(typeof renderMembers==='function')renderMembers()}catch(_){}
+      try{if(typeof renderApproval==='function')renderApproval()}catch(_){}
+      try{if(typeof renderIncomeMember==='function')renderIncomeMember()}catch(_){}
     }
   }
   window.umrohAdminRefreshBridge=refreshFromSupabase;
@@ -4959,90 +4876,167 @@ const SB=()=>window.supabaseClient||null;
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
 const money=n=>Number(n||0).toLocaleString('id-ID');
 const dbC=x=>({id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),pax:Number(x.pax||1),travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),date:x.closing_date||'',createdAt:x.created_at||''});
+
 function closeMenus(){
- document.querySelectorAll('.mobile-menu-open,.mobile-menu.show,.mobileNav.open,.nav.open').forEach(x=>x.classList.remove('mobile-menu-open','show','open'));
- document.querySelectorAll('.mobileMenuToggle[aria-expanded="true"]').forEach(x=>x.setAttribute('aria-expanded','false'));
+  document.querySelectorAll('.mobile-menu-open,.mobile-menu.show,.mobileNav.open,.nav.open').forEach(x=>{
+    x.classList.remove('mobile-menu-open','show','open');
+  });
+  document.querySelectorAll('.mobileMenuToggle[aria-expanded="true"]').forEach(x=>x.setAttribute('aria-expanded','false'));
+  const btn=document.getElementById('mobileMenuToggle');
+  if(btn){btn.innerHTML='☰ &nbsp; BUKA MENU';}
 }
 function bindMenuClose(){
- document.querySelectorAll('#adminNav .navItem,#memberNav .navItem').forEach(x=>{
-  if(x.dataset.v25menu)return;x.dataset.v25menu='1';
-  x.addEventListener('click',()=>setTimeout(closeMenus,0),true);
- });
+  document.querySelectorAll('#adminNav .navItem,#memberNav .navItem,.mobileLogout').forEach(x=>{
+    if(x.dataset.v25menu==='1')return;
+    x.dataset.v25menu='1';
+    x.addEventListener('click',()=>setTimeout(closeMenus,0),true);
+  });
+  const btn=document.getElementById('mobileMenuToggle');
+  if(btn&&!btn.dataset.v25closeBound){
+    btn.dataset.v25closeBound='1';
+    btn.addEventListener('click',()=>setTimeout(bindMenuClose,0),true);
+  }
 }
 window.__closeUmrohMenusV25=closeMenus;
 
 async function adminSyncV25(){
- if(currentRole!=='admin')return;
- const c=SB();if(!c)return;
- try{
-  let profiles=[],activities=[],leads=[],closings=[],checklists=[];
-  const snap=await c.rpc('admin_dashboard_snapshot');
-  if(!snap.error&&snap.data?.success){
-    profiles=Array.isArray(snap.data.profiles)?snap.data.profiles:[];
-    activities=Array.isArray(snap.data.activities)?snap.data.activities:[];
-    leads=Array.isArray(snap.data.leads)?snap.data.leads:[];
-    closings=Array.isArray(snap.data.closings)?snap.data.closings:[];
-    checklists=Array.isArray(snap.data.checklists)?snap.data.checklists:[];
-  }else{
-    const pr=await c.from('profiles').select('id,name,username,wa,role,status,day,registered_at,approved_at').eq('role','member').order('name',{ascending:true});
-    if(pr.error)throw pr.error;
-    profiles=pr.data||[];
-    const [ar,lr,cr,kr]=await Promise.all([
-      c.from('sales_activities').select('*').order('activity_date',{ascending:false}),
-      c.from('member_leads').select('*').order('lead_date',{ascending:false}),
-      c.from('member_closings').select('*').order('closing_date',{ascending:false}),
-      c.from('member_checklists').select('*').order('updated_at',{ascending:false})
-    ]);
-    activities=ar.error?[]:(ar.data||[]);leads=lr.error?[]:(lr.data||[]);closings=cr.error?[]:(cr.data||[]);checklists=kr.error?[]:(kr.data||[]);
+  if(currentRole!=='admin')return;
+  const c=SB();if(!c)return;
+  try{
+    // ONE source of truth for Super Admin: SECURITY DEFINER snapshot.
+    const snap=await c.rpc('admin_dashboard_snapshot');
+    if(snap.error)throw snap.error;
+    if(!snap.data?.success)throw new Error(snap.data?.message||'Snapshot admin gagal dimuat.');
+
+    const profiles=Array.isArray(snap.data.profiles)?snap.data.profiles:[];
+    const activities=Array.isArray(snap.data.activities)?snap.data.activities:[];
+    const leads=Array.isArray(snap.data.leads)?snap.data.leads:[];
+    const closings=Array.isArray(snap.data.closings)?snap.data.closings:[];
+    const checklists=Array.isArray(snap.data.checklists)?snap.data.checklists:[];
+    const byA=new Map(),byL=new Map(),byC=new Map(),byK=new Map();
+
+    activities.forEach(x=>{
+      const k=String(x.member_id);if(!byA.has(k))byA.set(k,[]);
+      byA.get(k).push({id:x.id,date:x.activity_date||'',day:Number(x.program_day||0),japri:Number(x.japri||0),follow:Number(x.follow_up||0),conv:Number(x.conversation||0),lead:Number(x.lead||0),offer:Number(x.offer||0),closing:Number(x.closing||0),referral:Number(x.referral||0),notes:x.notes||''});
+    });
+    leads.forEach(x=>{
+      const k=String(x.member_id);if(!byL.has(k))byL.set(k,[]);
+      byL.get(k).push({...x});
+    });
+    closings.forEach(x=>{
+      const k=String(x.member_id);if(!byC.has(k))byC.set(k,[]);
+      byC.get(k).push(dbC(x));
+    });
+    checklists.forEach(x=>{
+      const k=String(x.member_id);if(!byK.has(k))byK.set(k,{});
+      byK.get(k)[String(x.program_day)]=x.checks||{};
+    });
+
+    const nextMembers=profiles.filter(p=>p.role==='member').map(p=>{
+      const id=String(p.id);
+      const aa=byA.get(id)||[];
+      return {
+        id:p.id,name:p.name||'',username:p.username||'',wa:p.wa||'',role:'member',
+        status:p.status||'pending',day:Number(p.day||0),
+        registeredAt:p.registered_at||'-',approvedAt:p.approved_at||null,
+        checks:byK.get(id)||{},sales:{},
+        activityLog:aa,leads:byL.get(id)||[],closingData:byC.get(id)||[]
+      };
+    });
+
+    window.members=nextMembers;
+    members=nextMembers;
+
+    if(typeof window.renderAllAdmin==='function')window.renderAllAdmin();
+    if(typeof window.renderMembersV3==='function')window.renderMembersV3();
+    if(typeof window.renderApprovalV3==='function')window.renderApprovalV3();
+    if(typeof window.renderIncomeMember==='function')window.renderIncomeMember();
+
+    // Explicitly render the two areas reported empty.
+    if(typeof window.renderAdminDashboard==='function')window.renderAdminDashboard();
+    if(typeof window.renderIncomeMember==='function')window.renderIncomeMember();
+
+    console.log('ADMIN CENTRAL SYNC OK', {
+      members:nextMembers.length,
+      closings:closings.length,
+      closingMembers:new Set(closings.map(x=>String(x.member_id))).size
+    });
+  }catch(e){
+    // Critical: do NOT replace valid data with [].
+    console.error('V25 authoritative admin sync failed:',e);
   }
-  const byA=new Map(),byL=new Map(),byC=new Map(),byK=new Map();
-  activities.forEach(x=>{const k=String(x.member_id);if(!byA.has(k))byA.set(k,[]);byA.get(k).push({id:x.id,date:x.activity_date||'',day:Number(x.program_day||0),japri:Number(x.japri||0),follow:Number(x.follow_up||0),conv:Number(x.conversation||0),lead:Number(x.lead||0),offer:Number(x.offer||0),closing:Number(x.closing||0),referral:Number(x.referral||0),notes:x.notes||''})});
-  leads.forEach(x=>{const k=String(x.member_id);if(!byL.has(k))byL.set(k,[]);byL.get(k).push({...x})});
-  closings.forEach(x=>{const k=String(x.member_id);if(!byC.has(k))byC.set(k,[]);byC.get(k).push(dbC(x))});
-  checklists.forEach(x=>{const k=String(x.member_id);if(!byK.has(k))byK.set(k,{});byK.get(k)[String(x.program_day)]=x.checks||{}});
-  window.members=(profiles||[]).filter(p=>p.role==='member').map(p=>{const id=String(p.id);return{id:p.id,name:p.name||'',username:p.username||'',wa:p.wa||'',role:'member',status:p.status||'pending',day:Number(p.day||0),registeredAt:p.registered_at||'-',approvedAt:p.approved_at||null,checks:byK.get(id)||{},sales:{},activityLog:byA.get(id)||[],leads:byL.get(id)||[],closingData:byC.get(id)||[]}});
-  members=window.members;
-  if(typeof window.renderAllAdmin==='function')window.renderAllAdmin();
-  if(typeof window.renderMembersV3==='function')window.renderMembersV3();
-  if(typeof window.renderApprovalV3==='function')window.renderApprovalV3();
-  if(typeof window.renderIncomeMember==='function')window.renderIncomeMember(); else renderIncomeV25();
- }catch(e){console.error('V25 admin sync:',e)}
 }
+
 function renderIncomeV25(){
- const body=document.getElementById('incomeRows');if(!body)return;
- let rows=[];(window.members||[]).forEach(m=>(Array.isArray(m.closingData)?m.closingData:[]).forEach(x=>rows.push({...x,member:m.name||m.username||'',memberId:m.id})));
- const q=(document.getElementById('incomeMemberSearch')?.value||'').toLowerCase().trim(),st=document.getElementById('incomeStart')?.value||'',en=document.getElementById('incomeEnd')?.value||'';
- if(q)rows=rows.filter(x=>String(x.member).toLowerCase().includes(q));if(st)rows=rows.filter(x=>String(x.date||'')>=st);if(en)rows=rows.filter(x=>String(x.date||'')<=en);
- rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
- const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0),pax=rows.reduce((n,x)=>n+Number(x.pax||0),0),om=rows.reduce((n,x)=>n+Number(x.omset||0),0),uniq=new Set(rows.map(x=>String(x.memberId)));
- const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
- set('incomeInvoiceTotal',inv);set('incomePaxTotal',pax);set('incomeOmsetTotal','Rp '+money(om));set('incomeMemberTotal',uniq.size);
- body.innerHTML=rows.length?rows.map(x=>'<tr><td><b>'+esc(x.member)+'</b></td><td>'+esc(x.date)+'</td><td>'+Number(x.invoice||0)+'</td><td>'+esc(x.name)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel)+'</td><td>'+esc(x.package)+'</td><td>Rp '+money(x.omset)+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+  const body=document.getElementById('incomeRows');if(!body)return;
+  let rows=[];
+  (window.members||[]).forEach(m=>(Array.isArray(m.closingData)?m.closingData:[]).forEach(x=>rows.push({...x,member:m.name||m.username||'',memberId:m.id})));
+  const q=(document.getElementById('incomeMemberSearch')?.value||'').toLowerCase().trim();
+  const st=document.getElementById('incomeStart')?.value||'',en=document.getElementById('incomeEnd')?.value||'';
+  if(q)rows=rows.filter(x=>String(x.member).toLowerCase().includes(q));
+  if(st)rows=rows.filter(x=>String(x.date||'')>=st);
+  if(en)rows=rows.filter(x=>String(x.date||'')<=en);
+  rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0);
+  const pax=rows.reduce((n,x)=>n+Number(x.pax||0),0);
+  const om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
+  const uniq=new Set(rows.map(x=>String(x.memberId)));
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+  set('incomeInvoiceTotal',inv);set('incomePaxTotal',pax);set('incomeOmsetTotal','Rp '+money(om));set('incomeMemberTotal',uniq.size);
+  body.innerHTML=rows.length?rows.map(x=>'<tr><td><b>'+esc(x.member)+'</b></td><td>'+esc(x.date)+'</td><td>'+Number(x.invoice||0)+'</td><td>'+esc(x.name)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel)+'</td><td>'+esc(x.package)+'</td><td>Rp '+money(x.omset)+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
 }
 window.renderIncomeV25=renderIncomeV25;
 window.renderIncomeMember=renderIncomeV25;
 
 function renderMemberClosingV25(){
- if(currentRole!=='member'||!currentUser)return;
- const body=document.getElementById('myClosingRows');if(!body)return;
- const rows=(Array.isArray(currentUser.closingData)?currentUser.closingData:[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
- const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0),pax=rows.reduce((n,x)=>n+Number(x.pax||0),0),om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
- const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
- set('myClosingInvoices',inv);set('myClosingPax',pax);set('myClosingOmset','Rp '+money(om));set('myClosingCount',rows.length);
- body.innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.date||'-')+'</td><td><b>'+esc(x.name||'-')+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel||'-')+'</td><td>'+esc(x.package||'-')+'</td><td>Rp '+money(x.omset)+'</td><td>'+ (typeof editClosing==='function'?'<button class="btnMini" type="button" onclick="editClosing('+JSON.stringify(String(x.id))+')">Edit</button> ':'') + (typeof deleteClosing==='function'?'<button class="btnMini danger" type="button" onclick="deleteClosing('+JSON.stringify(String(x.id))+')">Hapus</button>':'')+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+  if(currentRole!=='member'||!currentUser)return;
+  const body=document.getElementById('myClosingRows');if(!body)return;
+  const rows=(Array.isArray(currentUser.closingData)?currentUser.closingData:[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0);
+  const pax=rows.reduce((n,x)=>n+Number(x.pax||0),0);
+  const om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+  set('myClosingInvoices',inv);set('myClosingPax',pax);set('myClosingOmset','Rp '+money(om));set('myClosingCount',rows.length);
+  body.innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.date||'-')+'</td><td><b>'+esc(x.name||'-')+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel||'-')+'</td><td>'+esc(x.package||'-')+'</td><td>Rp '+money(x.omset)+'</td><td>'+ (typeof editClosing==='function'?'<button class="btnMini" type="button" onclick="editClosing('+JSON.stringify(String(x.id))+')">Edit</button> ':'') + (typeof deleteClosing==='function'?'<button class="btnMini danger" type="button" onclick="deleteClosing('+JSON.stringify(String(x.id))+')">Hapus</button>':'')+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
 }
 window.renderMemberClosing=renderMemberClosingV25;
 
 const oldShow=window.showPage;
 window.showPage=function(page){
- const r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;
- setTimeout(()=>{bindMenuClose();closeMenus();if(currentRole==='admin'&&page==='adminIncome')adminSyncV25();if(currentRole==='member'&&page==='memberClosing')renderMemberClosingV25()},60);
- return r;
+  const r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;
+  setTimeout(()=>{
+    bindMenuClose();
+    closeMenus();
+    if(currentRole==='admin'&&page==='adminIncome')adminSyncV25();
+    if(currentRole==='member'&&page==='memberClosing')renderMemberClosingV25();
+  },60);
+  return r;
 };
-function boot(){bindMenuClose();if(currentRole==='admin')adminSyncV25();if(currentRole==='member')setTimeout(renderMemberClosingV25,100)}
+
+document.addEventListener('click',function(e){
+  const item=e.target?.closest?.('#adminNav .navItem,#memberNav .navItem,.mobileLogout');
+  if(item)setTimeout(closeMenus,0);
+},true);
+
+function boot(){
+  bindMenuClose();
+  closeMenus();
+  if(currentRole==='admin')adminSyncV25();
+  if(currentRole==='member')setTimeout(renderMemberClosingV25,100);
+}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){bindMenuClose();if(currentRole==='admin')adminSyncV25();if(currentRole==='member')renderMemberClosingV25()}});
-setInterval(()=>{if(document.hidden)return;if(currentRole==='admin')adminSyncV25();if(currentRole==='member')renderMemberClosingV25()},5000);
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden){
+    bindMenuClose();
+    if(currentRole==='admin')adminSyncV25();
+    if(currentRole==='member')renderMemberClosingV25();
+  }
+});
+setInterval(()=>{
+  if(document.hidden)return;
+  if(currentRole==='admin')adminSyncV25();
+  if(currentRole==='member')renderMemberClosingV25();
+},5000);
 })();
 </script>
 
