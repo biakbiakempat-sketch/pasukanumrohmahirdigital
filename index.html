@@ -5518,5 +5518,20 @@ setInterval(()=>{
   else setTimeout(adminLightRefresh,300);
 })();
 </script>
+
+<!-- RELEASE HARDENING V32B - STOP LEGACY FULL POLLING -->
+<script id="releaseHardeningV32B">
+(function(){
+  'use strict';
+  if(typeof window.adminRefresh!=='function')return;
+  const light=window.adminRefresh;
+  if(typeof refreshFromSupabase!=='undefined')refreshFromSupabase=light;
+  window.refreshFromSupabase=light;
+  if(typeof adminSyncV25!=='undefined')adminSyncV25=light;
+  window.adminSyncV25=light;
+  window.umrohAdminRefreshBridge=light;
+  window.finalAdminRefresh=light;
+})();
+</script>
 </body>
 </html>
