@@ -1127,65 +1127,37 @@ function tasksFor(d){const x=C().checklist?.[String(d)]||C().checklist?.[d]||{};
 function checksFor(d){currentUser.checks=currentUser.checks||{};currentUser.checks[d]=currentUser.checks[d]||{};return currentUser.checks[d]}
 function pct(d){const ts=tasksFor(d),st=checksFor(d);return ts.length?Math.round(ts.filter((_,i)=>st[i]===true).length/ts.length*100):0}
 async function saveCheck(d,i,val,input){
-  const st=checksFor(d),old=st[i];st[i]=!!val;
-  try{
-    const sb=SB(),token=T();if(!sb||!token)throw new Error('Sesi member belum siap.');
-    const r=await sb.rpc('member_checklist_upsert',{p_token:token,p_program_day:d,p_checks:JSON.parse(JSON.stringify(st))});
-    if(r.error)throw r.error;if(!r.data?.success)throw new Error(r.data?.message||'Checklist gagal disimpan.');
-    renderProgramV24();
-  }catch(e){
-    st[i]=old;if(input)input.checked=!!old;
-    alert('Checklist gagal disimpan ke database: '+(e?.message||e));
-  }
+ const st=checksFor(d),old=st[i];st[i]=!!val;
+ try{const sb=SB(),token=T();if(!sb||!token)throw new Error('Sesi member belum siap.');
+  const r=await sb.rpc('member_checklist_upsert',{p_token:token,p_program_day:d,p_checks:JSON.parse(JSON.stringify(st))});
+  if(r.error)throw r.error;if(!r.data?.success)throw new Error(r.data?.message||'Checklist gagal disimpan.');renderProgramV24();
+ }catch(e){st[i]=old;if(input)input.checked=!!old;alert('Checklist gagal disimpan ke database: '+(e?.message||e))}
 }
 async function finishV24(){
-  if(window.__finishV24Busy)return;
-  if(currentRole!=='member'||!currentUser){alert('Sesi member belum siap. Silakan login kembali.');return}
-  const d=Math.max(1,Number(currentUser.day||1)),p=pct(d);
-  if(d>=60){alert('Program 60 hari selesai.');return}
-  if(p<100){alert('Checklist Hari '+d+' baru '+p+'%. Lengkapi sampai 100% terlebih dahulu.');return}
-  const sb=SB(),token=T();if(!sb||!token){alert('Sesi member belum siap. Silakan login kembali.');return}
-  const b=document.getElementById('memberFinishDayV16');window.__finishV24Busy=true;
-  if(b){b.disabled=true;b.textContent='Menyimpan progress ke database...'}
-  try{
-    const r=await sb.rpc('member_day_complete_v19',{p_token:token});
-    if(r.error)throw r.error;if(!r.data?.success)throw new Error(r.data?.message||'Hari berikutnya belum dapat dibuka.');
-    const snap=await sb.rpc('member_dashboard_snapshot',{p_token:token});
-    if(snap.error)throw snap.error;if(!snap.data?.success)throw new Error(snap.data?.message||'Gagal membaca data terbaru.');
-    currentUser.day=Number(snap.data.profile?.day||d+1);
-    currentUser.checks=snap.data.checklist||{};
-    currentUser.leads=(snap.data.leads||[]).map(typeof dbToLead==='function'?dbToLead:(x=>x));
-    currentUser.closingData=(snap.data.closings||[]).map(typeof dbToClosing==='function'?dbToClosing:(x=>x));
-    currentUser.activityLog=(snap.data.activities||[]).map(typeof dbToActivity==='function'?dbToActivity:(x=>x));
-    renderProgramV24();if(typeof renderClosingTableV22==='function')renderClosingTableV22();
-    alert('Hari '+d+' selesai. Hari '+currentUser.day+' sekarang terbuka dan tersimpan di Supabase.');
-  }catch(e){console.error('Final V24 day:',e);alert('Gagal membuka hari berikutnya: '+(e?.message||e))}
-  finally{window.__finishV24Busy=false;setTimeout(renderProgramV24,0)}
+ if(window.__finishV24Busy)return;if(currentRole!=='member'||!currentUser){alert('Sesi member belum siap. Silakan login kembali.');return}
+ const d=Math.max(1,Number(currentUser.day||1)),p=pct(d);if(d>=60){alert('Program 60 hari selesai.');return}
+ if(p<100){alert('Checklist Hari '+d+' baru '+p+'%. Lengkapi sampai 100% terlebih dahulu.');return}
+ const sb=SB(),token=T();if(!sb||!token){alert('Sesi member belum siap. Silakan login kembali.');return}
+ const b=document.getElementById('memberFinishDayV16');window.__finishV24Busy=true;if(b){b.disabled=true;b.textContent='Menyimpan progress ke database...'}
+ try{const r=await sb.rpc('member_day_complete_v19',{p_token:token});if(r.error)throw r.error;if(!r.data?.success)throw new Error(r.data?.message||'Hari berikutnya belum dapat dibuka.');
+  const snap=await sb.rpc('member_dashboard_snapshot',{p_token:token});if(snap.error)throw snap.error;if(!snap.data?.success)throw new Error(snap.data?.message||'Gagal membaca data terbaru.');
+  currentUser.day=Number(snap.data.profile?.day||d+1);currentUser.checks=snap.data.checklist||{};currentUser.leads=(snap.data.leads||[]).map(typeof dbToLead==='function'?dbToLead:(x=>x));currentUser.closingData=(snap.data.closings||[]).map(typeof dbToClosing==='function'?dbToClosing:(x=>x));currentUser.activityLog=(snap.data.activities||[]).map(typeof dbToActivity==='function'?dbToActivity:(x=>x));
+  renderProgramV24();if(typeof renderClosingTableV22==='function')renderClosingTableV22();alert('Hari '+d+' selesai. Hari '+currentUser.day+' sekarang terbuka dan tersimpan di Supabase.');
+ }catch(e){console.error('Final V24 day:',e);alert('Gagal membuka hari berikutnya: '+(e?.message||e))}finally{window.__finishV24Busy=false;setTimeout(renderProgramV24,0)}
 }
 function renderProgramV24(){
-  if(currentRole!=='member'||!currentUser)return;
-  const root=document.getElementById('page-program');if(!root)return;
-  const d=Math.max(1,Number(currentUser.day||1)),ts=tasksFor(d),st=checksFor(d),p=pct(d);
-  root.innerHTML='<div class="title"><div><h2>☑ Checklist & SOP Program</h2><p>Data checklist tersimpan terpusat di Supabase.</p></div></div>'+
-  '<div class="panel memberChecklistV15"><div class="notice"><b>Hari '+d+'/60</b> • Progress checklist: <b>'+p+'%</b></div>'+
-  '<div style="margin-top:10px">'+(ts.length?ts.map((t,i)=>'<label class="memberTaskV24"><input type="checkbox" data-v24-check="'+i+'" '+(st[i]===true?'checked':'')+'><div><b>'+esc(t)+'</b></div></label>').join(''):'<div class="empty">Belum ada tugas checklist untuk Hari '+d+'.</div>')+'</div>'+
-  '<button id="memberFinishDayV16" type="button" class="btn memberFinishV24" '+(p>=100&&d<60?'':'disabled')+'>Selesaikan Hari Ini & Buka Hari Berikutnya →</button>'+
-  '<div class="notice" style="margin-top:10px">'+(p>=100?(d<60?'Checklist 100%. Tombol buka hari berikutnya aktif.':'Program 60 hari selesai.'):'Checklist harus 100% untuk membuka hari berikutnya.')+'</div></div>';
-  root.querySelectorAll('[data-v24-check]').forEach(inp=>inp.addEventListener('change',()=>saveCheck(d,Number(inp.dataset.v24Check),inp.checked,inp)));
-  const b=document.getElementById('memberFinishDayV16');if(b)b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();finishV24()});
+ if(currentRole!=='member'||!currentUser)return;const root=document.getElementById('page-program');if(!root)return;
+ const d=Math.max(1,Number(currentUser.day||1)),ts=tasksFor(d),st=checksFor(d),p=pct(d);
+ root.innerHTML='<div class="title"><div><h2>☑ Checklist & SOP Program</h2><p>Data checklist tersimpan terpusat di Supabase.</p></div></div><div class="panel memberChecklistV15"><div class="notice"><b>Hari '+d+'/60</b> • Progress checklist: <b>'+p+'%</b></div><div style="margin-top:10px">'+(ts.length?ts.map((t,i)=>'<label class="memberTaskV24"><input type="checkbox" data-v24-check="'+i+'" '+(st[i]===true?'checked':'')+'><div><b>'+esc(t)+'</b></div></label>').join(''):'<div class="empty">Belum ada tugas checklist untuk Hari '+d+'.</div>')+'</div><button id="memberFinishDayV16" type="button" class="btn memberFinishV24" '+(p>=100&&d<60?'':'disabled')+'>Selesaikan Hari Ini & Buka Hari Berikutnya →</button><div class="notice" style="margin-top:10px">'+(p>=100?(d<60?'Checklist 100%. Tombol buka hari berikutnya aktif.':'Program 60 hari selesai.'):'Checklist harus 100% untuk membuka hari berikutnya.')+'</div></div>';
+ root.querySelectorAll('[data-v24-check]').forEach(inp=>inp.addEventListener('change',()=>saveCheck(d,Number(inp.dataset.v24Check),inp.checked,inp)));
+ const btn=document.getElementById('memberFinishDayV16');if(btn)btn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();finishV24()});
 }
-window.__memberChecklistRenderV16=renderProgramV24;
-window.__finishMemberDayV24=finishV24;window.__finishMemberDayV19=finishV24;window.__finishMemberDayV17=finishV24;window.__finishMemberDayV16=finishV24;window.__finishMemberDayV15=finishV24;window.finishMemberDay=finishV24;
-const oldShow=window.showPage;
-window.showPage=function(page){const r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;if(currentRole==='member'&&page==='program')setTimeout(renderProgramV24,40);return r};
+window.__memberChecklistRenderV16=renderProgramV24;window.__finishMemberDayV24=finishV24;window.__finishMemberDayV19=finishV24;window.__finishMemberDayV17=finishV24;window.__finishMemberDayV16=finishV24;window.__finishMemberDayV15=finishV24;window.finishMemberDay=finishV24;
+const oldShow=window.showPage;window.showPage=function(page){const r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;if(currentRole==='member'&&page==='program')setTimeout(renderProgramV24,40);return r};
 window.renderMemberClosing=function(){
-  if(currentRole!=='member'||!currentUser)return;
-  const rows=Array.isArray(currentUser.closingData)?currentUser.closingData.slice():[],body=document.getElementById('myClosingRows');
-  if(!body)return;
-  rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
-  const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0),pax=rows.reduce((n,x)=>n+Number(x.pax||0),0),om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
-  const el=id=>document.getElementById(id);if(el('myClosingInvoices'))el('myClosingInvoices').textContent=inv;if(el('myClosingPax'))el('myClosingPax').textContent=pax;if(el('myClosingOmset'))el('myClosingOmset').textContent='Rp '+om.toLocaleString('id-ID');if(el('myClosingCount'))el('myClosingCount').textContent=rows.length;
-  body.innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.date||'-')+'</td><td><b>'+esc(x.name||'-')+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel||'-')+'</td><td>'+esc(x.package||'-')+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td><td><button class="btnMini" type="button" onclick="editClosing('+JSON.stringify(String(x.id))+')">Edit</button> <button class="btnMini danger" type="button" onclick="deleteClosing('+JSON.stringify(String(x.id))+')">Hapus</button></td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+ if(currentRole!=='member'||!currentUser)return;const rows=Array.isArray(currentUser.closingData)?currentUser.closingData.slice():[],body=document.getElementById('myClosingRows');if(!body)return;rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+ const el=id=>document.getElementById(id),inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0),pax=rows.reduce((n,x)=>n+Number(x.pax||0),0),om=rows.reduce((n,x)=>n+Number(x.omset||0),0);if(el('myClosingInvoices'))el('myClosingInvoices').textContent=inv;if(el('myClosingPax'))el('myClosingPax').textContent=pax;if(el('myClosingOmset'))el('myClosingOmset').textContent='Rp '+om.toLocaleString('id-ID');if(el('myClosingCount'))el('myClosingCount').textContent=rows.length;
+ body.innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.date||'-')+'</td><td><b>'+esc(x.name||'-')+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel||'-')+'</td><td>'+esc(x.package||'-')+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td><td><button class="btnMini" type="button" onclick="editClosing('+JSON.stringify(String(x.id))+')">Edit</button> <button class="btnMini danger" type="button" onclick="deleteClosing('+JSON.stringify(String(x.id))+')">Hapus</button></td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
 };
 window.__finalMemberUiV24=true;
 })();
