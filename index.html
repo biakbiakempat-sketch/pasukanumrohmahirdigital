@@ -5188,5 +5188,49 @@ setInterval(()=>{
   else retry();
 })();
 </script>
+
+<!-- FINAL ADMIN REFRESH STABILITY V30 -->
+<script id="adminRefreshStabilityV30">
+(function(){
+  'use strict';
+  const base=window.renderAllAdmin;
+  if(typeof base!=='function'||base.__stableV30)return;
+  let rendering=false;
+  const wrapped=function(){
+    if(rendering)return;
+    rendering=true;
+    const active=document.querySelector('.page.active')?.id||'';
+    const y=window.scrollY||window.pageYOffset||0;
+    const focus=document.activeElement;
+    const focusId=focus?.id||'';
+    const focusValue=(focus&&('value' in focus))?focus.value:null;
+    try{base.apply(this,arguments)}catch(e){console.error('Admin render:',e)}
+    const restore=()=>{
+      if(active){
+        document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+        const p=document.getElementById(active);
+        if(p)p.classList.add('active');
+        document.querySelectorAll('.navItem[data-page]').forEach(n=>{
+          n.classList.toggle('active',n.dataset.page===active.replace(/^page-/,''));
+        });
+      }
+      try{window.scrollTo(0,y)}catch(e){}
+      if(focusId){
+        const el=document.getElementById(focusId);
+        if(el&&document.contains(el)){
+          try{el.focus({preventScroll:true})}catch(e){try{el.focus()}catch(_){}}
+          if(focusValue!==null&&'value' in el&&document.activeElement===el)try{el.value=focusValue}catch(_){}
+        }
+      }
+    };
+    try{requestAnimationFrame(restore)}catch(e){}
+    setTimeout(restore,0);
+    setTimeout(restore,80);
+    rendering=false;
+  };
+  wrapped.__stableV30=true;
+  window.renderAllAdmin=wrapped;
+})();
+</script>
 </body>
 </html>
