@@ -1,3 +1,4 @@
+<!-- DEPLOY TRIGGER 2026-09-27 -->
 <!DOCTYPE html>
 
 <html lang="id">
@@ -969,40 +970,143 @@ function xlsEscape(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&
 function downloadExcel(filename,headers,rows){
  const html=`<html><head><meta charset="UTF-8"></head><body><table><tr>${headers.map(h=>`<th>${xlsEscape(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${xlsEscape(x)}</td>`).join("")}</tr>`).join("")}</table>
 
-\n<script id="adminRealtimeCanonicalV23">
+\n
+<!-- FINAL CLOSING TABLE + ADMIN REALTIME V22 -->
+<style id="closingRealtimeV22">
+#page-memberClosing .closingTableV22{margin-top:0}
+#page-memberClosing .closingTableV22 .tableWrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+#page-memberClosing .closingTableV22 table{min-width:760px}
+</style>
+<script id="closingRealtimeV22">
 (function(){
-  'use strict';
-  const SB=()=>window.supabaseClient||null;
-  let channel=null;
-  function refresh(){
-    try{if(window.currentRole==='admin'&&typeof window.adminRefresh==='function')window.adminRefresh();}catch(e){console.warn('Admin realtime refresh:',e)}
+'use strict';
+const SB=()=>window.supabaseClient||null;
+const TOK=()=>window.umrohMemberSession?.get?.()||'';
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+const money=n=>Number(n||0).toLocaleString('id-ID');
+
+function renderClosingTableV22(){
+  if(currentRole!=='member')return;
+  const body=document.getElementById('myClosingRows');
+  if(!body)return;
+  const rows=Array.isArray(currentUser?.closingData)?currentUser.closingData.slice():[];
+  rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  body.innerHTML=rows.length?rows.map(x=>{
+    const id=JSON.stringify(String(x.id));
+    return '<tr>'+
+      '<td>'+esc(x.date||'-')+'</td>'+
+      '<td><b>'+esc(x.name||'-')+'</b></td>'+
+      '<td>'+Number(x.invoice||0)+'</td>'+
+      '<td>'+Number(x.pax||0)+'</td>'+
+      '<td>'+esc(x.travel||'-')+'</td>'+
+      '<td>'+esc(x.package||'-')+'</td>'+
+      '<td>Rp '+money(x.omset)+'</td>'+
+      '<td><button class="btnMini" type="button" onclick="editClosing('+id+')">Edit</button> <button class="btnMini danger" type="button" onclick="deleteClosing('+id+')">Hapus</button></td>'+
+      '</tr>';
+  }).join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+  const table=body.closest('.panel');
+  if(table)table.classList.add('closingTableV22');
+  // The older V20/V21 cards duplicate this data; the original table is now authoritative.
+  ['memberClosingRecordsV20','memberClosingRecordsV21'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.remove();
+  });
+}
+
+async function refreshClosingV22(){
+  if(currentRole!=='member'||!currentUser)return;
+  const sb=SB(),token=TOK();
+  if(!sb||!token){renderClosingTableV22();return}
+  try{
+    const r=await sb.rpc('member_dashboard_snapshot',{p_token:token});
+    if(r.error)throw r.error;
+    if(r.data?.success){
+      currentUser.closingData=(r.data.closings||[]).map(x=>({
+        id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),pax:Number(x.pax||1),
+        travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),
+        date:x.closing_date||'',createdAt:x.created_at||''
+      }));
+    }
+  }catch(e){console.warn('Closing V22 sync:',e)}
+  renderClosingTableV22();
+}
+
+const baseRender=window.renderMember;
+window.renderMember=function(){
+  try{if(typeof baseRender==='function')baseRender.apply(this,arguments)}catch(e){}
+  setTimeout(renderClosingTableV22,0);
+};
+const baseShow=window.showPage;
+window.showPage=function(page){
+  const r=typeof baseShow==='function'?baseShow.apply(this,arguments):undefined;
+  if(page==='memberClosing'&&currentRole==='member')setTimeout(refreshClosingV22,100);
+  return r;
+};
+const baseSave=window.saveClosing;
+window.saveClosing=async function(){
+  try{
+    if(typeof baseSave==='function'){
+      const r=baseSave.apply(this,arguments);
+      if(r&&typeof r.then==='function')await r;
+    }
+  }finally{setTimeout(refreshClosingV22,150)}
+};
+const baseDelete=window.deleteClosing;
+window.deleteClosing=async function(id){
+  try{
+    if(typeof baseDelete==='function'){
+      const r=baseDelete.apply(this,arguments);
+      if(r&&typeof r.then==='function')await r;
+    }
+  }finally{setTimeout(refreshClosingV22,150)}
+};
+
+// Member keeps Supabase as source of truth. Other member devices are picked up
+// by the normal central snapshot; this closing view refreshes every 12 seconds.
+setInterval(function(){
+  if(currentRole==='member'&&!document.hidden&&document.getElementById('page-memberClosing')?.classList.contains('active')){
+    refreshClosingV22();
   }
-  function start(){
-    const sb=SB();
-    if(!sb||window.currentRole!=='admin'||channel)return;
-    channel=sb.channel('pasukan-umroh-admin-sync-v23')
-      .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},refresh)
-      .on('postgres_changes',{event:'*',schema:'public',table:'member_checklists'},refresh)
-      .on('postgres_changes',{event:'*',schema:'public',table:'member_leads'},refresh)
-      .on('postgres_changes',{event:'*',schema:'public',table:'member_closings'},refresh)
-      .on('postgres_changes',{event:'*',schema:'public',table:'sales_activities'},refresh)
-      .subscribe((status,error)=>console.log('Admin Realtime V23:',status,error||''));
-  }
-  const oldEnter=window.enterApp;
-  window.enterApp=function(){
-    const r=typeof oldEnter==='function'?oldEnter.apply(this,arguments):undefined;
-    setTimeout(start,500);
-    return r;
-  };
-  const oldLogout=window.logout;
-  window.logout=async function(){
-    try{if(channel&&SB())await SB().removeChannel(channel)}catch(e){}
-    channel=null;
-    return typeof oldLogout==='function'?oldLogout.apply(this,arguments):undefined;
-  };
-  setInterval(()=>{if(window.currentRole==='admin')start()},5000);
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(start,800));
-  else setTimeout(start,800);
+},12000);
+
+function startAdminRealtimeV22(){
+  const sb=SB();
+  if(!sb||currentRole!=='admin'||window.__adminRealtimeV22)return;
+  window.__adminRealtimeV22=true;
+  const ch=sb.channel('pasukan-umroh-admin-sync-v22')
+    .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>window.__adminForceRefreshV22?.())
+    .on('postgres_changes',{event:'*',schema:'public',table:'member_checklists'},()=>window.__adminForceRefreshV22?.())
+    .on('postgres_changes',{event:'*',schema:'public',table:'member_leads'},()=>window.__adminForceRefreshV22?.())
+    .on('postgres_changes',{event:'*',schema:'public',table:'member_closings'},()=>window.__adminForceRefreshV22?.())
+    .on('postgres_changes',{event:'*',schema:'public',table:'sales_activities'},()=>window.__adminForceRefreshV22?.())
+    .subscribe((status,error)=>{
+      console.log('Admin Realtime V22:',status,error||'');
+    });
+  window.__adminRealtimeChannelV22=ch;
+}
+window.__adminForceRefreshV22=async function(){
+  if(currentRole!=='admin')return;
+  try{
+    // Call the actual final central loader directly. Older V18 bridge may have
+    // captured an earlier/empty bridge before Phase 3 initialized.
+    if(typeof window.loadAdminCentral==='function')await window.loadAdminCentral();
+    else if(typeof window.umrohAdminRefreshBridge==='function')await window.umrohAdminRefreshBridge();
+  }catch(e){console.warn('Admin V22 refresh:',e)}
+};
+const oldEnter=window.enterApp;
+window.enterApp=function(){
+  const r=typeof oldEnter==='function'?oldEnter.apply(this,arguments):undefined;
+  setTimeout(startAdminRealtimeV22,300);
+  return r;
+};
+const oldLogout=window.logout;
+window.logout=async function(){
+  try{if(window.__adminRealtimeChannelV22&&SB())await SB().removeChannel(window.__adminRealtimeChannelV22)}catch(e){}
+  window.__adminRealtimeChannelV22=null;window.__adminRealtimeV22=false;
+  return typeof oldLogout==='function'?oldLogout.apply(this,arguments):undefined;
+};
+setInterval(()=>{if(currentRole==='admin')startAdminRealtimeV22()},5000);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(startAdminRealtimeV22,700));
+else setTimeout(startAdminRealtimeV22,700);
 })();
 <\/script>
 
@@ -1016,45 +1120,17 @@ function downloadExcel(filename,headers,rows){
 <script id="finalMemberUiV24">
 (function(){
 'use strict';
-const SB=()=>window.supabaseClient||null,T=()=>window.umrohMemberSession?.get?.()||'';
-const C=()=>window.__umrohCentralConfig||{};
+const SB=()=>window.supabaseClient||null,T=()=>window.umrohMemberSession?.get?.()||'',C=()=>window.__umrohCentralConfig||{};
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
-function tasksFor(d){const x=C().checklist?.[String(d)]||C().checklist?.[d]||{};return Array.isArray(x.tasks)?x.tasks.filter(Boolean):[]}
-function checksFor(d){currentUser.checks=currentUser.checks||{};currentUser.checks[d]=currentUser.checks[d]||{};return currentUser.checks[d]}
-function pct(d){const ts=tasksFor(d),st=checksFor(d);return ts.length?Math.round(ts.filter((_,i)=>st[i]===true).length/ts.length*100):0}
-async function saveCheck(d,i,val,input){
- const st=checksFor(d),old=st[i];st[i]=!!val;
- try{const sb=SB(),token=T();if(!sb||!token)throw new Error('Sesi member belum siap.');
-  const r=await sb.rpc('member_checklist_upsert',{p_token:token,p_program_day:d,p_checks:JSON.parse(JSON.stringify(st))});
-  if(r.error)throw r.error;if(!r.data?.success)throw new Error(r.data?.message||'Checklist gagal disimpan.');renderProgramV24();
- }catch(e){st[i]=old;if(input)input.checked=!!old;alert('Checklist gagal disimpan ke database: '+(e?.message||e))}
-}
-async function finishV24(){
- if(window.__finishV24Busy)return;if(currentRole!=='member'||!currentUser){alert('Sesi member belum siap. Silakan login kembali.');return}
- const d=Math.max(1,Number(currentUser.day||1)),p=pct(d);if(d>=60){alert('Program 60 hari selesai.');return}
- if(p<100){alert('Checklist Hari '+d+' baru '+p+'%. Lengkapi sampai 100% terlebih dahulu.');return}
- const sb=SB(),token=T();if(!sb||!token){alert('Sesi member belum siap. Silakan login kembali.');return}
- const b=document.getElementById('memberFinishDayV16');window.__finishV24Busy=true;if(b){b.disabled=true;b.textContent='Menyimpan progress ke database...'}
- try{const r=await sb.rpc('member_day_complete_v19',{p_token:token});if(r.error)throw r.error;if(!r.data?.success)throw new Error(r.data?.message||'Hari berikutnya belum dapat dibuka.');
-  const snap=await sb.rpc('member_dashboard_snapshot',{p_token:token});if(snap.error)throw snap.error;if(!snap.data?.success)throw new Error(snap.data?.message||'Gagal membaca data terbaru.');
-  currentUser.day=Number(snap.data.profile?.day||d+1);currentUser.checks=snap.data.checklist||{};currentUser.leads=(snap.data.leads||[]).map(typeof dbToLead==='function'?dbToLead:(x=>x));currentUser.closingData=(snap.data.closings||[]).map(typeof dbToClosing==='function'?dbToClosing:(x=>x));currentUser.activityLog=(snap.data.activities||[]).map(typeof dbToActivity==='function'?dbToActivity:(x=>x));
-  renderProgramV24();if(typeof renderClosingTableV22==='function')renderClosingTableV22();alert('Hari '+d+' selesai. Hari '+currentUser.day+' sekarang terbuka dan tersimpan di Supabase.');
- }catch(e){console.error('Final V24 day:',e);alert('Gagal membuka hari berikutnya: '+(e?.message||e))}finally{window.__finishV24Busy=false;setTimeout(renderProgramV24,0)}
-}
-function renderProgramV24(){
- if(currentRole!=='member'||!currentUser)return;const root=document.getElementById('page-program');if(!root)return;
- const d=Math.max(1,Number(currentUser.day||1)),ts=tasksFor(d),st=checksFor(d),p=pct(d);
- root.innerHTML='<div class="title"><div><h2>☑ Checklist & SOP Program</h2><p>Data checklist tersimpan terpusat di Supabase.</p></div></div><div class="panel memberChecklistV15"><div class="notice"><b>Hari '+d+'/60</b> • Progress checklist: <b>'+p+'%</b></div><div style="margin-top:10px">'+(ts.length?ts.map((t,i)=>'<label class="memberTaskV24"><input type="checkbox" data-v24-check="'+i+'" '+(st[i]===true?'checked':'')+'><div><b>'+esc(t)+'</b></div></label>').join(''):'<div class="empty">Belum ada tugas checklist untuk Hari '+d+'.</div>')+'</div><button id="memberFinishDayV16" type="button" class="btn memberFinishV24" '+(p>=100&&d<60?'':'disabled')+'>Selesaikan Hari Ini & Buka Hari Berikutnya →</button><div class="notice" style="margin-top:10px">'+(p>=100?(d<60?'Checklist 100%. Tombol buka hari berikutnya aktif.':'Program 60 hari selesai.'):'Checklist harus 100% untuk membuka hari berikutnya.')+'</div></div>';
- root.querySelectorAll('[data-v24-check]').forEach(inp=>inp.addEventListener('change',()=>saveCheck(d,Number(inp.dataset.v24Check),inp.checked,inp)));
- const btn=document.getElementById('memberFinishDayV16');if(btn)btn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();finishV24()});
-}
-window.__memberChecklistRenderV16=renderProgramV24;window.__finishMemberDayV24=finishV24;window.__finishMemberDayV19=finishV24;window.__finishMemberDayV17=finishV24;window.__finishMemberDayV16=finishV24;window.__finishMemberDayV15=finishV24;window.finishMemberDay=finishV24;
-const oldShow=window.showPage;window.showPage=function(page){const r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;if(currentRole==='member'&&page==='program')setTimeout(renderProgramV24,40);return r};
-window.renderMemberClosing=function(){
- if(currentRole!=='member'||!currentUser)return;const rows=Array.isArray(currentUser.closingData)?currentUser.closingData.slice():[],body=document.getElementById('myClosingRows');if(!body)return;rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
- const el=id=>document.getElementById(id),inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0),pax=rows.reduce((n,x)=>n+Number(x.pax||0),0),om=rows.reduce((n,x)=>n+Number(x.omset||0),0);if(el('myClosingInvoices'))el('myClosingInvoices').textContent=inv;if(el('myClosingPax'))el('myClosingPax').textContent=pax;if(el('myClosingOmset'))el('myClosingOmset').textContent='Rp '+om.toLocaleString('id-ID');if(el('myClosingCount'))el('myClosingCount').textContent=rows.length;
- body.innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.date||'-')+'</td><td><b>'+esc(x.name||'-')+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel||'-')+'</td><td>'+esc(x.package||'-')+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td><td><button class="btnMini" type="button" onclick="editClosing('+JSON.stringify(String(x.id))+')">Edit</button> <button class="btnMini danger" type="button" onclick="deleteClosing('+JSON.stringify(String(x.id))+')">Hapus</button></td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
-};
+const tasks=d=>{const x=C().checklist?.[String(d)]||C().checklist?.[d]||{};return Array.isArray(x.tasks)?x.tasks.filter(Boolean):[]};
+const checks=d=>{currentUser.checks=currentUser.checks||{};currentUser.checks[d]=currentUser.checks[d]||{};return currentUser.checks[d]};
+const pct=d=>{const t=tasks(d),s=checks(d);return t.length?Math.round(t.filter((_,i)=>s[i]===true).length/t.length*100):0};
+async function saveCheck(d,i,val,input){const s=checks(d),old=s[i];s[i]=!!val;try{const sb=SB(),t=T();if(!sb||!t)throw new Error('Sesi member belum siap.');const r=await sb.rpc('member_checklist_upsert',{p_token:t,p_program_day:d,p_checks:JSON.parse(JSON.stringify(s))});if(r.error)throw r.error;if(!r.data?.success)throw new Error(r.data?.message||'Checklist gagal disimpan.');renderV24()}catch(e){s[i]=old;if(input)input.checked=!!old;alert('Checklist gagal disimpan ke database: '+(e?.message||e))}}
+async function finishV24(){if(window.__finishV24Busy)return;if(currentRole!=='member'||!currentUser){alert('Sesi member belum siap. Silakan login kembali.');return}const d=Math.max(1,Number(currentUser.day||1)),p=pct(d);if(d>=60){alert('Program 60 hari selesai.');return}if(p<100){alert('Checklist Hari '+d+' baru '+p+'%. Lengkapi sampai 100% terlebih dahulu.');return}const sb=SB(),t=T();if(!sb||!t){alert('Sesi member belum siap. Silakan login kembali.');return}window.__finishV24Busy=true;const b=document.getElementById('memberFinishDayV16');if(b){b.disabled=true;b.textContent='Menyimpan progress ke database...'}try{const r=await sb.rpc('member_day_complete_v19',{p_token:t});if(r.error)throw r.error;if(!r.data?.success)throw new Error(r.data?.message||'Hari berikutnya belum dapat dibuka.');const snap=await sb.rpc('member_dashboard_snapshot',{p_token:t});if(snap.error)throw snap.error;if(!snap.data?.success)throw new Error(snap.data?.message||'Gagal membaca data terbaru.');currentUser.day=Number(snap.data.profile?.day||d+1);currentUser.checks=snap.data.checklist||{};currentUser.leads=(snap.data.leads||[]).map(typeof dbToLead==='function'?dbToLead:(x=>x));currentUser.closingData=(snap.data.closings||[]).map(typeof dbToClosing==='function'?dbToClosing:(x=>x));currentUser.activityLog=(snap.data.activities||[]).map(typeof dbToActivity==='function'?dbToActivity:(x=>x));renderV24();if(typeof window.renderMemberClosing==='function')window.renderMemberClosing();alert('Hari '+d+' selesai. Hari '+currentUser.day+' sekarang terbuka dan tersimpan di Supabase.')}catch(e){console.error('Final V24 day:',e);alert('Gagal membuka hari berikutnya: '+(e?.message||e))}finally{window.__finishV24Busy=false;setTimeout(renderV24,0)}}
+function renderV24(){if(currentRole!=='member'||!currentUser)return;const root=document.getElementById('page-program');if(!root)return;const d=Math.max(1,Number(currentUser.day||1)),ts=tasks(d),st=checks(d),p=pct(d);root.innerHTML='<div class="title"><div><h2>☑ Checklist & SOP Program</h2><p>Data checklist tersimpan terpusat di Supabase.</p></div></div><div class="panel memberChecklistV15"><div class="notice"><b>Hari '+d+'/60</b> • Progress checklist: <b>'+p+'%</b></div><div style="margin-top:10px">'+(ts.length?ts.map((x,i)=>'<label class="memberTaskV24"><input type="checkbox" data-v24-check="'+i+'" '+(st[i]===true?'checked':'')+'><div><b>'+esc(x)+'</b></div></label>').join(''):'<div class="empty">Belum ada tugas checklist untuk Hari '+d+'.</div>')+'</div><button id="memberFinishDayV16" type="button" class="btn memberFinishV24" '+(p>=100&&d<60?'':'disabled')+'>Selesaikan Hari Ini & Buka Hari Berikutnya →</button><div class="notice" style="margin-top:10px">'+(p>=100?(d<60?'Checklist 100%. Tombol buka hari berikutnya aktif.':'Program 60 hari selesai.'):'Checklist harus 100% untuk membuka hari berikutnya.')+'</div></div>';root.querySelectorAll('[data-v24-check]').forEach(inp=>inp.addEventListener('change',()=>saveCheck(d,Number(inp.dataset.v24Check),inp.checked,inp)));const b=document.getElementById('memberFinishDayV16');if(b)b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();finishV24()})}
+window.__memberChecklistRenderV16=renderV24;window.__finishMemberDayV24=finishV24;window.__finishMemberDayV19=finishV24;window.__finishMemberDayV17=finishV24;window.__finishMemberDayV16=finishV24;window.__finishMemberDayV15=finishV24;window.finishMemberDay=finishV24;
+const oldShow=window.showPage;window.showPage=function(page){const r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;if(currentRole==='member'&&page==='program')setTimeout(renderV24,40);return r};
+window.renderMemberClosing=function(){if(currentRole!=='member'||!currentUser)return;const rows=Array.isArray(currentUser.closingData)?currentUser.closingData.slice():[],body=document.getElementById('myClosingRows');if(!body)return;rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));const el=id=>document.getElementById(id),inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0),pax=rows.reduce((n,x)=>n+Number(x.pax||0),0),om=rows.reduce((n,x)=>n+Number(x.omset||0),0);if(el('myClosingInvoices'))el('myClosingInvoices').textContent=inv;if(el('myClosingPax'))el('myClosingPax').textContent=pax;if(el('myClosingOmset'))el('myClosingOmset').textContent='Rp '+om.toLocaleString('id-ID');if(el('myClosingCount'))el('myClosingCount').textContent=rows.length;body.innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.date||'-')+'</td><td><b>'+esc(x.name||'-')+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel||'-')+'</td><td>'+esc(x.package||'-')+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td><td><button class="btnMini" type="button" onclick="editClosing('+JSON.stringify(String(x.id))+')">Edit</button> <button class="btnMini danger" type="button" onclick="deleteClosing('+JSON.stringify(String(x.id))+')">Hapus</button></td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>'};
 window.__finalMemberUiV24=true;
 })();
 </script></body></html>`;
@@ -1103,75 +1179,87 @@ window.__finalMemberUiV24=true;
   async function loadMemberCentral(){
     if(currentRole!=='member'||!currentUser||!token()||!S())return;
     try{
-      const [leadR,closeR,actR,cfgR]=await Promise.all([
-        S().rpc('member_leads_list',{p_token:token()}),
-        S().rpc('member_closings_list',{p_token:token()}),
-        S().rpc('member_activity_list',{p_token:token()}),
-        S().rpc('member_config_get',{p_token:token()})
-      ]);
-      if(leadR.error)throw leadR.error;
-      if(closeR.error)throw closeR.error;
-      if(actR.error)throw actR.error;
-      if(!leadR.data?.success)throw new Error(leadR.data?.message||'Lead gagal dimuat');
-      if(!closeR.data?.success)throw new Error(closeR.data?.message||'Closing gagal dimuat');
-      if(!actR.data?.success)throw new Error(actR.data?.message||'Aktivitas gagal dimuat');
-      currentUser.leads=(leadR.data.rows||[]).map(dbToLead);
-      currentUser.closingData=(closeR.data.rows||[]).map(dbToClosing);
-      currentUser.activityLog=(actR.data.rows||[]).map(dbToActivity);
+      const {data,error}=await S().rpc('member_dashboard_snapshot',{p_token:token()});
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Data member gagal dimuat');
+
+      const p=data.profile||{};
+      currentUser.id=p.id||currentUser.id;
+      currentUser.name=p.name||currentUser.name||'';
+      currentUser.username=p.username||currentUser.username||'';
+      currentUser.wa=p.wa||currentUser.wa||'';
+      currentUser.status=p.status||currentUser.status||'approved';
+      currentUser.day=Math.max(1,Number(p.day||1));
+      currentUser.registeredAt=p.registered_at||currentUser.registeredAt||'';
+      currentUser.approvedAt=p.approved_at||currentUser.approvedAt||null;
+
+      currentUser.leads=(data.leads||[]).map(dbToLead);
+      currentUser.closingData=(data.closings||[]).map(dbToClosing);
+      currentUser.activityLog=(data.activities||[]).map(dbToActivity);
       currentUser.sales={};
       currentUser.activityLog.forEach(x=>{if(x.day)currentUser.sales[x.day]={...x}});
-      if(cfgR.data?.success){
-        const c=cfgR.data.configs||{};
-        Object.keys(c).forEach(k=>{if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=c[k]});
-      }
-      const day=currentDay();
-      const ck=await S().rpc('member_checklist_get',{p_token:token(),p_program_day:day});
-      if(!ck.error&&ck.data?.success){
-        currentUser.checks=currentUser.checks||{};
-        currentUser.checks[day]=ck.data.checks||{};
+      currentUser.checks=data.checklist||{};
+
+      if(data.configs){
+        Object.keys(data.configs).forEach(k=>{
+          if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=data.configs[k];
+        });
       }
       if(typeof renderMember==='function')renderMember();
-    }catch(e){console.warn('Phase 3 member load:',e)}
+    }catch(e){console.warn('Central member snapshot:',e)}
   }
 
   async function loadAdminCentral(){
     if(currentRole!=='admin'||!S())return;
     try{
-      const [pr,ar,lr,cr,cfg]=await Promise.all([
-        S().from('profiles').select('id,name,username,wa,role,status,day,registered_at,approved_at').eq('role','member').order('name',{ascending:true}),
-        S().from('sales_activities').select('*').order('activity_date',{ascending:false}),
-        S().from('member_leads').select('*').order('lead_date',{ascending:false}),
-        S().from('member_closings').select('*').order('closing_date',{ascending:false}),
-        S().rpc('admin_config_get')
-      ]);
-      if(pr.error)throw pr.error;
-      if(ar.error)throw ar.error;
-      if(lr.error)throw lr.error;
-      if(cr.error)throw cr.error;
+      const {data,error}=await S().rpc('admin_dashboard_snapshot');
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Snapshot admin gagal dimuat.');
 
-      const activityBy=new Map(), leadBy=new Map(), closingBy=new Map();
-      (ar.data||[]).forEach(x=>{const k=String(x.member_id);if(!activityBy.has(k))activityBy.set(k,[]);activityBy.get(k).push(x)});
-      (lr.data||[]).forEach(x=>{const k=String(x.member_id);if(!leadBy.has(k))leadBy.set(k,[]);leadBy.get(k).push(x)});
-      (cr.data||[]).forEach(x=>{const k=String(x.member_id);if(!closingBy.has(k))closingBy.set(k,[]);closingBy.get(k).push(x)});
+      const profiles=Array.isArray(data.profiles)?data.profiles:[];
+      const activities=Array.isArray(data.activities)?data.activities:[];
+      const leads=Array.isArray(data.leads)?data.leads:[];
+      const closings=Array.isArray(data.closings)?data.closings:[];
+      const checklists=Array.isArray(data.checklists)?data.checklists:[];
+      const byA=new Map(),byL=new Map(),byC=new Map(),byK=new Map();
 
-      members=(pr.data||[]).map(m=>{
+      activities.forEach(x=>{
+        const k=String(x.member_id);if(!byA.has(k))byA.set(k,[]);byA.get(k).push(x);
+      });
+      leads.forEach(x=>{
+        const k=String(x.member_id);if(!byL.has(k))byL.set(k,[]);byL.get(k).push(x);
+      });
+      closings.forEach(x=>{
+        const k=String(x.member_id);if(!byC.has(k))byC.set(k,[]);byC.get(k).push(x);
+      });
+      checklists.forEach(x=>{
+        const k=String(x.member_id);if(!byK.has(k))byK.set(k,{});
+        byK.get(k)[String(x.program_day)]=JSON.parse(JSON.stringify(x.checks||{}));
+      });
+
+      members=profiles.map(m=>{
         const id=String(m.id);
-        const x={id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',role:m.role||'member',
-          status:m.status||'pending',day:Number(m.day||0),checks:{},sales:{},activityLog:[],
-          leads:[],closingData:[],registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null};
-        x.activityLog=(activityBy.get(id)||[]).map(dbToActivity);
+        const x={
+          id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',role:m.role||'member',
+          status:m.status||'pending',day:Number(m.day||0),checks:byK.get(id)||{},sales:{},
+          activityLog:[],leads:[],closingData:[],
+          registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null
+        };
+        x.activityLog=(byA.get(id)||[]).map(dbToActivity);
         x.sales={};x.activityLog.forEach(a=>{if(a.day)x.sales[a.day]={...a}});
-        x.leads=(leadBy.get(id)||[]).map(dbToLead);
-        x.closingData=(closingBy.get(id)||[]).map(dbToClosing);
+        x.leads=(byL.get(id)||[]).map(dbToLead);
+        x.closingData=(byC.get(id)||[]).map(dbToClosing);
         return x;
       });
-      if(cfg?.data?.success){
-        const cc=cfg.data.configs||{};
+
+      if(data.configs){
+        const cc=data.configs||{};
         Object.keys(cc).forEach(k=>{if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=cc[k]});
       }
       if(typeof renderAllAdmin==='function')renderAllAdmin();
-    }catch(e){console.error('Phase 3 admin load:',e)}
+    }catch(e){console.error('Central admin snapshot:',e)}
   };
+
   window.renderAllAdmin=function(){
     try{renderAdminDashboard()}catch(e){}
     try{renderMembers()}catch(e){}
@@ -1206,7 +1294,7 @@ window.__finalMemberUiV24=true;
   window.umrohAdminRefreshBridge=loadAdminCentral;
   window.__centralConfigSig={};
   // Central configuration is persisted directly to Supabase by put()/syncCentralConfig().
-  setInterval(function(){if(currentRole==='member'&&!document.hidden)loadMemberCentral()},10000);
+  setInterval(function(){if(!window.__centralSyncV18Primary&&currentRole==='member'&&!document.hidden)loadMemberCentral()},10000);
   setTimeout(async function(){
     try{
       if(currentRole==='admin'){
@@ -1720,16 +1808,17 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   async function syncCentralConfig(key,value){
     try{
       const c=window.supabaseClient;
-      if(!c)return;
-      const {error}=await c.from('program_configs').upsert({
-        config_key:key,
-        config_value:value,
-        updated_at:new Date().toISOString()
-      },{onConflict:'config_key'});
-      if(error)throw error;
+      if(!c)throw new Error('Koneksi Supabase belum siap.');
+      if(currentRole==='admin'){
+        const {data,error}=await c.rpc('admin_config_save',{p_config_key:key,p_config_value:value});
+        if(error)throw error;
+        if(!data?.success)throw new Error(data?.message||'Gagal menyimpan konfigurasi.');
+      }else{
+        throw new Error('Hanya Super Admin yang dapat menyimpan konfigurasi.');
+      }
     }catch(e){
       console.error('Central config save '+key+':',e);
-      notify('Gagal menyimpan '+key+' ke Supabase.');
+      notify('Gagal menyimpan '+key+' ke Supabase: '+(e?.message||e));
     }
   }
   const put=(k,v)=>{
@@ -2140,17 +2229,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   const oldShow=window.showPage;
   window.showPage=function(page){const r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;if(currentRole==='admin'&&(page==='adminDashboard'||page==='members'))setTimeout(adminRefresh,100);return r};
 
-  // Force a fresh member login after Phase A. Super Admin session is preserved.
-  setTimeout(function(){
-    try{
-      const s=JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY)||'null');
-      if(s?.role==='member'){
-        clearAuthSession();currentUser=null;currentRole=null;
-        $('app')?.classList.add('hidden');$('auth')?.classList.remove('hidden');authMode('login');msg('Sistem member sudah diperbarui. Silakan login kembali.',true);
-      }
-    }catch(e){}
-  },200);
-
   window.umrohMemberDbPhaseA={loadDbMembers};
 })();
 </script>
@@ -2520,7 +2598,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   // Re-check server state whenever the app becomes visible.
   document.addEventListener('visibilitychange',function(){if(!document.hidden&&currentRole==='member')setTimeout(safeReload,150)});
   // Super Admin sees new member/lead/closing changes without manually refreshing the page.
-  setInterval(function(){if(currentRole==='admin'&&!document.hidden&&typeof adminRefresh==='function')adminRefresh()},30000);
+  setInterval(function(){if(currentRole==='admin'&&typeof adminRefresh==='function')adminRefresh()},5000);
 })();
 </script>
 <script id="approvalSyncFinalFix">
@@ -2766,15 +2844,31 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     const c=C();if(!c)return;
     try{
       // MEMBER REGISTRY: direct Supabase table read is the first and independent step.
-      // A failure in secondary data must never hide the member registry.
-      const pr=await c.from('profiles').select('id,name,username,wa,role,status,day,registered_at,approved_at').eq('role','member').order('name',{ascending:true});
+      // This is intentionally the same path that was stable in V16: a failure in
+      // activities/leads/closings/checklists must NEVER hide the member registry.
+      const pr=await c.from('profiles')
+        .select('id,name,username,wa,role,status,day,registered_at,approved_at')
+        .eq('role','member')
+        .order('name',{ascending:true});
       if(pr.error)throw pr.error;
+
       const profiles=Array.isArray(pr.data)?pr.data:[];
-      members=profiles.map(m=>({id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',role:m.role||'member',status:m.status||'pending',day:Number(m.day||0),checks:{},sales:{},activityLog:[],leads:[],closingData:[],registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null}));
+      const emptyBy=new Map();
+      members=profiles.map(m=>({
+        id:m.id,name:m.name||'',username:m.username||'',wa:m.wa||'',
+        role:m.role||'member',status:m.status||'pending',day:Number(m.day||0),
+        checks:{},sales:{},activityLog:[],leads:[],closingData:[],
+        registeredAt:m.registered_at||'-',approvedAt:m.approved_at||null
+      }));
       window.members=members;
+
+      // Render immediately. Member count/approval list must not wait for any
+      // secondary table or RPC.
       ensureIncomePage();
       try{if(typeof window.renderAllAdmin==='function')window.renderAllAdmin()}catch(e){console.warn('Initial admin member render:',e)}
 
+      // Secondary central data is loaded independently. A failure here must not
+      // overwrite/empty the already-loaded member registry.
       const [ar,lr,cr,kr,cfg]=await Promise.all([
         c.from('sales_activities').select('*').order('activity_date',{ascending:false}),
         c.from('member_leads').select('*').order('lead_date',{ascending:false}),
@@ -2782,27 +2876,65 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
         c.from('member_checklists').select('*').order('updated_at',{ascending:false}),
         c.rpc('admin_config_get')
       ]);
-      const activities=ar.error?[]:(ar.data||[]),leads=lr.error?[]:(lr.data||[]),closings=cr.error?[]:(cr.data||[]),checklists=kr.error?[]:(kr.data||[]);
+
+      const activities=ar.error?[]:(ar.data||[]);
+      const leads=lr.error?[]:(lr.data||[]);
+      const closings=cr.error?[]:(cr.data||[]);
+      const checklists=kr.error?[]:(kr.data||[]);
       if(ar.error)console.warn('Admin activities sync:',ar.error);
       if(lr.error)console.warn('Admin leads sync:',lr.error);
       if(cr.error)console.warn('Admin closings sync:',cr.error);
       if(kr.error)console.warn('Admin checklist sync:',kr.error);
       if(cfg.error)console.warn('Admin config sync:',cfg.error);
+
       const byA=new Map(),byL=new Map(),byC=new Map(),byK=new Map();
       activities.forEach(x=>{const k=String(x.member_id);if(!byA.has(k))byA.set(k,[]);byA.get(k).push(x)});
       leads.forEach(x=>{const k=String(x.member_id);if(!byL.has(k))byL.set(k,[]);byL.get(k).push(x)});
       closings.forEach(x=>{const k=String(x.member_id);if(!byC.has(k))byC.set(k,[]);byC.get(k).push(x)});
-      checklists.forEach(x=>{const k=String(x.member_id);if(!byK.has(k))byK.set(k,{});byK.get(k)[String(x.program_day)]=JSON.parse(JSON.stringify(x.checks||{}));});
-      const dbA=x=>({id:x.id,date:x.activity_date||'',day:Number(x.program_day||0),japri:Number(x.japri||0),follow:Number(x.follow_up||0),conv:Number(x.conversation||0),lead:Number(x.lead||0),offer:Number(x.offer||0),closing:Number(x.closing||0),referral:Number(x.referral||0),notes:x.notes||''});
-      const dbL=x=>({id:x.id,date:x.lead_date||'',time:x.lead_time||'',name:x.name||'',city:x.city||'',contact:x.contact||'',source:x.source||'',response:x.response||'',plan:x.plan||'',funnel:x.funnel||'',closing:x.closing||'Belum Closing',closingDate:x.closing_date||'',fu1:x.fu1||'',fu1Response:x.fu1_response||'',fu2:x.fu2||'',fu2Response:x.fu2_response||'',fu3:x.fu3||'',fu3Response:x.fu3_response||'',noClose:x.no_close||'',cs:x.cs||'',note:x.note||'',score:Number(x.score||0)});
-      const dbC=x=>({id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),pax:Number(x.pax||1),travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),date:x.closing_date||'',createdAt:x.created_at||''});
-      members=members.map(m=>{const id=String(m.id),aa=(byA.get(id)||[]).map(dbA),ll=(byL.get(id)||[]).map(dbL),cc=(byC.get(id)||[]).map(dbC),sales={};aa.forEach(a=>{if(a.day)sales[a.day]={...a}});return {...m,checks:byK.get(id)||{},sales,activityLog:aa,leads:ll,closingData:cc}});
+      checklists.forEach(x=>{
+        const k=String(x.member_id);
+        if(!byK.has(k))byK.set(k,{});
+        byK.get(k)[String(x.program_day)]=JSON.parse(JSON.stringify(x.checks||{}));
+      });
+
+      const dbA=x=>({id:x.id,date:x.activity_date||'',day:Number(x.program_day||0),
+        japri:Number(x.japri||0),follow:Number(x.follow_up||0),conv:Number(x.conversation||0),
+        lead:Number(x.lead||0),offer:Number(x.offer||0),closing:Number(x.closing||0),
+        referral:Number(x.referral||0),notes:x.notes||''});
+      const dbL=x=>({id:x.id,date:x.lead_date||'',time:x.lead_time||'',name:x.name||'',
+        city:x.city||'',contact:x.contact||'',source:x.source||'',response:x.response||'',
+        plan:x.plan||'',funnel:x.funnel||'',closing:x.closing||'Belum Closing',
+        closingDate:x.closing_date||'',fu1:x.fu1||'',fu1Response:x.fu1_response||'',
+        fu2:x.fu2||'',fu2Response:x.fu2_response||'',fu3:x.fu3||'',
+        fu3Response:x.fu3_response||'',noClose:x.no_close||'',cs:x.cs||'',
+        note:x.note||'',score:Number(x.score||0)});
+      const dbC=x=>({id:x.id,name:x.closing_name||'',invoice:Number(x.invoice||1),
+        pax:Number(x.pax||1),travel:x.travel||'',package:x.package||'',omset:Number(x.omset||0),
+        date:x.closing_date||'',createdAt:x.created_at||''});
+
+      members=members.map(m=>{
+        const id=String(m.id);
+        const aa=(byA.get(id)||[]).map(dbA);
+        const ll=(byL.get(id)||[]).map(dbL);
+        const cc=(byC.get(id)||[]).map(dbC);
+        const sales={};
+        aa.forEach(a=>{if(a.day)sales[a.day]={...a}});
+        return {...m,checks:byK.get(id)||{},sales,activityLog:aa,leads:ll,closingData:cc};
+      });
       window.members=members;
-      if(!cfg.error&&cfg.data?.success&&cfg.data.configs){const ccfg=cfg.data.configs||{};Object.keys(ccfg).forEach(k=>{if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=ccfg[k]})}
+
+      if(!cfg.error&&cfg.data?.success&&cfg.data.configs){
+        const ccfg=cfg.data.configs||{};
+        Object.keys(ccfg).forEach(k=>{
+          if(Object.prototype.hasOwnProperty.call(centralConfig,k))centralConfig[k]=ccfg[k];
+        });
+      }
+
       try{if(typeof window.renderAllAdmin==='function')window.renderAllAdmin()}catch(e){console.warn('Final admin render:',e)}
       try{renderIncome()}catch(e){}
     }catch(e){
       console.error('Final admin Supabase sync:',e);
+      // Do not replace a previously loaded member registry with [] on error.
       ensureIncomePage();
       try{if(typeof window.renderMembers==='function')window.renderMembers()}catch(_){}
       try{if(typeof window.renderApproval==='function')window.renderApproval()}catch(_){}
@@ -2819,7 +2951,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     const target=document.getElementById('page-'+page);
     if(target)target.classList.add('active');
     document.querySelectorAll('.navItem[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
-    if(window.currentRole==='admin' && (page==='adminDashboard'||page==='members'||page==='activities'||page==='adminLeads'||page==='adminIncome'))setTimeout(refreshFromSupabase,30);
+    if(currentRole==='admin' && (page==='adminDashboard'||page==='members'||page==='activities'||page==='adminLeads'||page==='adminIncome'))setTimeout(refreshFromSupabase,30);
     window.scrollTo(0,0);
   };
 
@@ -2843,12 +2975,2108 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   function boot(){
     ensureIncomePage();
     bindNav();
-    if(window.currentRole==='admin')setTimeout(refreshFromSupabase,80);
+    if(currentRole==='admin')setTimeout(refreshFromSupabase,80);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
-  document.addEventListener('visibilitychange',function(){if(!document.hidden&&window.currentRole==='admin')setTimeout(refreshFromSupabase,80)});
-  setInterval(function(){if(window.currentRole==='admin'&&!document.hidden)refreshFromSupabase()},5000);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&currentRole==='admin')setTimeout(refreshFromSupabase,80)});
+  setInterval(function(){if(currentRole==='admin'&&!document.hidden)refreshFromSupabase()},5000);
+})();
+</script>
+<script id="crossDeviceSessionAndSyncFixV2">
+(function(){
+  const C=()=>window.supabaseClient||null;
+  const AUTH_KEY=typeof AUTH_SESSION_KEY!=='undefined'?AUTH_SESSION_KEY:'pasukanUmrohAuthSessionV1';
+  const PAGE_KEY='pasukanUmrohCurrentPageV1';
+
+  function readAuth(){
+    try{const v=sessionStorage.getItem(AUTH_KEY);if(v)return JSON.parse(v)}catch(e){}
+    try{const v=localStorage.getItem(AUTH_KEY);if(v)return JSON.parse(v)}catch(e){}
+    return null;
+  }
+  function savePage(page){
+    if(currentRole!=='member'&&currentRole!=='admin')return;
+    try{sessionStorage.setItem(PAGE_KEY,String(page||''))}catch(e){}
+    try{localStorage.setItem(PAGE_KEY,String(page||''))}catch(e){}
+  }
+  function readPage(){
+    try{const v=sessionStorage.getItem(PAGE_KEY);if(v)return v}catch(e){}
+    try{return localStorage.getItem(PAGE_KEY)||''}catch(e){return ''}
+  }
+
+  const baseShow=window.showPage;
+  if(typeof baseShow==='function'&&!baseShow.__crossDeviceV2){
+    const wrapped=function(page){savePage(page);return baseShow.apply(this,arguments)};
+    wrapped.__crossDeviceV2=true;
+    window.showPage=wrapped;
+  }
+
+  async function restoreSession(){
+    const c=C();if(!c)return false;
+    let a=readAuth();
+    if(!a){
+      try{
+        const g=await c.auth.getSession();
+        const user=g?.data?.session?.user;
+        if(user)a={role:'admin',userId:user.id,username:'mahirdigitalumroh'};
+        else if(window.umrohMemberSession?.get?.())a={role:'member'};
+        else return false;
+      }catch(e){
+        if(window.umrohMemberSession?.get?.())a={role:'member'};
+        else return false;
+      }
+    }
+
+    if(a.role==='admin'){
+      try{
+        const g=await c.auth.getSession(),user=g?.data?.session?.user;
+        if(!user)return false;
+        currentUser={id:user.id,name:user.user_metadata?.name||'Super Admin',username:'mahirdigitalumroh',roleLabel:'Super Admin',role:'super_admin',status:'approved'};
+        currentRole='admin';
+        if(typeof enterApp==='function')enterApp();
+        const page=readPage()||'adminDashboard';
+        if(typeof window.showPage==='function')window.showPage(page);
+        if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+        return true;
+      }catch(e){console.warn('Restore admin session:',e);return false}
+    }
+
+    if(a.role==='member'){
+      const token=window.umrohMemberSession?.get?.()||'';
+      if(!token)return false;
+      try{
+        const r=await c.rpc('member_session_get',{p_token:token});
+        if(r.error)throw r.error;
+        if(!r.data?.success)return false;
+        const p=r.data.profile||{};
+        currentUser={id:p.id,name:p.name||'',username:p.username||'',wa:p.wa||'',role:p.role||'member',status:p.status||'approved',day:Number(p.day||1),checks:{},sales:{},activityLog:[],leads:[],closingData:[],registeredAt:p.registered_at||'',approvedAt:p.approved_at||null};
+        currentRole='member';
+        members=[currentUser];window.members=members;
+        if(typeof enterApp==='function')enterApp();
+        const page=readPage()||'memberDashboard';
+        if(typeof window.showPage==='function')window.showPage(page);
+        if(typeof loadMemberCentral==='function')await loadMemberCentral();
+        return true;
+      }catch(e){console.warn('Restore member session:',e);return false}
+    }
+    return false;
+  }
+
+  async function memberRefresh(){
+    if(currentRole!=='member'||!currentUser)return;
+    try{
+      if(typeof loadMemberCentral==='function')await loadMemberCentral();
+      members=[currentUser];window.members=members;
+      if(typeof renderMember==='function')renderMember();
+    }catch(e){console.warn('Cross-device member refresh:',e)}
+  }
+
+  function boot(){
+    setTimeout(async function(){
+      if(currentRole==='admin'){
+        if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      }else if(!currentRole){
+        await restoreSession();
+      }else if(currentRole==='member'){
+        await memberRefresh();
+      }
+    },250);
+  }
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden)return;
+    if(currentRole==='admin'&&typeof window.finalAdminRefresh==='function')window.finalAdminRefresh();
+    if(currentRole==='member')memberRefresh();
+  });
+  setInterval(function(){
+    if(document.hidden)return;
+    if(currentRole==='admin'&&typeof window.finalAdminRefresh==='function')window.finalAdminRefresh();
+    if(currentRole==='member')memberRefresh();
+  },5000);
+})();
+</script>
+<script id="superAdminFullRightsFixV1">
+(function(){
+  const S=()=>window.supabaseClient||null;
+  const escA=v=>typeof esc2==='function'?esc2(v):String(v??'');
+  async function requireAdmin(){
+    if(currentRole!=='admin'||!S())throw new Error('Super Admin belum login.');
+  }
+
+  window.saveAdminLead=async function(){
+    try{
+      await requireAdmin();
+      const memberId=String($('adminLeadMember')?.value||'');
+      const name=$('alName')?.value.trim()||'';
+      const contact=$('alContact')?.value.trim()||'';
+      if(!memberId||!name||!contact){alert('Member, nama lead, dan kontak wajib diisi.');return}
+      const id=String($('adminLeadEditId')?.value||'').trim();
+      const payload={
+        member_id:memberId,
+        lead_date:$('alDate')?.value||isoToday(),
+        lead_time:$('alTime')?.value||null,
+        name,city:$('alCity')?.value.trim()||'',contact,
+        source:$('alSource')?.value||'',response:$('alResponse')?.value||'',
+        plan:$('alPlan')?.value||'',funnel:$('alFunnel')?.value||'',
+        closing:$('alClosing')?.value||'Belum Closing',
+        closing_date:$('alClosingDate')?.value||null,
+        fu1:$('alFu1')?.value||null,fu1_response:$('alFu1Response')?.value||null,
+        fu2:$('alFu2')?.value||null,fu2_response:$('alFu2Response')?.value||null,
+        fu3:$('alFu3')?.value||null,fu3_response:$('alFu3Response')?.value||null,
+        no_close:$('alNoClose')?.value.trim()||null,cs:$('alCs')?.value.trim()||null,
+        note:$('alNote')?.value.trim()||null,score:Number($('alScore')?.value)||0
+      };
+      if(id)payload.id=id;
+      const {error}=await S().from('member_leads').upsert(payload,{onConflict:'id'});
+      if(error)throw error;
+      closeAdminLeadForm();
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();else if(typeof window.umrohAdminRefreshBridge==='function')await window.umrohAdminRefreshBridge();
+      alert('Lead berhasil disimpan ke database.');
+    }catch(e){console.error('Admin lead save:',e);alert('Gagal menyimpan lead: '+(e?.message||e))}
+  };
+
+  window.deleteAdminLead=async function(mid,id){
+    if(!confirm('Hapus lead ini dari database?'))return;
+    try{
+      await requireAdmin();
+      const {error}=await S().from('member_leads').delete().eq('id',String(id));
+      if(error)throw error;
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      alert('Lead berhasil dihapus dari database.');
+    }catch(e){console.error('Admin lead delete:',e);alert('Gagal menghapus lead: '+(e?.message||e))}
+  };
+
+  const baseLeadReport=window.renderAdminLeadReport;
+  window.renderAdminLeadReport=function(){
+    if(!$('adminLeadMemberFilter'))return;
+    try{
+      fillMemberSelect('adminLeadMemberFilter');ensureAdminDateFilters();
+      const rows=allLeadRows($('adminLeadMemberFilter').value,$('adminLeadStart').value,$('adminLeadEnd').value);
+      $('leadTotal').textContent=rows.length;
+      $('leadHot').textContent=rows.filter(l=>String(l.response||'').toLowerCase()==='hot').length;
+      $('leadWarm').textContent=rows.filter(l=>String(l.response||'').toLowerCase()==='warm').length;
+      $('leadCold').textContent=rows.filter(l=>String(l.response||'').toLowerCase()==='cold').length;
+      $('leadNoResp').textContent=rows.filter(l=>String(l.response||'').toLowerCase().includes('no respon')).length;
+      $('leadClosing').textContent=rows.filter(l=>l.closing==='Closing').length;
+      $('adminLeadRows').innerHTML=rows.length?rows.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(l=>{
+        const id=JSON.stringify(String(l.id)),mid=JSON.stringify(String(l.memberId));
+        return '<tr><td>'+escA(l.member)+'</td><td>'+escA(l.date)+'</td><td><b>'+escA(l.name)+'</b></td><td>'+escA(l.contact)+'</td><td>'+escA(l.source)+'</td><td>'+escA(l.response)+'</td><td>'+escA(l.plan)+'</td><td>'+escA(l.funnel)+'</td><td>'+escA(l.closing)+'</td><td>'+Number(l.score||0)+'</td><td><button class="btnMini" onclick="editAdminLead('+mid+','+id+')">Edit</button> <button class="btnMini" style="background:#fff0f0;color:#a33" onclick="deleteAdminLead('+mid+','+id+')">Hapus</button></td></tr>';
+      }).join(''):'<tr><td colspan="11"><div class="empty">Belum ada lead pada periode ini.</div></td></tr>';
+    }catch(e){console.warn('Admin lead report:',e);if(typeof baseLeadReport==='function')baseLeadReport()}
+  };
+
+  window.adminDeleteClosing=async function(id){
+    if(!confirm('Hapus closing ini dari database?'))return;
+    try{
+      await requireAdmin();
+      const {error}=await S().from('member_closings').delete().eq('id',String(id));
+      if(error)throw error;
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      alert('Closing berhasil dihapus dari database.');
+    }catch(e){console.error('Admin closing delete:',e);alert('Gagal menghapus closing: '+(e?.message||e))}
+  };
+
+  window.adminEditClosing=async function(id){
+    try{
+      await requireAdmin();
+      const row=(members||[]).flatMap(m=>(m.closingData||[]).map(x=>({...x,memberId:m.id,member:m.name}))).find(x=>String(x.id)===String(id));
+      if(!row){alert('Closing tidak ditemukan.');return}
+      const name=prompt('Atas nama:',row.name||'');if(name===null)return;
+      const invoice=prompt('Jumlah invoice:',String(row.invoice||1));if(invoice===null)return;
+      const pax=prompt('Jumlah pax:',String(row.pax||1));if(pax===null)return;
+      const travel=prompt('Nama travel:',row.travel||'');if(travel===null)return;
+      const pkg=prompt('Nama paket:',row.package||'');if(pkg===null)return;
+      const omset=prompt('Omset:',String(row.omset||0));if(omset===null)return;
+      const date=prompt('Tanggal closing (YYYY-MM-DD):',row.date||isoToday());if(date===null)return;
+      const {error}=await S().from('member_closings').update({
+        closing_name:name,invoice:Number(invoice)||0,pax:Number(pax)||0,travel,package:pkg,omset:Number(omset)||0,closing_date:date,updated_at:new Date().toISOString()
+      }).eq('id',String(id));
+      if(error)throw error;
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      alert('Closing berhasil diperbarui.');
+    }catch(e){console.error('Admin closing edit:',e);alert('Gagal memperbarui closing: '+(e?.message||e))}
+  };
+
+  const baseIncome=window.renderIncomeMember;
+  window.renderIncomeMember=function(){
+    if(typeof baseIncome==='function')baseIncome.apply(this,arguments);
+    const body=$('incomeRows');if(!body)return;
+    body.querySelectorAll('tr').forEach(tr=>{
+      const cells=tr.querySelectorAll('td');if(!cells.length)return;
+      const member=members.find(m=>m.name===cells[0]?.textContent?.trim());
+      const date=cells[1]?.textContent?.trim(),name=cells[3]?.textContent?.trim();
+      const row=(member?.closingData||[]).find(x=>String(x.date)===String(date)&&String(x.name)===String(name));
+      if(row){
+        const td=document.createElement('td');
+        td.innerHTML='<button class="btnMini" onclick="adminEditClosing('+JSON.stringify(String(row.id))+')">Edit</button> <button class="btnMini" style="background:#fff0f0;color:#a33" onclick="adminDeleteClosing('+JSON.stringify(String(row.id))+')">Hapus</button>';
+        tr.appendChild(td);
+      }
+    });
+    const head=body.closest('table')?.querySelector('thead tr');
+    if(head&&!head.querySelector('.adminIncomeActionHead')){const th=document.createElement('th');th.className='adminIncomeActionHead';th.textContent='Aksi';head.appendChild(th)}
+  };
+})();
+</script>
+
+<script id="superAdminMemberCrudFixV2">
+(function(){
+  const S=()=>window.supabaseClient||null;
+  const $m=id=>document.getElementById(id);
+  const escM=v=>typeof esc2==='function'?esc2(v):String(v??'');
+  const safeId=v=>JSON.stringify(String(v??''));
+
+  async function adminRequired(){
+    if(currentRole!=='admin'||!S()) throw new Error('Super Admin belum login.');
+  }
+
+  window.adminEditMember=async function(id){
+    try{
+      await adminRequired();
+      const m=(window.members||members||[]).find(x=>String(x.id)===String(id));
+      if(!m){alert('Member tidak ditemukan.');return}
+      $m('memberModalTitle').textContent='Edit Member';
+      $m('editMemberId').value=String(m.id);
+      $m('newName').value=m.name||'';
+      $m('newUsername').value=m.username||'';
+      $m('newUsername').disabled=false;
+      $m('newWa').value=m.wa||'';
+      $m('newPassword').value='';
+      $m('modalBack').classList.add('show');
+    }catch(e){console.error('Admin edit member:',e);alert(e?.message||e)}
+  };
+
+  window.openModal=function(id){
+    if(id!==undefined&&id!==null&&String(id)!==''){
+      return window.adminEditMember(id);
+    }
+    $m('memberModalTitle').textContent='Tambah Member';
+    $m('editMemberId').value='';
+    $m('newName').value='';
+    $m('newUsername').value='';
+    $m('newUsername').disabled=false;
+    $m('newWa').value='';
+    $m('newPassword').value='';
+    $m('modalBack').classList.add('show');
+  };
+
+  window.saveMemberAdmin=async function(){
+    try{
+      await adminRequired();
+      const id=String($m('editMemberId')?.value||'').trim();
+      const name=String($m('newName')?.value||'').trim();
+      const username=String($m('newUsername')?.value||'').trim();
+      const wa=String($m('newWa')?.value||'').trim();
+      const password=String($m('newPassword')?.value||'');
+      if(!name||!username||!wa){alert('Nama, username, dan WhatsApp wajib diisi.');return}
+      if(!id&&!password){alert('Password wajib diisi untuk member baru.');return}
+
+      const r=await S().rpc('admin_member_upsert',{
+        p_id:id||null,
+        p_name:name,
+        p_username:username,
+        p_wa:wa,
+        p_password:password||null,
+        p_status:id ? ((window.members||members).find(x=>String(x.id)===id)?.status||'approved') : 'approved',
+        p_day:id ? Number((window.members||members).find(x=>String(x.id)===id)?.day||0) : 1
+      });
+      if(r.error)throw r.error;
+      if(!r.data?.success)throw new Error(r.data?.message||'Gagal menyimpan member.');
+      if(typeof closeModal==='function')closeModal();
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      alert('Data member berhasil disimpan ke database.');
+    }catch(e){console.error('Admin member save:',e);alert('Gagal menyimpan member: '+(e?.message||e))}
+  };
+
+  window.approveMember=async function(id){
+    try{
+      await adminRequired();
+      const r=await S().rpc('member_approve',{p_member_id:String(id)});
+      if(r.error)throw r.error;
+      if(!r.data?.success)throw new Error(r.data?.message||'Approval gagal.');
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      alert('Member berhasil di-approve.');
+    }catch(e){console.error('Admin approval:',e);alert('Gagal approve member: '+(e?.message||e))}
+  };
+
+  window.rejectMember=async function(id){
+    if(!confirm('Tolak/hapus pendaftaran member ini? Data member dan data terkait akan ikut dihapus.'))return;
+    try{
+      await adminRequired();
+      const r=await S().rpc('member_reject',{p_member_id:String(id)});
+      if(r.error)throw r.error;
+      if(!r.data?.success)throw new Error(r.data?.message||'Penolakan gagal.');
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      alert('Pendaftaran member ditolak dan dihapus.');
+    }catch(e){console.error('Admin reject:',e);alert('Gagal menolak member: '+(e?.message||e))}
+  };
+
+  window.deleteMember=async function(id){
+    if(!confirm('Hapus member ini beserta seluruh data aktivitas, lead, closing, dan checklist-nya?'))return;
+    try{
+      await adminRequired();
+      const r=await S().rpc('admin_member_delete',{p_member_id:String(id)});
+      if(r.error)throw r.error;
+      if(!r.data?.success)throw new Error(r.data?.message||'Penghapusan gagal.');
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      alert('Member dan data terkait berhasil dihapus.');
+    }catch(e){console.error('Admin delete member:',e);alert('Gagal menghapus member: '+(e?.message||e))}
+  };
+
+  window.renderMembers=function(){
+    const q=($m('memberSearch')?.value||'').toLowerCase().trim();
+    const rows=(window.members||members||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')))
+      .filter(m=>(String(m.name||'')+' '+String(m.username||'')+' '+String(m.wa||'')).toLowerCase().includes(q));
+    const body=$m('memberRows');if(!body)return;
+    body.innerHTML=rows.length?rows.map(m=>{
+      const id=safeId(m.id),pct=typeof progressOf==='function'?progressOf(m):Math.round((Number(m.day||0)/60)*100);
+      return '<tr data-member-id="'+escM(m.id)+'" style="cursor:pointer">'+
+        '<td><b>'+escM(m.name)+'</b></td>'+
+        '<td>'+escM(m.username)+'</td>'+
+        '<td><a target="_blank" href="'+(typeof waUrl==='function'?waUrl(m.wa):'#')+'" onclick="event.stopPropagation()">'+escM(m.wa)+'</a></td>'+
+        '<td><span class="status '+(m.status==='approved'?'active':'pending')+'">'+(m.status==='approved'?'AKTIF':'PENDING')+'</span></td>'+
+        '<td>'+escM(m.registeredAt||'-')+'</td>'+
+        '<td>'+Number(m.day||0)+'/60</td>'+
+        '<td><b>'+pct+'%</b><div class="pctBar"><span style="width:'+pct+'%"></span></div></td>'+
+        '<td>'+totalLead(m)+'</td><td>'+totalClosing(m)+'</td>'+
+        '<td><button class="btnMini" onclick="event.stopPropagation();adminEditMember('+id+')">Edit</button> '+
+        '<button class="btnMini" style="background:#fff0f0;color:#a33" onclick="event.stopPropagation();deleteMember('+id+')">Hapus</button></td>'+
+      '</tr>';
+    }).join(''):'<tr><td colspan="10"><div class="empty">Belum ada member yang terdaftar.</div></td></tr>';
+  };
+
+  window.renderApproval=function(){
+    const list=$m('approvalList');if(!list)return;
+    const p=(window.members||members||[]).filter(m=>m.status==='pending');
+    $m('pendingLabel').textContent=p.length+' pending';
+    list.className=p.length?'':'empty';
+    list.innerHTML=p.length?p.map(m=>{
+      const id=safeId(m.id);
+      return '<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
+        '<div><b>'+escM(m.name)+'</b><div class="muted">Daftar: '+escM(m.registeredAt||'-')+' • '+escM(m.username)+' • <a target="_blank" href="'+(typeof waUrl==='function'?waUrl(m.wa):'#')+'">'+escM(m.wa)+'</a></div></div>'+
+        '<div><button class="btnMini" onclick="approveMember('+id+')">✓ Approve</button> '+
+        '<button class="btnMini" style="background:#fff0f0;color:#a33" onclick="rejectMember('+id+')">Tolak</button></div>'+
+      '</div>';
+    }).join(''):'Belum ada pendaftaran.';
+  };
+
+  function bindMemberRows(){
+    const body=$m('memberRows');
+    if(!body||body.dataset.crudV2Bound)return;
+    body.dataset.crudV2Bound='1';
+    body.addEventListener('click',function(e){
+      if(e.target.closest('button,a'))return;
+      const tr=e.target.closest('tr[data-member-id]');
+      if(tr)window.adminEditMember(tr.dataset.memberId);
+    });
+  }
+
+  function boot(){
+    bindMemberRows();
+    if(currentRole==='admin'){window.renderMembers();window.renderApproval();}
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
+
+<!-- SCHEDULE CENTRAL KEY FIX V7 -->
+<script id="scheduleCentralKeyFixV7">
+(function(){
+  const C=()=>window.__umrohCentralConfig||null;
+  const esc=v=>typeof esc2==='function'?esc2(v):String(v??'');
+  const getSchedule=()=>{const c=C();return c&&Array.isArray(c.schedule)?JSON.parse(JSON.stringify(c.schedule)):[]};
+  window.openScheduleForm=function(id){
+    const x=id?getSchedule().find(a=>String(a.id)===String(id)):null;
+    $('scheduleModalTitle').textContent=x?'Edit Jadwal / Webinar':'Tambah Jadwal / Webinar';
+    $('schId').value=x?.id||'';
+    $('schName').value=x?.name||'';
+    $('schDate').value=x?.date||new Date().toISOString().slice(0,10);
+    $('schMode').value=x?.mode||'Online';
+    $('schLink').value=x?.link||'';
+    $('scheduleModal').classList.add('show');
+  };
+  window.closeScheduleForm=function(){$('scheduleModal').classList.remove('show')};
+  window.saveScheduleItem=async function(){
+    const name=$('schName').value.trim(),date=$('schDate').value,mode=$('schMode').value,link=$('schLink').value.trim(),rawId=$('schId').value;
+    if(!name||!date){alert('Nama kegiatan dan tanggal wajib diisi.');return}
+    const c=C(); if(!c){alert('Database konfigurasi belum siap.');return}
+    const arr=getSchedule(),id=rawId?String(rawId):'';
+    if(id){
+      const x=arr.find(a=>String(a.id)===id);
+      if(x){x.name=name;x.date=date;x.mode=mode;x.link=link}
+    }else{
+      arr.push({id:String(Date.now()),name,date,mode,link});
+    }
+    c.schedule=arr;
+    try{
+      const sb=window.supabaseClient;
+      if(!sb)throw new Error('Koneksi Supabase belum siap.');
+      const {data,error}=await sb.rpc('admin_config_save',{p_config_key:'schedule',p_config_value:arr});
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Akses Super Admin ditolak.');
+      window.__umrohCentralConfig.schedule=arr;
+      closeScheduleForm();
+      renderScheduleAdmin();
+      if(typeof renderInfoBars==='function')renderInfoBars();
+      alert('Jadwal disimpan.');
+    }catch(e){
+      console.error('Schedule save:',e);
+      alert('Gagal menyimpan jadwal ke database: '+(e?.message||e));
+    }
+  };
+  window.deleteScheduleItem=async function(id){
+    if(!confirm('Hapus jadwal ini?'))return;
+    const arr=getSchedule().filter(x=>String(x.id)!==String(id));
+    try{
+      const sb=window.supabaseClient;if(!sb)throw new Error('Koneksi Supabase belum siap.');
+      const {data,error}=await sb.rpc('admin_config_save',{p_config_key:'schedule',p_config_value:arr});
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Akses Super Admin ditolak.');
+      C().schedule=arr;renderScheduleAdmin();
+      if(typeof renderInfoBars==='function')renderInfoBars();
+    }catch(e){console.error('Schedule delete:',e);alert('Gagal menghapus jadwal: '+(e?.message||e))}
+  };
+  window.renderScheduleAdmin=function(){
+    const arr=getSchedule().slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const el=$('scheduleAdminWrap');if(!el)return;
+    el.innerHTML=arr.length?arr.map(x=>'<div class="scheduleRow"><div><b>'+esc(x.name)+'</b></div><div>'+esc(x.date)+'</div><div><span class="pill">'+esc(x.mode)+'</span></div><div>'+(x.link?'<a target="_blank" href="'+esc(x.link)+'">Buka Link</a>':'<span class="muted">Tidak ada link</span>')+'</div><div><button class="btnMini" onclick="openScheduleForm('+JSON.stringify(String(x.id))+')">Edit</button> <button class="btnMini" onclick="deleteScheduleItem('+JSON.stringify(String(x.id))+')">Hapus</button></div></div>').join(''):'<div class="empty">Belum ada jadwal atau webinar.</div>';
+  };
+})();
+</script>
+<!-- SUPER ADMIN PASSWORD RESET V6 -->
+<style id="superAdminPasswordResetV6">
+#adminPasswordHelp{font-size:12px;color:#6f7d95;margin-top:6px;line-height:1.45}
+#adminPasswordTools{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+#adminPasswordTools button{border:0;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer}
+</style>
+<script id="superAdminPasswordResetV6">
+(function(){
+  function el(id){return document.getElementById(id)}
+  function randomPassword(){
+    const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    const a=new Uint32Array(10); crypto.getRandomValues(a);
+    let s=''; for(let i=0;i<a.length;i++) s+=chars[a[i]%chars.length];
+    return s;
+  }
+  function ensureTools(){
+    const input=el('newPassword'); if(!input||el('adminPasswordTools'))return;
+    input.type='text';
+    input.autocomplete='new-password';
+    input.placeholder='Kosongkan jika password tidak diubah';
+    const help=document.createElement('div');
+    help.id='adminPasswordHelp';
+    help.textContent='Password lama tidak disimpan dalam bentuk yang bisa dibaca kembali. Jika member lupa, buat password baru di sini lalu klik Simpan Member.';
+    const tools=document.createElement('div');
+    tools.id='adminPasswordTools';
+    const b=document.createElement('button');
+    b.type='button';
+    b.textContent='🔑 Buat Password Baru';
+    b.onclick=function(){ input.value=randomPassword(); input.focus(); };
+    const copy=document.createElement('button');
+    copy.type='button';
+    copy.textContent='📋 Salin';
+    copy.onclick=async function(){
+      if(!input.value){alert('Buat password baru dulu.');return}
+      try{await navigator.clipboard.writeText(input.value);alert('Password baru disalin.')}catch(e){input.select();document.execCommand('copy');alert('Password baru disalin.')}
+    };
+    tools.appendChild(b); tools.appendChild(copy);
+    input.parentNode.appendChild(help); input.parentNode.appendChild(tools);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ensureTools);else ensureTools();
+  new MutationObserver(ensureTools).observe(document.body,{subtree:true,childList:true});
+})();
+</script>
+<!-- SUPER ADMIN CRUD HARD FIX V5: restore modal/action layer + Super Admin interaction -->
+<style id="superAdminCrudHardFixV5">
+/* Modal must sit above every admin panel/button layer. */
+.modalBack,
+#memberModal,
+#scheduleModal,
+#infoBarModal,
+#popupModal{
+  z-index:10000!important;
+  pointer-events:auto!important;
+}
+.modalBack.show{display:grid!important;pointer-events:auto!important}
+.modalBack.show .modal{position:relative!important;z-index:10001!important;pointer-events:auto!important}
+.modalBack.show .modal button,
+.modalBack.show .modal input,
+.modalBack.show .modal textarea,
+.modalBack.show .modal select{pointer-events:auto!important}
+</style>
+<!-- SUPER ADMIN CRUD HARD FIX V4 -->
+<style id="superAdminCrudHardFixV4">
+#page-members{position:relative!important;z-index:100!important}
+#page-members .panel{position:relative!important;z-index:101!important}
+#page-members button,#page-members a{pointer-events:auto!important}
+#page-members .btnMini{cursor:pointer!important;position:relative!important;z-index:1000!important;touch-action:manipulation!important}
+</style>
+<script id="superAdminCrudHardFixV4">
+(function(){
+  'use strict';
+  function el(id){return document.getElementById(id)}
+  function bind(){
+    document.querySelectorAll('#page-members [data-crud-action]').forEach(function(btn){
+      if(btn.dataset.v4==='1')return;
+      btn.dataset.v4='1'; btn.type='button'; btn.style.pointerEvents='auto';
+      btn.onclick=function(e){
+        e.preventDefault(); e.stopPropagation();
+        var id=btn.getAttribute('data-id'), a=btn.getAttribute('data-crud-action');
+        if(btn.dataset.busy==='1')return;
+        btn.dataset.busy='1'; btn.disabled=true;
+        Promise.resolve().then(function(){
+          if(a==='approve')return window.approveMember(String(id));
+          if(a==='reject')return window.rejectMember(String(id));
+          if(a==='edit')return window.adminEditMember(String(id));
+          if(a==='delete')return window.deleteMember(String(id));
+        }).catch(function(err){console.error('CRUD V4',err);alert('Gagal: '+(err&&err.message||err))})
+        .finally(function(){btn.disabled=false;delete btn.dataset.busy});
+      };
+    });
+  }
+  function repaint(){
+    var body=el('memberRows'), list=el('approvalList');
+    if(body){
+      body.querySelectorAll('button').forEach(function(b){
+        var text=(b.textContent||'').trim().toLowerCase();
+        var oc=b.getAttribute('onclick')||'';
+        var id=null;
+        if(text==='edit') id=(oc.match(/openModal\(([^)]+)\)/)||[])[1];
+        if(text==='hapus') id=(oc.match(/deleteMember\(([^)]+)\)/)||[])[1] || (b.closest('tr')||{}).getAttribute?.('data-member-id');
+        if(id){b.removeAttribute('onclick');b.setAttribute('data-crud-action',text==='edit'?'edit':'delete');b.setAttribute('data-id',String(id).replace(/["']/g,''));}
+      });
+    }
+    if(list){
+      list.querySelectorAll('button').forEach(function(b){
+        var text=(b.textContent||'').trim().toLowerCase(), oc=b.getAttribute('onclick')||'';
+        var id=(oc.match(/(?:approveMember|rejectMember)\(([^)]+)\)/)||[])[1];
+        if(id){b.removeAttribute('onclick');b.setAttribute('data-crud-action',text.indexOf('approve')>=0?'approve':'reject');b.setAttribute('data-id',String(id).replace(/["']/g,''));}
+      });
+    }
+    bind();
+  }
+  function install(){
+    repaint();
+    document.addEventListener('click',function(e){
+      var b=e.target && e.target.closest ? e.target.closest('#page-members [data-crud-action]') : null;
+      if(b && b.dataset.v4!=='1') { e.preventDefault(); e.stopPropagation(); }
+    },true);
+    var target=el('page-members')||document.body;
+    new MutationObserver(function(){repaint()}).observe(target,{subtree:true,childList:true});
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(install,300)});
+  else setTimeout(install,300);
 })();
 </script>
 </body>
 </html>
+
+<style id="superAdminActionInteractionFixV3">
+/* V3 — Super Admin actions: explicit button hit-area + delegated handlers.
+   This is intentionally scoped to supabase-live-v1. */
+#page-members .btnMini,
+#page-members button,
+#page-members a { position:relative; z-index:5; pointer-events:auto; }
+#page-members .panel,
+#page-members .tableWrap,
+#page-members #memberRows,
+#page-members #approvalList { position:relative; z-index:2; }
+#page-members .actionBusy { opacity:.65; pointer-events:none!important; }
+</style>
+<script id="superAdminActionInteractionFixV3">
+(function(){
+  const M=()=>window.members||members||[];
+  const byId=id=>document.getElementById(id);
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  const sid=v=>String(v??'');
+  function rowMember(id){return M().find(x=>sid(x.id)===sid(id));}
+  function setBusy(el,on){if(el)el.classList.toggle('actionBusy',!!on);}
+
+  async function runAction(el,fn){
+    setBusy(el,true);
+    try{await fn()}finally{setBusy(el,false)}
+  }
+
+  function renderApprovalV3(){
+    const list=byId('approvalList'); if(!list)return;
+    const pending=M().filter(m=>String(m.status)==='pending');
+    const label=byId('pendingLabel'); if(label)label.textContent=pending.length+' pending';
+    if(!pending.length){list.className='empty';list.innerHTML='Belum ada pendaftaran.';return}
+    list.className='';
+    list.innerHTML=pending.map(m=>{
+      const id=esc(m.id);
+      return '<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
+        '<div><b>'+esc(m.name)+'</b><div class="muted">Daftar: '+esc(m.registeredAt||'-')+' • '+esc(m.username)+' • <a target="_blank" rel="noopener" href="'+(typeof waUrl==='function'?waUrl(m.wa):'#')+'">'+esc(m.wa)+'</a></div></div>'+
+        '<div class="linkBtns" style="margin-top:0">'+
+        '<button type="button" class="btnMini" data-admin-action="approve" data-id="'+id+'">✓ Approve</button>'+
+        '<button type="button" class="btnMini" style="background:#fff0f0;color:#a33" data-admin-action="reject" data-id="'+id+'">Tolak</button>'+
+        '</div></div>';
+    }).join('');
+  }
+
+  function renderMembersV3(){
+    const body=byId('memberRows'); if(!body)return;
+    const q=(byId('memberSearch')?.value||'').toLowerCase().trim();
+    const rows=M().slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')))
+      .filter(m=>(String(m.name||'')+' '+String(m.username||'')+' '+String(m.wa||'')).toLowerCase().includes(q));
+    body.innerHTML=rows.length?rows.map(m=>{
+      const id=esc(m.id);
+      const pct=typeof progressOf==='function'?progressOf(m):Math.round((Number(m.day||0)/60)*100);
+      return '<tr data-member-id="'+id+'">'+
+        '<td><b>'+esc(m.name)+'</b></td><td>'+esc(m.username)+'</td>'+
+        '<td><a target="_blank" rel="noopener" href="'+(typeof waUrl==='function'?waUrl(m.wa):'#')+'">'+esc(m.wa)+'</a></td>'+
+        '<td><span class="status '+(m.status==='approved'?'active':'pending')+'">'+(m.status==='approved'?'AKTIF':'PENDING')+'</span></td>'+
+        '<td>'+esc(m.registeredAt||'-')+'</td><td>'+Number(m.day||0)+'/60</td>'+
+        '<td><b>'+pct+'%</b><div class="pctBar"><span style="width:'+pct+'%"></span></div></td>'+
+        '<td>'+totalLead(m)+'</td><td>'+totalClosing(m)+'</td>'+
+        '<td><button type="button" class="btnMini" data-admin-action="edit" data-id="'+id+'">Edit</button> '+
+        '<button type="button" class="btnMini" style="background:#fff0f0;color:#a33" data-admin-action="delete" data-id="'+id+'">Hapus</button></td>'+
+        '</tr>';
+    }).join(''):'<tr><td colspan="10"><div class="empty">Belum ada member yang terdaftar.</div></td></tr>';
+  }
+
+  function bind(containerId){
+    const el=byId(containerId); if(!el||el.dataset.actionFixV3)return;
+    el.dataset.actionFixV3='1';
+    el.addEventListener('click',function(e){
+      const b=e.target.closest('[data-admin-action]');
+      if(!b||!el.contains(b))return;
+      e.preventDefault();e.stopPropagation();
+      const id=b.getAttribute('data-id');
+      const action=b.getAttribute('data-admin-action');
+      runAction(b,async()=>{
+        if(action==='approve')return window.approveMember(id);
+        if(action==='reject')return window.rejectMember(id);
+        if(action==='edit')return window.adminEditMember(id);
+        if(action==='delete')return window.deleteMember(id);
+      }).catch(err=>console.error('Admin action V3:',err));
+    },true);
+  }
+
+  window.renderApprovalV3=renderApprovalV3;
+  window.renderMembersV3=renderMembersV3;
+
+  const oldRenderMembers=window.renderMembers;
+  window.renderMembers=function(){
+    try{if(typeof oldRenderMembers==='function')oldRenderMembers.apply(this,arguments)}catch(e){console.warn('renderMembers base:',e)}
+    try{renderMembersV3()}catch(e){console.error('renderMembers V3:',e)}
+  };
+  const oldRenderApproval=window.renderApproval;
+  window.renderApproval=function(){
+    try{if(typeof oldRenderApproval==='function')oldRenderApproval.apply(this,arguments)}catch(e){console.warn('renderApproval base:',e)}
+    try{renderApprovalV3()}catch(e){console.error('renderApproval V3:',e)}
+  };
+
+  function boot(){
+    bind('approvalList');bind('memberRows');
+    if(currentRole==='admin'){renderMembersV3();renderApprovalV3()}
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
+
+<!-- CENTRAL MEMBER DELIVERY + CHECKLIST FIX V8 -->
+<style id="centralMemberDeliveryFixV8">
+#memberChecks{position:relative!important;z-index:20!important;pointer-events:auto!important}
+#memberChecks .check{position:relative!important;z-index:21!important;pointer-events:auto!important;cursor:pointer!important}
+#memberChecks .check input{position:relative!important;z-index:22!important;pointer-events:auto!important;cursor:pointer!important}
+#memberPopupOverlay{z-index:50000!important}
+#memberPopupOverlay.show{pointer-events:auto!important}
+</style>
+<script id="centralMemberDeliveryFixV8">
+(function(){
+  const S=()=>window.supabaseClient||null;
+  const T=()=>window.umrohMemberSession?.get?.()||'';
+  const cfg=()=>window.__umrohCentralConfig||{};
+  const clone=v=>{try{return JSON.parse(JSON.stringify(v))}catch(e){return v}};
+  const tasksFor=day=>{
+    const c=cfg().checklist;
+    if(c&&c[day]&&Array.isArray(c[day].tasks))return c[day].tasks;
+    if(typeof window.tasksForDay==='function')return window.tasksForDay(day)||[];
+    return [];
+  };
+  const stateFor=(day)=>{
+    currentUser.checks=currentUser.checks||{};
+    currentUser.checks[day]=currentUser.checks[day]||{};
+    const st=currentUser.checks[day];
+    tasksFor(day).forEach((_,i)=>{if(typeof st[i]!=='boolean')st[i]=false});
+    return st;
+  };
+
+  window.renderInfoBars=function(){
+    const arr=Array.isArray(cfg().info_bars)?cfg().info_bars:[];
+    const active=arr.filter(x=>x&&x.active!==false);
+    const items=active.length?active.map(x=>'📢 <b>'+String(x.title||'Info').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))+'</b> • '+String(x.text||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))):['📢 Belum ada Info Bar aktif.'];
+    document.querySelectorAll('.infoTrack').forEach(t=>{const html=items.map(x=>'<div class="infoItem">'+x+'</div>').join('');t.innerHTML=html+html});
+  };
+
+  window.forceMemberPopup=function(){
+    if(currentRole!=='member'||!currentUser)return false;
+    const arr=Array.isArray(cfg().popups)?cfg().popups:[];
+    const x=arr.filter(v=>v&&v.active!==false).sort((a,b)=>Number(b.updatedAt||b.createdAt||b.id||0)-Number(a.updatedAt||a.createdAt||a.id||0))[0];
+    if(!x)return false;
+    const ov=$('memberPopupOverlay');if(!ov)return false;
+    const img=$('memberPopupImage'),title=$('memberPopupTitle'),txt=$('memberPopupText'),btn=$('memberPopupButton');
+    if(x.image){img.src=x.image;img.style.display='block'}else{img.removeAttribute('src');img.style.display='none'}
+    title.textContent=x.title||'';title.style.display=x.title?'block':'none';
+    txt.textContent=x.text||'';txt.style.display=x.text?'block':'none';
+    if(x.button&&x.link){btn.textContent=x.button;btn.href=x.link;btn.style.display='inline-flex'}else btn.style.display='none';
+    ov.classList.add('show');
+    return true;
+  };
+
+  window.toggleCheck=async function(i,val){
+    if(currentRole!=='member'||!currentUser)return;
+    const day=currentDay(),st=stateFor(day);
+    st[i]=!!val;
+    try{
+      const sb=S();if(!sb||!T())throw new Error('Sesi member belum siap.');
+      const {data,error}=await sb.rpc('member_checklist_upsert',{p_token:T(),p_program_day:day,p_checks:st});
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Checklist gagal disimpan.');
+      currentUser.checks[day]=clone(st);
+      if(typeof renderMember==='function')renderMember();
+    }catch(e){
+      st[i]=!val;
+      const input=document.querySelector('#memberChecks input[data-check-index="'+i+'"]');
+      if(input)input.checked=st[i];
+      alert('Checklist gagal disimpan ke database: '+(e?.message||e));
+    }
+  };
+
+  function bindChecks(){
+    const wrap=$('memberChecks');if(!wrap)return;
+    wrap.querySelectorAll('input[type="checkbox"]').forEach((input,i)=>{
+      input.dataset.checkIndex=String(i);
+      input.disabled=false;
+      input.style.pointerEvents='auto';
+      input.onclick=function(e){e.stopPropagation()};
+      input.onchange=function(){window.toggleCheck(i,input.checked)};
+    });
+  }
+
+  const baseRender=window.renderMember;
+  window.renderMember=function(){
+    try{if(typeof baseRender==='function')baseRender.apply(this,arguments)}catch(e){console.warn('member render base',e)}
+    try{renderInfoBars();bindChecks()}catch(e){}
+    setTimeout(()=>{try{bindChecks();if(!document.hidden)window.forceMemberPopup()}catch(e){}},150);
+  };
+
+  async function loadAgain(){
+    try{
+      if(typeof window.loadMemberCentral==='function')await window.loadMemberCentral();
+      if(typeof window.renderMember==='function')window.renderMember();
+    }catch(e){console.warn('central member refresh',e)}
+  }
+
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&currentRole==='member')setTimeout(loadAgain,100)});
+  setTimeout(()=>{if(currentRole==='member')loadAgain()},900);
+})();
+</script>
+<!-- POPUP ONCE PER LOGIN FINAL V9 -->
+<script id="popupOncePerLoginFinalV9">
+(function(){
+  let shownUserId=null;
+  let wasMember=false;
+  const keyFor=u=>String(u?.id||u?.username||'');
+  const originalForce=window.forceMemberPopup;
+  window.forceMemberPopup=function(){
+    if(typeof currentRole==='undefined'||currentRole!=='member'||!currentUser)return false;
+    const id=keyFor(currentUser);
+    if(!wasMember || shownUserId!==id){
+      shownUserId=null;
+      wasMember=true;
+    }
+    if(shownUserId===id)return false;
+    const result=typeof originalForce==='function'?originalForce.apply(this,arguments):false;
+    if(result!==false){
+      shownUserId=id;
+      try{sessionStorage.setItem('pasukanUmrohPopupShownThisLogin','1')}catch(e){}
+    }
+    return result;
+  };
+  const tick=()=>{
+    if(typeof currentRole==='undefined'||currentRole!=='member'||!currentUser){
+      wasMember=false;
+      shownUserId=null;
+      return;
+    }
+    window.forceMemberPopup();
+  };
+  setInterval(tick,1000);
+})();
+</script>
+<!-- MEMBER SCHEDULE WEBINAR CARD V10 -->
+<style id="memberScheduleWebinarCardV10">
+#memberScheduleWebinarCard{margin-top:12px}
+#memberScheduleWebinarCard .swGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#memberScheduleWebinarCard .swItem{border:1px solid var(--line,#e6e9ef);border-radius:10px;padding:10px;background:#fff}
+#memberScheduleWebinarCard .swDate{font-size:11px;color:#71809a;margin-bottom:4px}
+#memberScheduleWebinarCard .swName{font-weight:800;color:#172a55}
+#memberScheduleWebinarCard .swMode{font-size:11px;margin-top:5px;color:#65738c}
+#memberScheduleWebinarCard .swLink{display:inline-block;margin-top:7px;font-size:11px;font-weight:800}
+@media(max-width:700px){#memberScheduleWebinarCard .swGrid{grid-template-columns:1fr}}
+</style>
+<script id="memberScheduleWebinarCardV10">
+(function(){
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  function render(){
+    if(typeof currentRole==='undefined'||currentRole!=='member'||!currentUser)return;
+    const root=document.getElementById('page-memberDashboard');
+    if(!root)return;
+    let card=document.getElementById('memberScheduleWebinarCard');
+    if(!card){
+      card=document.createElement('div');
+      card.id='memberScheduleWebinarCard';
+      const kpi=root.querySelector('.kpi');
+      if(kpi&&kpi.parentNode)kpi.parentNode.insertBefore(card,kpi.nextSibling);
+      else root.prepend(card);
+    }
+    const arr=Array.isArray(window.__umrohCentralConfig?.schedule)?window.__umrohCentralConfig.schedule.slice():[];
+    arr.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+    const upcoming=arr.filter(x=>String(x.date||'')>=new Date().toISOString().slice(0,10));
+    const list=(upcoming.length?upcoming:arr).slice(0,4);
+    const webinars=list.filter(x=>/webinar|kajian|kelas|training/i.test(String(x.name||'')));
+    const shown=webinars.length?webinars:list;
+    card.innerHTML='<div class="panel"><h3 style="margin-bottom:8px">📅 Jadwal Webinar / Kajian</h3>'+(shown.length?'<div class="swGrid">'+shown.map(x=>'<div class="swItem"><div class="swDate">'+esc(x.date||'')+'</div><div class="swName">'+esc(x.name||'Kegiatan')+'</div><div class="swMode">'+esc(x.mode||'')+'</div>'+(x.link?'<a class="swLink" target="_blank" rel="noopener" href="'+esc(x.link)+'">🔗 Buka Link</a>':'')+'</div>').join('')+'</div>':'<div class="notice">Belum ada jadwal webinar/kajian.</div>')+'</div>';
+  }
+  const old=window.renderMember;
+  window.renderMember=function(){try{if(typeof old==='function')old.apply(this,arguments)}finally{setTimeout(render,0)}};
+  setTimeout(render,1200);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(render,150)});
+})();
+</script>
+
+<!-- FINAL CROSS DEVICE HARD FIX V11 -->
+<style id="finalCrossDeviceHardFixV11">
+#page-members button,#page-members a,#page-members input,
+#memberChecks,#memberChecks *{pointer-events:auto!important}
+#page-members button,#memberChecks input[type="checkbox"]{cursor:pointer!important}
+#memberChecks{position:relative!important;z-index:200!important}
+#memberChecks .check{position:relative!important;z-index:201!important}
+#memberChecks input[type="checkbox"]{position:relative!important;z-index:202!important;width:18px!important;height:18px!important}
+#memberPopupOverlay{z-index:50000!important}
+#memberPopupOverlay.show{pointer-events:auto!important}
+</style>
+<script id="finalCrossDeviceHardFixV11">
+(function(){
+  const SB=()=>window.supabaseClient||null;
+  const TOK=()=>window.umrohMemberSession?.get?.()||'';
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  const today=()=>new Date().toISOString().slice(0,10);
+
+  /* 1) MEMBER CHECKLIST: one authoritative handler, always writes Supabase. */
+  let checklistBound=false;
+  async function saveCheck(index,checked,input){
+    if(currentRole!=='member'||!currentUser)return;
+    const day=typeof currentDay==='function'?currentDay():Math.max(1,Number(currentUser.day||1));
+    currentUser.checks=currentUser.checks||{};
+    currentUser.checks[day]=currentUser.checks[day]||{};
+    currentUser.checks[day][index]=!!checked;
+    const snapshot=JSON.parse(JSON.stringify(currentUser.checks[day]));
+    try{
+      const sb=SB(),token=TOK();
+      if(!sb||!token)throw new Error('Sesi member belum siap.');
+      const {data,error}=await sb.rpc('member_checklist_upsert',{
+        p_token:token,p_program_day:day,p_checks:snapshot
+      });
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Checklist gagal disimpan.');
+      if(input)input.checked=!!checked;
+      if(typeof renderMember==='function')renderMember();
+    }catch(e){
+      currentUser.checks[day][index]=!checked;
+      if(input)input.checked=!checked;
+      alert('Checklist gagal disimpan ke database: '+(e?.message||e));
+    }
+  }
+  function bindChecklist(){
+    const wrap=document.getElementById('memberChecks');if(!wrap)return;
+    wrap.querySelectorAll('input[type="checkbox"]').forEach((input,i)=>{
+      input.disabled=false;
+      input.dataset.finalCheckV11='1';
+      input.onchange=function(e){
+        e.stopPropagation();
+        saveCheck(i,this.checked,this);
+      };
+      input.onclick=function(e){e.stopPropagation()};
+    });
+    checklistBound=true;
+  }
+  document.addEventListener('change',function(e){
+    const input=e.target?.closest?.('#memberChecks input[type="checkbox"]');
+    if(!input||input.dataset.finalCheckV11==='1')return;
+    const inputs=[...document.querySelectorAll('#memberChecks input[type="checkbox"]')];
+    const i=inputs.indexOf(input);if(i<0)return;
+    e.stopPropagation();
+    saveCheck(i,input.checked,input);
+  },true);
+
+  /* 2) MEMBER SCHEDULE/WEBINAR: read the same central Supabase config. */
+  function scheduleData(){
+    const c=window.__umrohCentralConfig||{};
+    return Array.isArray(c.schedule)?c.schedule:[];
+  }
+  function renderMemberSchedule(){
+    if(currentRole!=='member'||!currentUser)return;
+    const root=document.getElementById('page-memberDashboard');if(!root)return;
+    let card=document.getElementById('memberScheduleWebinarCard');
+    if(!card){
+      card=document.createElement('div');
+      card.id='memberScheduleWebinarCard';
+      const kpi=root.querySelector('.kpi');
+      if(kpi?.parentNode)kpi.parentNode.insertBefore(card,kpi.nextSibling);
+      else root.insertBefore(card,root.firstChild);
+    }
+    const arr=scheduleData().slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+    const upcoming=arr.filter(x=>String(x.date||'')>=today());
+    const source=(upcoming.length?upcoming:arr).slice(0,6);
+    const webinar=source.filter(x=>/webinar|kajian|kelas|training/i.test(String(x.name||'')));
+    const shown=webinar.length?webinar:source;
+    card.innerHTML='<div class="panel"><h3>📅 Jadwal Webinar / Kegiatan</h3>'+
+      (shown.length
+        ?'<div class="swGrid">'+shown.map(x=>'<div class="swItem"><div class="swDate">'+esc(x.date)+'</div><div class="swName">'+esc(x.name||'Kegiatan')+'</div><div class="swMode">'+esc(x.mode||'')+'</div>'+(x.link?'<a class="swLink" target="_blank" rel="noopener" href="'+esc(x.link)+'">🔗 Buka Link</a>':'')+'</div>').join('')+'</div>'
+        :'<div class="notice">Belum ada jadwal webinar/kegiatan yang dijadwalkan oleh Super Admin.</div>')+
+      '</div>';
+  }
+
+  /* 3) POPUP: hard once-per-login lock. Existing timers can call this every second,
+        but after first display they become harmless. */
+  let popupShownFor='';
+  function loginKey(){
+    return String(currentUser?.id||currentUser?.username||'');
+  }
+  window.forceMemberPopup=function(){
+    if(currentRole!=='member'||!currentUser)return false;
+    const key=loginKey();if(!key)return false;
+    const lock='pasukanUmrohPopupShownThisLogin';
+    try{
+      if(sessionStorage.getItem(lock)==='1')return false;
+    }catch(e){}
+    if(popupShownFor===key)return false;
+    const cfg=window.__umrohCentralConfig||{};
+    const arr=Array.isArray(cfg.popups)?cfg.popups:[];
+    const x=arr.filter(v=>v&&v.active!==false).sort((a,b)=>Number(b.updatedAt||b.createdAt||b.id||0)-Number(a.updatedAt||a.createdAt||a.id||0))[0];
+    const ov=document.getElementById('memberPopupOverlay');if(!x||!ov)return false;
+    const img=document.getElementById('memberPopupImage'),title=document.getElementById('memberPopupTitle'),txt=document.getElementById('memberPopupText'),btn=document.getElementById('memberPopupButton');
+    if(x.image){img.src=x.image;img.style.display='block'}else{img.removeAttribute('src');img.style.display='none'}
+    title.textContent=x.title||'';title.style.display=x.title?'block':'none';
+    txt.textContent=x.text||'';txt.style.display=x.text?'block':'none';
+    if(x.button&&x.link){btn.textContent=x.button;btn.href=x.link;btn.style.display='inline-flex'}else btn.style.display='none';
+    ov.classList.add('show');
+    popupShownFor=key;
+    try{sessionStorage.setItem(lock,'1')}catch(e){}
+    return true;
+  };
+
+  /* 4) MEMBER RENDER: keep Supabase state + schedule + checklist bound. */
+  const prevRender=window.renderMember;
+  window.renderMember=function(){
+    try{if(typeof prevRender==='function')prevRender.apply(this,arguments)}catch(e){console.warn('renderMember:',e)}
+    setTimeout(function(){bindChecklist();renderMemberSchedule()},0);
+  };
+
+  /* 5) Refresh central config/activity when member becomes visible. */
+  async function refreshMember(){
+    if(currentRole!=='member'||!currentUser)return;
+    try{
+      if(typeof window.loadMemberCentral==='function')await window.loadMemberCentral();
+    }catch(e){console.warn('member central refresh:',e)}
+    bindChecklist();renderMemberSchedule();
+  }
+
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden&&currentRole==='member')setTimeout(refreshMember,100);
+  });
+  window.addEventListener('pageshow',function(){if(currentRole==='member')setTimeout(refreshMember,100)});
+  setTimeout(function(){if(currentRole==='member')refreshMember()},500);
+
+  /* 6) SUPER ADMIN: force all CRUD buttons to be clickable and route to
+        the existing Supabase RPC-backed functions. */
+  function bindAdminActions(){
+    if(currentRole!=='admin')return;
+    const root=document.getElementById('page-members');if(!root)return;
+    root.querySelectorAll('button').forEach(b=>{
+      const text=(b.textContent||'').trim().toLowerCase();
+      let action=b.dataset.adminAction||b.dataset.crudAction||'';
+      let id=b.dataset.id||'';
+      const oc=b.getAttribute('onclick')||'';
+      if(!action){
+        const m=oc.match(/(?:approveMember|rejectMember|adminEditMember|deleteMember|openModal)\\(([^)]+)\\)/);
+        if(m)id=id||String(m[1]).replace(/['"]+/g,'');
+        if(text.includes('approve'))action='approve';
+        else if(text==='tolak'||text.includes('tolak'))action='reject';
+        else if(text==='edit')action='edit';
+        else if(text==='hapus'||text.includes('hapus'))action='delete';
+      }
+      if(!action) return;
+      b.style.pointerEvents='auto';b.style.position='relative';b.style.zIndex='9999';b.disabled=false;
+      b.onclick=async function(e){
+        e.preventDefault();e.stopPropagation();
+        try{
+          if(action==='approve')await window.approveMember(id);
+          else if(action==='reject')await window.rejectMember(id);
+          else if(action==='edit')await window.adminEditMember(id);
+          else if(action==='delete')await window.deleteMember(id);
+        }catch(err){console.error('Super Admin CRUD:',err);alert(err?.message||err)}
+      };
+    });
+  }
+  const observer=new MutationObserver(function(){
+    if(currentRole==='member')bindChecklist();
+    if(currentRole==='admin')bindAdminActions();
+  });
+  const start=document.body;
+  if(start)observer.observe(start,{subtree:true,childList:true});
+  setTimeout(function(){bindChecklist();renderMemberSchedule();bindAdminActions()},250);
+})();
+</script>
+
+<!-- FINAL MEMBER 10 MIN POPUP + CENTRAL SCHEDULE + ADMIN RIGHTS V12 -->
+<style id="finalMember10MinV12">
+#page-members button,#page-members input,#page-members select,#page-members textarea,#page-members a{pointer-events:auto!important}
+#page-members button{cursor:pointer!important;position:relative!important;z-index:10000!important}
+</style>
+<script id="finalMember10MinV12">
+(function(){
+  const TEN_MIN=10*60*1000;
+  const POP_TS='pasukanUmrohPopupLastShownAtV12';
+  const SB=()=>window.supabaseClient||null;
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  const key=()=>String(currentUser?.id||currentUser?.username||'');
+  function ts(){try{return Number(sessionStorage.getItem(POP_TS)||0)}catch(e){return 0}}
+  function setTs(v){try{sessionStorage.setItem(POP_TS,String(v))}catch(e){}}
+  function popupData(){const c=window.__umrohCentralConfig||{};return Array.isArray(c.popups)?c.popups.filter(x=>x&&x.active!==false).sort((a,b)=>Number(b.updatedAt||b.createdAt||b.id||0)-Number(a.updatedAt||a.createdAt||a.id||0))[0]:null}
+  function closePopup(){document.getElementById('memberPopupOverlay')?.classList.remove('show')}
+  function drawPopup(x){
+    const ov=document.getElementById('memberPopupOverlay');if(!x||!ov)return false;
+    const img=document.getElementById('memberPopupImage'),title=document.getElementById('memberPopupTitle'),txt=document.getElementById('memberPopupText'),btn=document.getElementById('memberPopupButton');
+    if(img){if(x.image){img.src=x.image;img.style.display='block'}else{img.removeAttribute('src');img.style.display='none'}}
+    if(title){title.textContent=x.title||'';title.style.display=x.title?'block':'none'}
+    if(txt){txt.textContent=x.text||'';txt.style.display=x.text?'block':'none'}
+    if(btn){if(x.button&&x.link){btn.textContent=x.button;btn.href=x.link;btn.style.display='inline-flex'}else btn.style.display='none'}
+    ov.classList.add('show');return true;
+  }
+  window.forceMemberPopup=function(){
+    if(currentRole!=='member'||!currentUser)return false;
+    const now=Date.now(),last=ts();
+    if(last && now-last<TEN_MIN){closePopup();return false}
+    const x=popupData();if(!x)return false;
+    if(drawPopup(x)){setTs(now);return true}
+    return false;
+  };
+
+  /* Override the legacy renderer chain so its old showActivePopup() cannot
+     reopen the popup every render. */
+  const previousRender=window.renderMember;
+  window.renderMember=function(){
+    try{if(typeof previousRender==='function')previousRender.apply(this,arguments)}catch(e){console.warn('member render chain:',e)}
+    setTimeout(function(){
+      bindChecklist();
+      renderSchedule();
+      if(currentRole==='member'&&currentUser){
+        const last=ts();
+        if(last && Date.now()-last<TEN_MIN) closePopup();
+        else window.forceMemberPopup();
+      }
+    },0);
+  };
+
+  /* Re-read schedule directly from Supabase after every central refresh.
+     This removes stale/empty in-memory config as the source of truth. */
+  async function loadScheduleFromSupabase(){
+    const sb=SB();if(!sb)return [];
+    try{
+      const {data,error}=await sb.from('program_configs').select('config_value').eq('config_key','schedule').maybeSingle();
+      if(error)throw error;
+      const arr=Array.isArray(data?.config_value)?data.config_value:[];
+      if(window.__umrohCentralConfig)window.__umrohCentralConfig.schedule=arr;
+      return arr;
+    }catch(e){console.warn('Schedule central load:',e);return Array.isArray(window.__umrohCentralConfig?.schedule)?window.__umrohCentralConfig.schedule:[]}
+  }
+  function renderSchedule(arr){
+    if(currentRole!=='member'||!currentUser)return;
+    const root=document.getElementById('page-memberDashboard');if(!root)return;
+    let card=document.getElementById('memberScheduleWebinarCard');
+    if(!card){card=document.createElement('div');card.id='memberScheduleWebinarCard';const k=root.querySelector('.kpi');if(k?.parentNode)k.parentNode.insertBefore(card,k.nextSibling);else root.prepend(card)}
+    arr=Array.isArray(arr)?arr.slice():[];
+    arr.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+    const today=new Date().toISOString().slice(0,10);
+    const upcoming=arr.filter(x=>String(x.date||'')>=today);
+    const shown=(upcoming.length?upcoming:arr).slice(0,6);
+    card.innerHTML='<div class="panel"><h3>📅 Jadwal Webinar / Kegiatan</h3>'+
+      (shown.length?'<div class="swGrid">'+shown.map(x=>'<div class="swItem"><div class="swDate">'+esc(x.date||'')+'</div><div class="swName">'+esc(x.name||'Kegiatan')+'</div><div class="swMode">'+esc(x.mode||'')+'</div>'+(x.link?'<a class="swLink" target="_blank" rel="noopener" href="'+esc(x.link)+'">🔗 Buka Link</a>':'')+'</div>').join('')+'</div>':'<div class="notice">Belum ada jadwal/webinar yang disimpan oleh Super Admin.</div>')+
+      '</div>';
+  }
+
+  async function refreshMemberCentralV12(){
+    if(currentRole!=='member'||!currentUser)return;
+    try{if(typeof window.loadMemberCentral==='function')await window.loadMemberCentral()}catch(e){console.warn('central member load:',e)}
+    const arr=await loadScheduleFromSupabase();
+    bindChecklist();renderSchedule(arr);
+  }
+
+  function bindChecklist(){
+    const wrap=document.getElementById('memberChecks');if(!wrap)return;
+    [...wrap.querySelectorAll('input[type="checkbox"]')].forEach((input,i)=>{
+      input.disabled=false;input.style.pointerEvents='auto';input.style.cursor='pointer';
+      input.dataset.finalCheckV12='1';
+      input.onchange=async function(e){
+        e.stopPropagation();
+        if(currentRole!=='member'||!currentUser)return;
+        const day=typeof currentDay==='function'?currentDay():Math.max(1,Number(currentUser.day||1));
+        currentUser.checks=currentUser.checks||{};currentUser.checks[day]=currentUser.checks[day]||{};
+        currentUser.checks[day][i]=!!this.checked;
+        const snapshot=JSON.parse(JSON.stringify(currentUser.checks[day]));
+        try{
+          const sb=SB(),token=window.umrohMemberSession?.get?.()||'';
+          if(!sb||!token)throw new Error('Sesi member belum siap.');
+          const {data,error}=await sb.rpc('member_checklist_upsert',{p_token:token,p_program_day:day,p_checks:snapshot});
+          if(error)throw error;if(!data?.success)throw new Error(data?.message||'Gagal menyimpan checklist.');
+        }catch(e){
+          currentUser.checks[day][i]=!this.checked;this.checked=!this.checked;
+          alert('Checklist gagal disimpan ke database: '+(e?.message||e));
+        }
+      };
+    });
+  }
+
+  /* Existing timers may call forceMemberPopup every second. It is now harmless,
+     and this timer only opens it when the 10-minute window has elapsed. */
+  setInterval(function(){
+    if(currentRole==='member'&&!document.hidden)window.forceMemberPopup();
+  },30000);
+
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden&&currentRole==='member'){
+      setTimeout(refreshMemberCentralV12,100);
+    }
+  });
+  window.addEventListener('pageshow',function(){if(currentRole==='member')setTimeout(refreshMemberCentralV12,100)});
+  setTimeout(function(){if(currentRole==='member')refreshMemberCentralV12()},700);
+
+  /* Super Admin CRUD: keep all existing Supabase-backed actions reachable,
+     even after the member list is re-rendered. */
+  function bindAdmin(){
+    if(currentRole!=='admin')return;
+    const root=document.getElementById('page-members');if(!root)return;
+    root.querySelectorAll('button').forEach(b=>{
+      const label=(b.textContent||'').trim().toLowerCase();
+      let action=b.dataset.adminAction||b.dataset.crudAction||'';
+      let id=b.dataset.id||'';
+      const oc=b.getAttribute('onclick')||'';
+      if(!action){
+        const m=oc.match(/(?:approveMember|rejectMember|adminEditMember|deleteMember)\(([^)]+)\)/);
+        if(m)id=id||String(m[1]).replace(/['"]/g,'');
+        if(label.includes('approve'))action='approve';
+        else if(label.includes('tolak'))action='reject';
+        else if(label==='edit')action='edit';
+        else if(label.includes('hapus'))action='delete';
+      }
+      if(!action)return;
+      b.disabled=false;b.style.pointerEvents='auto';b.onclick=async function(e){
+        e.preventDefault();e.stopPropagation();
+        try{
+          if(action==='approve')await window.approveMember(id);
+          if(action==='reject')await window.rejectMember(id);
+          if(action==='edit')await window.adminEditMember(id);
+          if(action==='delete')await window.deleteMember(id);
+        }catch(err){console.error(err);alert(err?.message||err)}
+      };
+    });
+  }
+  new MutationObserver(function(){if(currentRole==='admin')bindAdmin();if(currentRole==='member')bindChecklist()}).observe(document.body,{subtree:true,childList:true});
+  setTimeout(bindAdmin,500);
+})();
+</script>
+
+
+<!-- FINAL AUTHORITATIVE SUPABASE CENTRAL + MEMBER SYNC V13 -->
+<script id="finalAuthoritativeSupabaseV13">
+(function(){
+  'use strict';
+  const SB=()=>window.supabaseClient||null;
+  const TEN_MIN=10*60*1000;
+  const LEGACY={
+    pasukanUmrohSettingsV9:'settings',
+    pasukanUmrohScheduleV9:'schedule',
+    pasukanUmrohMaterialsV9:'materials',
+    pasukanUmrohRewardsV9:'rewards',
+    pasukanUmrohChecklistV9:'checklist',
+    pasukanUmrohInfoBarsV12:'info_bars',
+    pasukanUmrohPopupsV12:'popups'
+  };
+  const canon=k=>LEGACY[k]||k;
+  const clone=v=>{try{return JSON.parse(JSON.stringify(v))}catch(e){return v}};
+  const central=()=>window.__umrohCentralConfig||(window.__umrohCentralConfig={settings:null,schedule:null,materials:null,rewards:null,checklist:null,info_bars:null,popups:null});
+  async function saveCentral(key,value){
+    if(currentRole!=='admin')throw new Error('Hanya Super Admin yang dapat mengubah pengaturan pusat.');
+    const c=SB();if(!c)throw new Error('Koneksi Supabase belum siap.');
+    const k=canon(key),v=clone(value);
+    central()[k]=v;
+    const {data,error}=await c.rpc('admin_config_save',{p_config_key:k,p_config_value:v});
+    if(error)throw error;
+    if(!data?.success)throw new Error(data?.message||'Gagal menyimpan konfigurasi.');
+    return v;
+  }
+  window.__umrohSetCentralConfig=saveCentral;
+
+  // Make the checklist itself come from the same central Supabase config as Super Admin.
+  window.tasksForDay=function(day){
+    const c=central().checklist;
+    if(c&&c[day]&&Array.isArray(c[day].tasks))return c[day].tasks;
+    if(typeof window.daySpecific!=='undefined' && typeof window.commonBase!=='undefined'){
+      const special=window.daySpecific?.[day]||[],common=window.commonBase||[];
+      return day===1?special.slice():[...common.filter(x=>!special.includes(x)),...special];
+    }
+    return [];
+  };
+
+  // Super Admin: schedule is saved to canonical program_configs.schedule.
+  window.saveScheduleItem=async function(){
+    const name=$('schName')?.value.trim()||'',date=$('schDate')?.value||'',mode=$('schMode')?.value||'Online',link=$('schLink')?.value.trim()||'',id=Number($('schId')?.value)||0;
+    if(!name||!date){alert('Nama kegiatan dan tanggal wajib diisi.');return}
+    const arr=Array.isArray(central().schedule)?clone(central().schedule):[];
+    if(id){const x=arr.find(a=>Number(a.id)===id);if(x){x.name=name;x.date=date;x.mode=mode;x.link=link}else arr.push({id,name,date,mode,link})}
+    else arr.push({id:Date.now(),name,date,mode,link});
+    try{await saveCentral('schedule',arr);closeScheduleForm();renderScheduleAdmin();if(typeof renderInfoBars==='function')renderInfoBars();alert('Jadwal disimpan ke Supabase.');}
+    catch(e){alert('Gagal menyimpan jadwal ke Supabase: '+(e?.message||e))}
+  };
+  window.deleteScheduleItem=async function(id){
+    if(!confirm('Hapus jadwal ini?'))return;
+    try{await saveCentral('schedule',(central().schedule||[]).filter(x=>Number(x.id)!==Number(id)));renderScheduleAdmin();if(typeof renderInfoBars==='function')renderInfoBars();}
+    catch(e){alert('Gagal menghapus jadwal: '+(e?.message||e))}
+  };
+
+  // Super Admin: Info Bar and Pop Up are also canonical central config.
+  window.saveInfoBarItem=async function(){
+    const title=$('ibTitle')?.value.trim()||'',text=$('ibText')?.value.trim()||'',active=$('ibActive')?.value==='1',id=Number($('ibId')?.value)||0;
+    if(!title||!text){alert('Judul dan isi Info Bar wajib diisi.');return}
+    const arr=Array.isArray(central().info_bars)?clone(central().info_bars):[];
+    if(id){const x=arr.find(a=>Number(a.id)===id);if(x){x.title=title;x.text=text;x.active=active;x.updatedAt=Date.now()}}
+    else arr.push({id:Date.now(),title,text,active,createdAt:Date.now(),updatedAt:Date.now()});
+    try{await saveCentral('info_bars',arr);closeInfoBarForm();renderInfoBarAdmin();renderInfoBars();alert('Info Bar disimpan ke Supabase.');}
+    catch(e){alert('Gagal menyimpan Info Bar: '+(e?.message||e))}
+  };
+  window.deleteInfoBarItem=async function(id){
+    if(!confirm('Hapus Info Bar ini?'))return;
+    try{await saveCentral('info_bars',(central().info_bars||[]).filter(x=>Number(x.id)!==Number(id)));renderInfoBarAdmin();renderInfoBars();}
+    catch(e){alert('Gagal menghapus Info Bar: '+(e?.message||e))}
+  };
+
+  function popupRatio(r){return r==='A4'?210/297:r==='4:5'?0.8:1}
+  window.savePopupItem=async function(){
+    const title=$('popTitle')?.value.trim()||'',text=$('popText')?.value.trim()||'',button=$('popButton')?.value.trim()||'',link=$('popLink')?.value.trim()||'',active=$('popActive')?.value==='1',ratio=$('popRatio')?.value||'1:1',id=Number($('popId')?.value)||0;
+    const file=$('popImage')?.files?.[0],arr=Array.isArray(central().popups)?clone(central().popups):[],existing=id?arr.find(a=>Number(a.id)===id):null;
+    if(!existing&&!file){alert('Desain Pop Up wajib diupload.');return}
+    const commit=async image=>{
+      const now=Date.now();
+      if(existing){Object.assign(existing,{title,text,button,link,active,ratio,updatedAt:now});if(image)existing.image=image}
+      else arr.push({id:now,title,text,button,link,active,ratio,image,createdAt:now,updatedAt:now});
+      try{await saveCentral('popups',arr);closePopupForm();renderPopupAdmin();alert('Pop Up disimpan ke Supabase.');}
+      catch(e){alert('Gagal menyimpan Pop Up: '+(e?.message||e))}
+    };
+    if(!file){await commit(existing?.image||null);return}
+    if(!/^image\/(jpeg|png|jpg)$/i.test(file.type)){alert('File harus JPG, JPEG, atau PNG.');return}
+    const reader=new FileReader();
+    reader.onload=e=>commit(e.target.result);
+    reader.readAsDataURL(file);
+  };
+  window.deletePopupItem=async function(id){
+    if(!confirm('Hapus Pop Up ini?'))return;
+    try{await saveCentral('popups',(central().popups||[]).filter(x=>Number(x.id)!==Number(id)));renderPopupAdmin();}
+    catch(e){alert('Gagal menghapus Pop Up: '+(e?.message||e))}
+  };
+
+  // Program settings, materials, rewards, and checklist editor all use canonical keys.
+  window.saveProgramSettings=async function(){
+    const v={programName:$('setProgramName')?.value.trim()||'Pasukan Umroh Mahir Digital',duration:Number($('setDuration')?.value)||60,unlock:Number($('setUnlock')?.value)||100};
+    try{await saveCentral('settings',v);renderSettings();alert('Pengaturan program disimpan ke Supabase.');}
+    catch(e){alert('Gagal menyimpan pengaturan: '+(e?.message||e))}
+  };
+  window.saveChecklistDay=async function(d){
+    const c=clone(central().checklist||{}),day=c[d];if(!day)return;
+    day.tasks=(day.tasks||[]).map((_,j)=>{const e=$('sop_'+d+'_'+j);return e?e.value.trim():''}).filter(Boolean);
+    try{await saveCentral('checklist',c);renderChecklistAdmin();if(currentRole==='member')renderMember();alert('Checklist Hari '+d+' disimpan ke Supabase.');}
+    catch(e){alert('Gagal menyimpan checklist: '+(e?.message||e))}
+  };
+  window.addChecklistTask=async function(d){
+    const c=clone(central().checklist||{});c[d]=c[d]||{active:true,tasks:[]};const v=prompt('Tugas baru untuk Hari '+d+':');if(!v?.trim())return;c[d].tasks.push(v.trim());
+    try{await saveCentral('checklist',c);renderChecklistAdmin();}
+    catch(e){alert('Gagal menyimpan checklist: '+(e?.message||e))}
+  };
+  window.deleteChecklistTask=async function(d,j){
+    const c=clone(central().checklist||{});if(!c[d])return;c[d].tasks.splice(j,1);
+    try{await saveCentral('checklist',c);renderChecklistAdmin();}
+    catch(e){alert('Gagal menghapus tugas: '+(e?.message||e))}
+  };
+  window.toggleChecklistDay=async function(d){
+    const c=clone(central().checklist||{});c[d]=c[d]||{active:true,tasks:[]};c[d].active=!c[d].active;
+    try{await saveCentral('checklist',c);renderChecklistAdmin();if(currentRole==='member')renderMember();}
+    catch(e){alert('Gagal mengubah status hari: '+(e?.message||e))}
+  };
+  window.deleteChecklistDay=async function(d){
+    if(!confirm('Hapus/nonaktifkan seluruh Hari '+d+'?'))return;
+    const c=clone(central().checklist||{});c[d]={active:false,tasks:[]};
+    try{await saveCentral('checklist',c);renderChecklistAdmin();if(currentRole==='member')renderMember();}
+    catch(e){alert('Gagal menghapus hari: '+(e?.message||e))}
+  };
+
+  // Popup is controlled centrally and never by legacy one-second timers.
+  const popupStamp='pasukanUmrohPopupLastShownAtV13';
+  function popupData(){return (central().popups||[]).filter(x=>x&&x.active!==false).sort((a,b)=>Number(b.updatedAt||b.createdAt||b.id||0)-Number(a.updatedAt||a.createdAt||a.id||0))[0]||null}
+  function showPopup(){
+    if(currentRole!=='member'||!currentUser)return false;
+    let last=0;try{last=Number(sessionStorage.getItem(popupStamp)||0)}catch(e){}
+    if(last&&Date.now()-last<TEN_MIN){document.getElementById('memberPopupOverlay')?.classList.remove('show');return false}
+    const x=popupData(),ov=document.getElementById('memberPopupOverlay');if(!x||!ov)return false;
+    const img=$('memberPopupImage'),title=$('memberPopupTitle'),txt=$('memberPopupText'),btn=$('memberPopupButton');
+    if(img){if(x.image){img.src=x.image;img.style.display='block'}else{img.removeAttribute('src');img.style.display='none'}}
+    if(title){title.textContent=x.title||'';title.style.display=x.title?'block':'none'}
+    if(txt){txt.textContent=x.text||'';txt.style.display=x.text?'block':'none'}
+    if(btn){if(x.button&&x.link){btn.textContent=x.button;btn.href=x.link;btn.style.display='inline-flex'}else btn.style.display='none'}
+    ov.classList.add('show');try{sessionStorage.setItem(popupStamp,String(Date.now()))}catch(e){}
+    return true;
+  }
+  window.forceMemberPopup=showPopup;
+  window.showActivePopup=showPopup;
+
+  // One authoritative checklist handler. Clicking a checkbox always persists to Supabase.
+  window.toggleCheck=async function(i,val){
+    if(currentRole!=='member'||!currentUser)return;
+    const day=typeof currentDay==='function'?currentDay():Math.max(1,Number(currentUser.day||1));
+    currentUser.checks=currentUser.checks||{};currentUser.checks[day]=currentUser.checks[day]||{};
+    const next=!!val,old=currentUser.checks[day][i];
+    currentUser.checks[day][i]=next;
+    try{
+      const token=window.umrohMemberSession?.get?.()||'';if(!SB()||!token)throw new Error('Sesi member belum siap.');
+      const {data,error}=await SB().rpc('member_checklist_upsert',{p_token:token,p_program_day:day,p_checks:clone(currentUser.checks[day])});
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Checklist gagal disimpan.');
+      renderMember();
+    }catch(e){
+      currentUser.checks[day][i]=old;
+      const inputs=[...document.querySelectorAll('#memberChecks input[type="checkbox"]')];if(inputs[i])inputs[i].checked=!!old;
+      alert('Checklist gagal disimpan ke database: '+(e?.message||e));
+    }
+  };
+
+  // Force the final "complete day" action to use the server-side member_day_update RPC.
+  window.finishMemberDay=async function(){
+    if(currentRole!=='member'||!currentUser)return;
+    const day=typeof currentDay==='function'?currentDay():Math.max(1,Number(currentUser.day||1));
+    const tasks=window.tasksForDay(day)||[],st=currentUser.checks?.[day]||{};
+    const pct=tasks.length?Math.round(tasks.filter((_,i)=>st[i]===true).length/tasks.length*100):100;
+    const unlock=Number(central().settings?.unlock||100),duration=Number(central().settings?.duration||60);
+    if(pct<unlock){alert('Checklist Hari '+day+' baru '+pct+'%. Minimal '+unlock+'% untuk membuka hari berikutnya.');return}
+    if(day>=duration){alert('Program '+duration+' hari selesai.');return}
+    try{
+      const token=window.umrohMemberSession?.get?.()||'';if(!SB()||!token)throw new Error('Sesi member belum siap.');
+      const {data,error}=await SB().rpc('member_day_update',{p_token:token,p_day:day+1});
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Gagal memperbarui hari.');
+      currentUser.day=day+1;
+      await (window.loadMemberCentral?window.loadMemberCentral():Promise.resolve());
+      if(typeof window.showPage==='function')window.showPage('memberDashboard');
+    }catch(e){alert('Gagal membuka hari berikutnya: '+(e?.message||e))}
+  };
+
+  // Make all Super Admin controls use the Supabase-backed handlers, even after re-render.
+  function bindAdmin(){
+    if(currentRole!=='admin')return;
+    const root=document.getElementById('page-members');if(!root)return;
+    root.querySelectorAll('button').forEach(b=>{
+      if(b.dataset.v13bound==='1')return;
+      const label=(b.textContent||'').trim().toLowerCase(),oc=b.getAttribute('onclick')||'';
+      let action=b.dataset.adminAction||b.dataset.crudAction||'',id=b.dataset.id||'';
+      if(!action){
+        const m=oc.match(/(?:approveMember|rejectMember|adminEditMember|deleteMember|openModal)\(([^)]+)\)/);
+        if(m)id=id||String(m[1]).replace(/['"]/g,'');
+        if(label.includes('approve'))action='approve';
+        else if(label.includes('tolak'))action='reject';
+        else if(label==='edit')action='edit';
+        else if(label.includes('hapus'))action='delete';
+      }
+      if(!action)return;
+      b.dataset.v13bound='1';b.disabled=false;b.style.pointerEvents='auto';b.style.cursor='pointer';
+      b.addEventListener('click',async e=>{
+        e.preventDefault();e.stopImmediatePropagation();
+        try{
+          if(action==='approve')await window.approveMember(id);
+          else if(action==='reject')await window.rejectMember(id);
+          else if(action==='edit')await window.adminEditMember(id);
+          else if(action==='delete')await window.deleteMember(id);
+        }catch(err){console.error('V13 admin action',err);alert(err?.message||err)}
+      },true);
+    });
+  }
+
+  // Pull central config before rendering member UI, so settings from another device arrive here.
+  async function refreshMember(){
+    if(currentRole!=='member'||!currentUser)return;
+    try{
+      if(typeof window.loadMemberCentral==='function')await window.loadMemberCentral();
+      const c=central();
+      const {data,error}=await SB().from('program_configs').select('config_key,config_value').in('config_key',['settings','schedule','info_bars','popups','checklist','materials','rewards']);
+      if(!error)(data||[]).forEach(r=>{c[r.config_key]=r.config_value});
+      if(typeof window.renderMember==='function')window.renderMember();
+      if(typeof window.renderInfoBars==='function')window.renderInfoBars();
+    }catch(e){console.warn('V13 member refresh',e)}
+  }
+
+  function boot(){
+    if(currentRole==='member')setTimeout(refreshMember,250);
+    if(currentRole==='admin')setTimeout(bindAdmin,250);
+  }
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){if(currentRole==='member')setTimeout(refreshMember,100);if(currentRole==='admin')setTimeout(bindAdmin,100)}});
+  setInterval(()=>{if(window.__centralSyncV18Primary)return;if(document.hidden)return;if(currentRole==='member')showPopup();if(currentRole==='admin')bindAdmin()},30000);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
+
+
+<!-- FINAL SUPABASE ADMIN RIGHTS + CONFIG RPC V14 -->
+<script id="finalSupabaseAdminV14">
+(function(){
+  'use strict';
+  const S=()=>window.supabaseClient||null;
+  const C=()=>window.__umrohCentralConfig||(window.__umrohCentralConfig={});
+  const cp=v=>{try{return JSON.parse(JSON.stringify(v))}catch(e){return v}};
+  async function adminSave(key,value){
+    const sb=S();if(!sb)throw new Error('Koneksi Supabase belum siap.');
+    if(currentRole!=='admin')throw new Error('Super Admin belum login.');
+    const {data,error}=await sb.rpc('admin_config_save_v2',{p_config_key:key,p_config_value:cp(value)});
+    if(error)throw error;
+    if(!data?.success)throw new Error(data?.message||'Akses Super Admin ditolak.');
+    C()[key]=cp(value);
+    return value;
+  }
+  window.__umrohAdminSaveConfigV14=adminSave;
+
+  // All central admin configuration writes use one non-overloaded RPC.
+  window.saveScheduleItem=async function(){
+    const name=$('schName')?.value.trim()||'',date=$('schDate')?.value||'',mode=$('schMode')?.value||'Online',link=$('schLink')?.value.trim()||'',raw=$('schId')?.value||'';
+    if(!name||!date){alert('Nama kegiatan dan tanggal wajib diisi.');return}
+    const arr=Array.isArray(C().schedule)?cp(C().schedule):[],idx=arr.findIndex(x=>String(x.id)===String(raw));
+    const item={id:raw||String(Date.now()),name,date,mode,link};
+    if(idx>=0)arr[idx]=item;else arr.push(item);
+    try{await adminSave('schedule',arr);closeScheduleForm();if(typeof renderScheduleAdmin==='function')renderScheduleAdmin();if(typeof renderInfoBars==='function')renderInfoBars();alert('Jadwal berhasil disimpan ke Supabase.')}
+    catch(e){console.error(e);alert('Gagal menyimpan jadwal: '+(e?.message||e))}
+  };
+  window.deleteScheduleItem=async function(id){
+    if(!confirm('Hapus jadwal ini?'))return;
+    try{await adminSave('schedule',(C().schedule||[]).filter(x=>String(x.id)!==String(id)));if(typeof renderScheduleAdmin==='function')renderScheduleAdmin();if(typeof renderInfoBars==='function')renderInfoBars()}
+    catch(e){alert('Gagal menghapus jadwal: '+(e?.message||e))}
+  };
+
+  window.saveInfoBarItem=async function(){
+    const title=$('ibTitle')?.value.trim()||'',text=$('ibText')?.value.trim()||'',active=$('ibActive')?.value==='1',raw=$('ibId')?.value||'';
+    if(!title||!text){alert('Judul dan isi Info Bar wajib diisi.');return}
+    const arr=Array.isArray(C().info_bars)?cp(C().info_bars):[],idx=arr.findIndex(x=>String(x.id)===String(raw));
+    const item={id:raw||String(Date.now()),title,text,active,updatedAt:Date.now()};
+    if(idx>=0)arr[idx]={...arr[idx],...item};else arr.push({...item,createdAt:Date.now()});
+    try{await adminSave('info_bars',arr);closeInfoBarForm();renderInfoBarAdmin();renderInfoBars();alert('Info Bar berhasil disimpan ke Supabase.')}
+    catch(e){console.error(e);alert('Gagal menyimpan Info Bar: '+(e?.message||e))}
+  };
+  window.deleteInfoBarItem=async function(id){
+    if(!confirm('Hapus Info Bar ini?'))return;
+    try{await adminSave('info_bars',(C().info_bars||[]).filter(x=>String(x.id)!==String(id)));renderInfoBarAdmin();renderInfoBars()}
+    catch(e){alert('Gagal menghapus Info Bar: '+(e?.message||e))}
+  };
+
+  window.savePopupItem=async function(){
+    const title=$('popTitle')?.value.trim()||'',text=$('popText')?.value.trim()||'',button=$('popButton')?.value.trim()||'',link=$('popLink')?.value.trim()||'',active=$('popActive')?.value==='1',ratio=$('popRatio')?.value||'1:1',raw=$('popId')?.value||'',file=$('popImage')?.files?.[0];
+    const arr=Array.isArray(C().popups)?cp(C().popups):[],existing=arr.find(x=>String(x.id)===String(raw));
+    if(!existing&&!file){alert('Desain Pop Up wajib diupload.');return}
+    const commit=async image=>{
+      const item={id:raw||String(Date.now()),title,text,button,link,active,ratio,updatedAt:Date.now()};
+      if(image)item.image=image;
+      const idx=arr.findIndex(x=>String(x.id)===String(raw));
+      if(idx>=0)arr[idx]={...arr[idx],...item};else arr.push({...item,createdAt:Date.now()});
+      try{await adminSave('popups',arr);closePopupForm();renderPopupAdmin();alert('Pop Up berhasil disimpan ke Supabase.')}
+      catch(e){alert('Gagal menyimpan Pop Up: '+(e?.message||e))}
+    };
+    if(!file){await commit(existing?.image||null);return}
+    if(!/^image\/(jpeg|png|jpg)$/i.test(file.type)){alert('File harus JPG, JPEG, atau PNG.');return}
+    const reader=new FileReader();reader.onload=e=>commit(e.target.result);reader.readAsDataURL(file);
+  };
+  window.deletePopupItem=async function(id){
+    if(!confirm('Hapus Pop Up ini?'))return;
+    try{await adminSave('popups',(C().popups||[]).filter(x=>String(x.id)!==String(id)));renderPopupAdmin()}
+    catch(e){alert('Gagal menghapus Pop Up: '+(e?.message||e))}
+  };
+
+  // Master settings/checklist/materials/rewards are also centralized in Supabase.
+  window.saveProgramSettings=async function(){
+    const v={programName:$('setProgramName')?.value.trim()||'Pasukan Umroh Mahir Digital',duration:Number($('setDuration')?.value)||60,unlock:Number($('setUnlock')?.value)||100};
+    try{await adminSave('settings',v);renderSettings();alert('Pengaturan program disimpan ke Supabase.')}catch(e){alert('Gagal menyimpan pengaturan: '+(e?.message||e))}
+  };
+  window.saveChecklistDay=async function(d){
+    const c=cp(C().checklist||{}),day=c[d];if(!day)return;
+    day.tasks=(day.tasks||[]).map((_,j)=>{const e=$('sop_'+d+'_'+j);return e?e.value.trim():''}).filter(Boolean);
+    try{await adminSave('checklist',c);renderChecklistAdmin();alert('Checklist Hari '+d+' disimpan ke Supabase.')}catch(e){alert('Gagal menyimpan checklist: '+(e?.message||e))}
+  };
+  window.addChecklistTask=async function(d){
+    const c=cp(C().checklist||{});c[d]=c[d]||{active:true,tasks:[]};const v=prompt('Tugas baru untuk Hari '+d+':');if(!v?.trim())return;c[d].tasks.push(v.trim());
+    try{await adminSave('checklist',c);renderChecklistAdmin()}catch(e){alert('Gagal menyimpan checklist: '+(e?.message||e))}
+  };
+  window.deleteChecklistTask=async function(d,j){
+    const c=cp(C().checklist||{});if(!c[d])return;c[d].tasks.splice(j,1);
+    try{await adminSave('checklist',c);renderChecklistAdmin()}catch(e){alert('Gagal menghapus tugas: '+(e?.message||e))}
+  };
+  window.toggleChecklistDay=async function(d){
+    const c=cp(C().checklist||{});c[d]=c[d]||{active:true,tasks:[]};c[d].active=!c[d].active;
+    try{await adminSave('checklist',c);renderChecklistAdmin()}catch(e){alert('Gagal mengubah hari: '+(e?.message||e))}
+  };
+  window.deleteChecklistDay=async function(d){
+    if(!confirm('Nonaktifkan seluruh Hari '+d+'?'))return;
+    const c=cp(C().checklist||{});c[d]={active:false,tasks:[]};
+    try{await adminSave('checklist',c);renderChecklistAdmin()}catch(e){alert('Gagal menghapus hari: '+(e?.message||e))}
+  };
+
+  // Fix overloaded reject RPC and keep approve/edit/delete on the Supabase-backed admin handlers.
+  window.approveMember=async function(id){
+    try{
+      if(currentRole!=='admin')throw new Error('Super Admin belum login.');
+      const {data,error}=await S().rpc('member_approve',{p_member_id:String(id)});
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Approval gagal.');
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();else if(typeof window.umrohAdminRefreshBridge==='function')await window.umrohAdminRefreshBridge();
+      alert('Member berhasil di-approve.');
+    }catch(e){console.error(e);alert('Gagal approve member: '+(e?.message||e))}
+  };
+  window.rejectMember=async function(id){
+    if(!confirm('Tolak/hapus pendaftaran member ini?'))return;
+    try{
+      if(currentRole!=='admin')throw new Error('Super Admin belum login.');
+      const {data,error}=await S().rpc('admin_member_reject_v2',{p_member_id:String(id)});
+      if(error)throw error;if(!data?.success)throw new Error(data?.message||'Penolakan gagal.');
+      if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();else if(typeof window.umrohAdminRefreshBridge==='function')await window.umrohAdminRefreshBridge();
+      alert('Member berhasil ditolak/dihapus.');
+    }catch(e){console.error(e);alert('Gagal menolak member: '+(e?.message||e))}
+  };
+
+  // Material/reward editor writes to the same central keys instead of browser-only storage.
+  window.addRewardPrompt=async function(){
+    const day=Number(prompt('Milestone hari berapa? (contoh 15)'));if(!day)return;
+    const name=prompt('Nama reward/benefit:');if(!name)return;
+    const desc=prompt('Deskripsi:')||'';const rs=Array.isArray(C().rewards)?cp(C().rewards):[];
+    rs.push({id:Date.now(),day,name,desc});rs.sort((a,b)=>a.day-b.day);
+    try{await adminSave('rewards',rs);renderRewards()}catch(e){alert('Gagal menyimpan reward: '+(e?.message||e))}
+  };
+  window.editRewardPrompt=async function(id){
+    const rs=Array.isArray(C().rewards)?cp(C().rewards):[],r=rs.find(x=>Number(x.id)===Number(id));if(!r)return;
+    const name=prompt('Nama reward/benefit:',r.name);if(name===null)return;const desc=prompt('Deskripsi:',r.desc||'');if(desc===null)return;
+    r.name=name;r.desc=desc;
+    try{await adminSave('rewards',rs);renderRewards()}catch(e){alert('Gagal menyimpan reward: '+(e?.message||e))}
+  };
+  window.deleteReward=async function(id){
+    if(!confirm('Hapus reward ini?'))return;
+    try{await adminSave('rewards',(C().rewards||[]).filter(x=>Number(x.id)!==Number(id)));renderRewards()}catch(e){alert('Gagal menghapus reward: '+(e?.message||e))}
+  };
+  window.addMaterialPrompt=async function(){
+    const name=prompt('Nama materi:');if(!name)return;const desc=prompt('Deskripsi:')||'';const ms=Array.isArray(C().materials)?cp(C().materials):[];
+    ms.push({id:Date.now(),name,desc,links:[]});
+    try{await adminSave('materials',ms);renderAdminMaterials()}catch(e){alert('Gagal menyimpan materi: '+(e?.message||e))}
+  };
+  window.editMaterialPrompt=async function(id){
+    const ms=Array.isArray(C().materials)?cp(C().materials):[],m=ms.find(x=>Number(x.id)===Number(id));if(!m)return;
+    const name=prompt('Nama materi:',m.name);if(name===null)return;const desc=prompt('Deskripsi:',m.desc||'');if(desc===null)return;m.name=name;m.desc=desc;
+    try{await adminSave('materials',ms);renderAdminMaterials()}catch(e){alert('Gagal menyimpan materi: '+(e?.message||e))}
+  };
+  window.addMaterialLinkPrompt=async function(id){
+    const ms=Array.isArray(C().materials)?cp(C().materials):[],m=ms.find(x=>Number(x.id)===Number(id));if(!m)return;
+    const name=prompt('Nama button/link:');if(!name)return;const url=prompt('URL:');if(!url)return;m.links=m.links||[];m.links.push({name,url});
+    try{await adminSave('materials',ms);renderAdminMaterials()}catch(e){alert('Gagal menyimpan link: '+(e?.message||e))}
+  };
+  window.editMaterialLinkPrompt=async function(id,i){
+    const ms=Array.isArray(C().materials)?cp(C().materials):[],m=ms.find(x=>Number(x.id)===Number(id)),l=m?.links?.[i];if(!l)return;
+    const name=prompt('Nama button/link:',l.name||'');if(name===null)return;const url=prompt('URL:',l.url||'');if(url===null)return;l.name=name;l.url=url;
+    try{await adminSave('materials',ms);renderAdminMaterials()}catch(e){alert('Gagal menyimpan link: '+(e?.message||e))}
+  };
+  window.deleteMaterial=async function(id){
+    if(!confirm('Hapus materi ini?'))return;
+    try{await adminSave('materials',(C().materials||[]).filter(x=>Number(x.id)!==Number(id)));renderAdminMaterials()}catch(e){alert('Gagal menghapus materi: '+(e?.message||e))}
+  };
+  window.deleteMaterialLink=async function(id,i){
+    const ms=Array.isArray(C().materials)?cp(C().materials):[],m=ms.find(x=>Number(x.id)===Number(id));if(!m)return;
+    if(!confirm('Hapus link ini?'))return;m.links=m.links||[];m.links.splice(i,1);
+    try{await adminSave('materials',ms);renderAdminMaterials()}catch(e){alert('Gagal menghapus link: '+(e?.message||e))}
+  };
+
+  // Ensure admin controls are not disabled/blocked by legacy layers.
+  function unlockAdminUI(){
+    if(currentRole!=='admin')return;
+    document.querySelectorAll('#page-members button,#page-adminDashboard button,#page-settings button,#page-checklists button,#page-materials button,#page-rewards button,#page-schedule button,#page-info button').forEach(b=>{
+      b.disabled=false;b.style.pointerEvents='auto';b.style.cursor='pointer';
+    });
+  }
+  setInterval(unlockAdminUI,1000);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',unlockAdminUI);else unlockAdminUI();
+})();
+</script>
+
+
+<!-- FINAL MEMBER CHECKLIST MENU + CENTRAL SOP V15 -->
+<style id="memberChecklistMenuV15">
+#page-program .memberChecklistV15{margin-top:12px}
+#page-program .memberDayNavV15{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;margin-bottom:12px}
+#page-program .memberDayNavV15 button{border:0;border-radius:8px;padding:8px 4px;font-weight:800;cursor:pointer;background:#edf2f8;color:#334}
+#page-program .memberDayNavV15 button.active{background:#214f82;color:#fff}
+#page-program .memberDayNavV15 button.done{background:#0bbf7a;color:#fff}
+#page-program .memberTaskV15{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #edf0f5}
+#page-program .memberTaskV15 input{width:20px;height:20px;flex:0 0 auto;cursor:pointer}
+@media(max-width:720px){#page-program .memberDayNavV15{grid-template-columns:repeat(6,minmax(0,1fr))}}
+</style>
+<script id="memberChecklistMenuV15">
+(function(){
+  'use strict';
+  const S=()=>window.supabaseClient||null;
+  const C=()=>window.__umrohCentralConfig||(window.__umrohCentralConfig={});
+  const esc=v=>typeof esc2==='function'?esc2(v):String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  const memberTasks=day=>{
+    const c=C().checklist;
+    const x=c&&typeof c==='object'?c[String(day)]||c[day]:null;
+    return Array.isArray(x?.tasks)?x.tasks.filter(Boolean):[];
+  };
+  const fallback=day=>typeof tasksForDay==='function'?tasksForDay(day):[];
+  const tasks=day=>memberTasks(day).length?memberTasks(day):fallback(day);
+  const dayNow=()=>Math.max(1,Number(currentUser?.day||1));
+  const checks=day=>{currentUser.checks=currentUser.checks||{};currentUser.checks[day]=currentUser.checks[day]||{};return currentUser.checks[day]};
+  function pct(day){
+    const ts=tasks(day),st=checks(day);
+    return ts.length?Math.round(ts.filter((_,i)=>st[i]===true).length/ts.length*100):100;
+  }
+  async function saveCheck(i,val){
+    const d=dayNow(),st=checks(d),old=st[i];
+    st[i]=!!val;
+    try{
+      const token=window.umrohMemberSession?.get?.()||'';
+      if(!S()||!token)throw new Error('Sesi member belum siap.');
+      const r=await S().rpc('member_checklist_upsert',{p_token:token,p_program_day:d,p_checks:JSON.parse(JSON.stringify(st))});
+      if(r.error)throw r.error;
+      if(!r.data?.success)throw new Error(r.data?.message||'Checklist gagal disimpan.');
+      renderProgram();
+      const m=document.getElementById('mCheck');if(m)m.textContent=pct(d)+'%';
+    }catch(e){
+      st[i]=old;
+      renderProgram();
+      alert('Checklist gagal disimpan ke database: '+(e?.message||e));
+    }
+  }
+  function renderProgram(){
+    if(currentRole!=='member'||!currentUser)return;
+    const root=document.getElementById('page-program');if(!root)return;
+    const d=dayNow(),ts=tasks(d),st=checks(d);
+    root.innerHTML=
+      '<div class="title"><div><h2>☑ Checklist & SOP Program</h2><p>Hari berikutnya terbuka setelah checklist hari sebelumnya 100%.</p></div></div>'+
+      '<div class="panel memberChecklistV15">'+
+      '<div class="memberDayNavV15">'+Array.from({length:60},(_,i)=>{
+        const n=i+1,active=n===d,done=n<d;
+        return '<button type="button" class="'+(active?'active ':'')+(done?'done':'')+'" '+(n<=d?'onclick="window.__openMemberDayV15('+n+')"':'disabled')+'>'+n+'</button>';
+      }).join('')+'</div>'+
+      '<div class="notice"><b>Hari '+d+'/60</b> • Progress checklist: <b>'+pct(d)+'%</b></div>'+
+      '<div style="margin-top:10px">'+(ts.length?ts.map((t,i)=>'<label class="memberTaskV15"><input type="checkbox" '+(st[i]===true?'checked':'')+' onchange="window.__memberCheckV15('+i+',this.checked)"><div><b>'+esc(t)+'</b></div></label>').join(''):'<div class="empty">Belum ada tugas checklist untuk Hari '+d+'.</div>')+'</div>'+
+      '<button type="button" class="btn" onclick="window.__finishMemberDayV15()" style="width:100%;margin-top:14px">Selesaikan Hari Ini & Buka Hari Berikutnya →</button>'+
+      '<div class="notice" style="margin-top:10px">Checklist harus 100% untuk membuka hari berikutnya.</div>'+
+      '</div>';
+  }
+  window.__memberCheckV15=saveCheck;
+  window.__openMemberDayV15=function(n){
+    if(currentRole!=='member'||!currentUser)return;
+    if(n!==dayNow()){alert('Hari '+n+' belum terbuka. Selesaikan Hari '+dayNow()+' sampai 100% terlebih dahulu.');return}
+    renderProgram();
+  };
+  window.__finishMemberDayV15=async function(){
+    if(currentRole!=='member'||!currentUser)return;
+    const d=dayNow(),ts=tasks(d),st=checks(d);
+    if(pct(d)<100){alert('Checklist Hari '+d+' baru '+pct(d)+'%. Lengkapi sampai 100% terlebih dahulu.');return}
+    if(d>=60){alert('Program 60 hari selesai.');return}
+    try{
+      const token=window.umrohMemberSession?.get?.()||'';
+      if(!S()||!token)throw new Error('Sesi member belum siap.');
+      const r=await S().rpc('member_day_update',{p_token:token,p_day:d+1});
+      if(r.error)throw r.error;
+      if(!r.data?.success)throw new Error(r.data?.message||'Gagal membuka hari berikutnya.');
+      currentUser.day=d+1;
+      if(typeof loadMemberCentral==='function')await loadMemberCentral();
+      renderProgram();
+      alert('Hari '+d+' selesai. Hari '+(d+1)+' sekarang terbuka.');
+    }catch(e){alert('Gagal membuka hari berikutnya: '+(e?.message||e))}
+  };
+  // Make the existing member menu explicitly point to the real checklist page.
+  function fixMenu(){
+    const item=document.querySelector('#memberNav .navItem[data-page="program"]');
+    if(item){
+      item.textContent='☑  Checklist & SOP';
+      item.style.pointerEvents='auto';
+      item.style.cursor='pointer';
+      item.onclick=function(e){e.preventDefault();e.stopPropagation();window.showPage('program');};
+    }
+  }
+  const oldShow=window.showPage;
+  window.showPage=function(page){
+    const r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;
+    fixMenu();
+    if(currentRole==='member'&&page==='program'){
+      setTimeout(async()=>{
+        try{if(typeof loadMemberCentral==='function')await loadMemberCentral()}catch(e){}
+        renderProgram();
+      },60);
+    }
+    return r;
+  };
+  const oldRender=window.renderMember;
+  window.renderMember=function(){
+    const r=typeof oldRender==='function'?oldRender.apply(this,arguments):undefined;
+    fixMenu();
+    if(currentRole==='member'&&document.getElementById('page-program')?.classList.contains('active'))setTimeout(renderProgram,0);
+    return r;
+  };
+  function boot(){fixMenu();if(currentRole==='member'&&document.getElementById('page-program')?.classList.contains('active'))renderProgram()}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
+
+
+<!-- FINAL CROSS-DEVICE HARDENING V16 -->
+<style id="crossDeviceHardeningV16">
+#page-program #memberFinishDayV16{position:relative;z-index:1000!important;pointer-events:auto!important;cursor:pointer!important;touch-action:manipulation!important}
+#page-program .memberTaskV15 input{position:relative;z-index:1001!important;pointer-events:auto!important;cursor:pointer!important;touch-action:manipulation!important}
+</style>
+<script id="crossDeviceHardeningV16">
+(function(){
+'use strict';
+const S=()=>window.supabaseClient||null,T=()=>window.umrohMemberSession?.get?.()||'',C=()=>window.__umrohCentralConfig||(window.__umrohCentralConfig={});
+const esc=v=>typeof esc2==='function'?esc2(v):String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+const pct=(m,d)=>{
+ const x=C().checklist?.[String(d)]||C().checklist?.[d]||{},ts=Array.isArray(x.tasks)?x.tasks:[],st=m?.checks?.[String(d)]||m?.checks?.[d]||{};
+ return ts.length?Math.round(ts.reduce((n,_,i)=>n+(st[i]===true?1:0),0)/ts.length*100):0;
+};
+
+window.__finishMemberDayV16=async function(){
+ if(window.__memberFinishBusyV16)return;
+ if(currentRole!=='member'||!currentUser){alert('Sesi member belum siap. Silakan login kembali.');return}
+ const sb=S(),token=T(),oldDay=Math.max(1,Number(currentUser.day||1));
+ if(!sb||!token){alert('Sesi member belum siap. Silakan login kembali.');return}
+ const btn=document.getElementById('memberFinishDayV16');
+ window.__memberFinishBusyV16=true;if(btn){btn.disabled=true;btn.textContent='Menyimpan progress ke database...'}
+ try{
+  const r=await sb.rpc('member_day_complete',{p_token:token});
+  if(r.error)throw r.error;
+  if(!r.data?.success)throw new Error(r.data?.message||'Hari berikutnya belum dapat dibuka.');
+  currentUser.day=Number(r.data.day||oldDay);
+  if(typeof loadMemberCentral==='function')await loadMemberCentral();
+  currentUser.day=Number(r.data.day||currentUser.day||oldDay);
+  if(typeof window.__memberChecklistRenderV16==='function')window.__memberChecklistRenderV16();
+  alert(Number(r.data.day)>oldDay?'Hari '+oldDay+' selesai. Hari '+Number(r.data.day)+' sekarang terbuka dan tersimpan di Supabase.':'Program 60 hari selesai.');
+ }catch(e){console.error('member_day_complete V16',e);alert('Gagal membuka hari berikutnya: '+(e?.message||e))}
+ finally{window.__memberFinishBusyV16=false}
+};
+
+function renderChecklistV16(){
+ if(currentRole!=='member'||!currentUser)return;
+ const root=document.getElementById('page-program');if(!root)return;
+ const d=Math.max(1,Number(currentUser.day||1)),cfg=C().checklist?.[String(d)]||C().checklist?.[d]||{},ts=Array.isArray(cfg.tasks)?cfg.tasks:[],st=currentUser.checks?.[String(d)]||currentUser.checks?.[d]||{},p=ts.length?Math.round(ts.reduce((n,_,i)=>n+(st[i]===true?1:0),0)/ts.length*100):0;
+ root.innerHTML='<div class="title"><div><h2>☑ Checklist & SOP Program</h2><p>Data checklist tersimpan terpusat di Supabase.</p></div></div>'+
+ '<div class="panel memberChecklistV15"><div class="memberDayNavV15">'+Array.from({length:60},(_,i)=>{const n=i+1;return '<button type="button" class="'+(n===d?'active ':'')+(n<d?'done':'')+'" '+(n===d?'':'disabled')+'>'+n+'</button>'}).join('')+'</div>'+
+ '<div class="notice"><b>Hari '+d+'/60</b> • Progress checklist: <b>'+p+'%</b></div>'+
+ '<div style="margin-top:10px">'+(ts.length?ts.map((t,i)=>'<label class="memberTaskV15"><input type="checkbox" '+(st[i]===true?'checked':'')+' data-v16-check="'+i+'"><div><b>'+esc(t)+'</b></div></label>').join(''):'<div class="empty">Belum ada tugas checklist untuk Hari '+d+'.</div>')+'</div>'+
+ '<button id="memberFinishDayV16" type="button" class="btn" style="width:100%;margin-top:14px" '+(p<100||d>=60?'disabled':'')+'>Selesaikan Hari Ini & Buka Hari Berikutnya →</button>'+
+ '<div class="notice" style="margin-top:10px">'+(p>=100?(d<60?'Checklist 100%. Hari berikutnya siap dibuka.':'Program 60 hari selesai.'):'Checklist harus 100% untuk membuka hari berikutnya.')+'</div></div>';
+ root.querySelectorAll('[data-v16-check]').forEach(input=>input.addEventListener('change',()=>window.__memberCheckV15(Number(input.dataset.v16Check),input.checked)));
+ document.getElementById('memberFinishDayV16')?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();window.__finishMemberDayV16()});
+ window.__memberChecklistRenderV16=renderChecklistV16;
+}
+window.__memberChecklistRenderV16=renderChecklistV16;
+const oldMemberCheckV15=window.__memberCheckV15;
+window.__memberCheckV15=async function(i,val){
+  if(typeof oldMemberCheckV15==='function')await oldMemberCheckV15(i,val);
+  renderChecklistV16();
+};
+document.addEventListener('click',e=>{if(e.target?.closest?.('#memberFinishDayV16')){e.preventDefault();e.stopPropagation();window.__finishMemberDayV16()}},true);
+
+const oldShowV16=window.showPage;
+window.showPage=function(page){const r=typeof oldShowV16==='function'?oldShowV16.apply(this,arguments):undefined;if(currentRole==='member'&&page==='program')setTimeout(renderChecklistV16,80);return r};
+
+const oldAdminBridge=window.umrohAdminRefreshBridge;
+window.umrohAdminRefreshBridge=async function(){
+  if(typeof oldAdminBridge==='function')await oldAdminBridge();
+};
+
+window.renderMembers=function(){
+ const body=document.getElementById('memberRows');if(!body)return;
+ const q=(document.getElementById('memberSearch')?.value||'').toLowerCase().trim(),rows=(window.members||members||[]).filter(m=>(String(m.name||'')+' '+String(m.username||'')+' '+String(m.wa||'')).toLowerCase().includes(q)).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+ const idArg=id=>JSON.stringify(String(id));
+ body.innerHTML=rows.length?rows.map(m=>{
+  const d=Math.max(1,Number(m.day||1)),cp=pct(m,d),dayPct=Math.round(Math.max(0,Math.min(60,Number(m.day||0)))/60*100),id=idArg(m.id);
+  return '<tr data-member-id="'+esc(m.id)+'" style="cursor:pointer"><td><b>'+esc(m.name)+'</b></td><td>'+esc(m.username)+'</td><td><a target="_blank" href="'+(typeof waUrl==='function'?waUrl(m.wa):'#')+'" onclick="event.stopPropagation()">'+esc(m.wa)+'</a></td><td><span class="status '+(m.status==='approved'?'active':'pending')+'">'+(m.status==='approved'?'AKTIF':'PENDING')+'</span></td><td>'+esc(m.registeredAt||'-')+'</td><td>'+Number(m.day||0)+'/60</td><td><b>Hari '+dayPct+'%</b><br><span class="small">Checklist H'+d+': '+cp+'%</span><div class="pctBar"><span style="width:'+cp+'%"></span></div></td><td>'+totalLead(m)+'</td><td>'+totalClosing(m)+'</td><td><button class="btnMini" onclick="event.stopPropagation();window.adminEditMember('+id+')">Edit</button> <button class="btnMini" style="background:#fff0f0;color:#a33" onclick="event.stopPropagation();window.deleteMember('+id+')">Hapus</button></td></tr>';
+ }).join(''):'<tr><td colspan="10"><div class="empty">Belum ada member yang terdaftar.</div></td></tr>';
+};
+document.addEventListener('click',e=>{const tr=e.target?.closest?.('#memberRows tr[data-member-id]');if(tr&&!e.target.closest('button,a')&&typeof window.adminEditMember==='function')window.adminEditMember(tr.dataset.memberId)},true);
+
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{if(currentRole==='member'&&document.getElementById('page-program')?.classList.contains('active'))renderChecklistV16()},120));else setTimeout(()=>{if(currentRole==='member'&&document.getElementById('page-program')?.classList.contains('active'))renderChecklistV16()},120);
+})();
+</script>
+
+
+<!-- FINAL MEMBER DAY + CROSS-DEVICE SYNC V17 -->
+<script id="memberDayCrossDeviceV17">
+(function(){
+'use strict';
+window.__centralSyncV18Primary=true;
+const SB=()=>window.supabaseClient||null;
+const TOK=()=>window.umrohMemberSession?.get?.()||'';
+const clone=v=>JSON.parse(JSON.stringify(v||{}));
+
+async function refreshMemberFromServerV17(){
+  const sb=SB(), token=TOK();
+  if(!sb||!token||currentRole!=='member'||!currentUser)return false;
+  const r=await sb.rpc('member_session_get',{p_token:token});
+  if(r.error)throw r.error;
+  if(!r.data?.success)throw new Error(r.data?.message||'Sesi member tidak valid.');
+  const p=r.data.profile||{};
+  currentUser.id=p.id;
+  currentUser.name=p.name||currentUser.name||'';
+  currentUser.username=p.username||currentUser.username||'';
+  currentUser.wa=p.wa||currentUser.wa||'';
+  currentUser.status=p.status||currentUser.status||'approved';
+  currentUser.day=Math.max(1,Number(p.day||1));
+  if(typeof saveAuthSession==='function')saveAuthSession();
+  return true;
+}
+
+window.__finishMemberDayV17=async function(){
+  if(window.__memberFinishBusyV17)return;
+  if(currentRole!=='member'||!currentUser){alert('Sesi member belum siap. Silakan login kembali.');return}
+  const sb=SB(),token=TOK();
+  if(!sb||!token){alert('Sesi member belum siap. Silakan login kembali.');return}
+
+  const oldDay=Math.max(1,Number(currentUser.day||1));
+  const cfg=window.__umrohCentralConfig?.checklist||{};
+  const dayCfg=cfg[String(oldDay)]||cfg[oldDay]||{};
+  const tasks=Array.isArray(dayCfg.tasks)?dayCfg.tasks:[];
+  const checks=currentUser.checks?.[String(oldDay)]||currentUser.checks?.[oldDay]||{};
+  const done=tasks.reduce((n,_,i)=>n+(checks[i]===true?1:0),0);
+  const pct=tasks.length?Math.round(done/tasks.length*100):0;
+  if(oldDay>=60){alert('Program 60 hari selesai.');return}
+  if(pct<100){alert('Checklist Hari '+oldDay+' baru '+pct+'%. Lengkapi sampai 100% terlebih dahulu.');return}
+
+  const btn=document.getElementById('memberFinishDayV16');
+  window.__memberFinishBusyV17=true;
+  if(btn){btn.disabled=true;btn.textContent='Menyimpan progress ke database...';}
+
+  try{
+    let result=null;
+    const primary=await sb.rpc('member_day_complete',{p_token:token});
+    if(!primary.error && primary.data?.success){
+      result=primary.data;
+    }else{
+      console.warn('member_day_complete V17 gagal, mencoba fallback member_day_update',primary.error||primary.data);
+      const fallback=await sb.rpc('member_day_update',{p_token:token,p_day:oldDay+1});
+      if(fallback.error)throw fallback.error;
+      if(!fallback.data?.success)throw new Error(fallback.data?.message||primary.data?.message||'Gagal membuka hari berikutnya.');
+      result={success:true,day:oldDay+1,previous_day:oldDay};
+    }
+
+    await refreshMemberFromServerV17();
+    if(Number(currentUser.day)!==Number(result.day)){
+      throw new Error('Database belum mengonfirmasi perubahan Hari '+oldDay+' ke Hari '+result.day+'.');
+    }
+
+    if(typeof window.loadMemberCentral==='function')await window.loadMemberCentral();
+    currentUser.day=Number(result.day);
+    if(typeof window.__memberChecklistRenderV16==='function')window.__memberChecklistRenderV16();
+    if(typeof window.renderMemberDashboardMilestones==='function')window.renderMemberDashboardMilestones();
+
+    alert('Hari '+oldDay+' selesai. Hari '+Number(result.day)+' sekarang terbuka dan tersimpan di Supabase.');
+  }catch(e){
+    console.error('Member day V17:',e);
+    alert('Gagal membuka hari berikutnya: '+(e?.message||e));
+    try{
+      await refreshMemberFromServerV17();
+      if(typeof window.__memberChecklistRenderV16==='function')window.__memberChecklistRenderV16();
+    }catch(_){}
+  }finally{
+    window.__memberFinishBusyV17=false;
+    const b=document.getElementById('memberFinishDayV16');
+    if(b)b.disabled=false;
+  }
+};
+
+// Replace every V16 finish call, including legacy inline/capture handlers.
+window.__finishMemberDayV16=window.__finishMemberDayV17;
+
+const oldShowV17=window.showPage;
+window.showPage=function(page){
+  const r=typeof oldShowV17==='function'?oldShowV17.apply(this,arguments):undefined;
+  if(currentRole==='member'&&page==='program')setTimeout(()=>{if(typeof window.__memberChecklistRenderV16==='function')window.__memberChecklistRenderV16()},80);
+  return r;
+};
+
+// Server-authoritative polling: profile/day + checklist are never sourced from localStorage.
+})();
+</script>
+
+
+<!-- FINAL MEMBER WRITE + DAY ADVANCE V19 -->
+<style id="memberWriteV19">
+#page-program #memberFinishDayV16{
+  position:relative!important;
+  z-index:10000!important;
+  pointer-events:auto!important;
+  touch-action:manipulation!important;
+}
+#memberDayV19Status{
+  margin-top:10px;
+  padding:11px 14px;
+  border-radius:10px;
+  background:#e8f8f2;
+  color:#187451;
+  font-size:13px;
+}
+</style>
+<script id="memberWriteV19">
+(function(){
+  'use strict';
+  const S=()=>window.supabaseClient||null;
+  const T=()=>window.umrohMemberSession?.get?.()||'';
+  let busy=false;
+
+  function status(msg,ok){
+    const b=document.getElementById('memberDayV19Status');
+    if(!b)return;
+    b.textContent=msg||'';
+    b.style.display=msg?'block':'none';
+    b.style.background=ok===false?'#fff0f0':'#e8f8f2';
+    b.style.color=ok===false?'#a52c2c':'#187451';
+  }
+
+  async function syncMemberV19(){
+    if(typeof window.loadMemberCentral==='function')await window.loadMemberCentral();
+    if(typeof window.__memberChecklistRenderV16==='function')window.__memberChecklistRenderV16();
+    if(typeof window.renderMemberDashboardMilestones==='function')window.renderMemberDashboardMilestones();
+  }
+
+  window.__finishMemberDayV19=async function(){
+    if(busy)return;
+    if(currentRole!=='member'||!currentUser){
+      alert('Sesi member belum siap. Silakan login kembali.');
+      return;
+    }
+    const sb=S(),token=T();
+    if(!sb||!token){
+      alert('Sesi member belum siap. Silakan login kembali.');
+      return;
+    }
+
+    busy=true;
+    window.__memberFinishBusyV17=true;
+    const btn=document.getElementById('memberFinishDayV16');
+    if(btn){btn.disabled=true;btn.textContent='Menyimpan progress ke database...';}
+    status('Memeriksa checklist dan menyimpan progress ke Supabase...',true);
+
+    try{
+      // Server is authoritative: it validates 100% and advances the member day atomically.
+      const r=await sb.rpc('member_day_complete_v19',{p_token:token});
+      if(r.error)throw r.error;
+      if(!r.data?.success)throw new Error(r.data?.message||'Hari berikutnya belum dapat dibuka.');
+
+      const nextDay=Number(r.data.day||0);
+      if(!nextDay)throw new Error('Database tidak mengembalikan nomor hari berikutnya.');
+
+      // Read the database again immediately. No localStorage is used as source of truth.
+      const snap=await sb.rpc('member_dashboard_snapshot',{p_token:token});
+      if(snap.error)throw snap.error;
+      if(!snap.data?.success)throw new Error(snap.data?.message||'Gagal membaca progress terbaru dari Supabase.');
+
+      const serverDay=Number(snap.data?.profile?.day||0);
+      if(serverDay!==nextDay)throw new Error('Supabase belum mengonfirmasi perubahan ke Hari '+nextDay+'. Server membaca Hari '+serverDay+'.');
+
+      currentUser.day=serverDay;
+      currentUser.checks=snap.data.checklist||{};
+      currentUser.leads=(snap.data.leads||[]).map(typeof dbToLead==='function'?dbToLead:(x=>x));
+      currentUser.closingData=(snap.data.closings||[]).map(typeof dbToClosing==='function'?dbToClosing:(x=>x));
+      currentUser.activityLog=(snap.data.activities||[]).map(typeof dbToActivity==='function'?dbToActivity:(x=>x));
+
+      await syncMemberV19();
+      status('Berhasil. Hari '+(serverDay-1)+' selesai dan Hari '+serverDay+' sudah tersimpan di Supabase.',true);
+      alert('Hari '+(serverDay-1)+' selesai. Hari '+serverDay+' sekarang terbuka dan tersimpan di Supabase.');
+    }catch(e){
+      console.error('Member Day V19:',e);
+      status('Gagal menyimpan progress: '+(e?.message||e),false);
+      alert('Gagal membuka hari berikutnya: '+(e?.message||e));
+      try{await syncMemberV19()}catch(_){}
+    }finally{
+      busy=false;
+      window.__memberFinishBusyV17=false;
+      const b=document.getElementById('memberFinishDayV16');
+      if(b)b.disabled=false;
+      // renderChecklist may recreate the button after sync; make it actionable again.
+      setTimeout(bindFinishV19,50);
+    }
+  };
+
+  // All legacy finish entry points now use the same server-authoritative V19 path.
+  window.__finishMemberDayV17=window.__finishMemberDayV19;
+  window.__finishMemberDayV16=window.__finishMemberDayV19;
+  window.__finishMemberDayV15=window.__finishMemberDayV19;
+  window.finishMemberDay=window.__finishMemberDayV19;
+
+  function ensureStatus(){
+    const btn=document.getElementById('memberFinishDayV16');
+    if(!btn)return;
+    let box=document.getElementById('memberDayV19Status');
+    if(!box){
+      box=document.createElement('div');
+      box.id='memberDayV19Status';
+      box.style.display='none';
+      btn.parentNode.insertBefore(box,btn.nextSibling);
+    }
+  }
+
+  function bindFinishV19(){
+    const btn=document.getElementById('memberFinishDayV16');
+    if(!btn)return;
+    ensureStatus();
+    btn.disabled=false;
+    btn.style.pointerEvents='auto';
+    btn.style.touchAction='manipulation';
+    if(btn.dataset.v19bound==='1')return;
+    btn.dataset.v19bound='1';
+    btn.onclick=function(e){
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      window.__finishMemberDayV19();
+    };
+  }
+
+  // Capture phase wins over older V15/V16/V17 handlers and prevents duplicate legacy calls.
+  document.addEventListener('click',function(e){
+    const btn=e.target?.closest?.('#memberFinishDayV16');
+    if(!btn)return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    window.__finishMemberDayV19();
+  },true);
+
+  const oldRender=window.__memberChecklistRenderV16;
+  window.__memberChecklistRenderV16=function(){
+    const r=typeof oldRender==='function'?oldRender.apply(this,arguments):undefined;
+    setTimeout(bindFinishV19,0);
+    return r;
+  };
+
+  const oldShow=window.showPage;
+  window.showPage=function(page){
+    const r=typeof oldShow==='function'?oldShow.apply(this,arguments):undefined;
+    if(currentRole==='member'&&page==='program')setTimeout(bindFinishV19,120);
+    return r;
+  };
+
+  setInterval(function(){
+    if(currentRole==='member'&&document.getElementById('page-program')?.classList.contains('active'))bindFinishV19();
+  },1000);
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(bindFinishV19,300));
+  else setTimeout(bindFinishV19,300);
+})();
+</script>
+
+<!-- V20: member operational writes allowed; profile identity fields remain protected; Supabase central sync verified 2026-09-27 -->
