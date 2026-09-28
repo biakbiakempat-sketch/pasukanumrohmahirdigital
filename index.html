@@ -973,7 +973,74 @@ function downloadExcel(filename,headers,rows){
    headers.map(h=>'<th>'+xlsEscape(h)+'</th>').join('')+
    '</tr>'+
    rows.map(r=>'<tr>'+r.map(x=>'<td>'+xlsEscape(x)+'</td>').join('')+'</tr>').join('')+
-   '</table></body></html>';
+   '</table>
+<!-- FINAL MEMBER DASHBOARD CHECKLIST DELIVERY V27 -->
+<style id="memberDashboardChecklistDeliveryV27">
+#page-memberDashboard #memberChecks{display:block!important;min-height:10px}
+#page-memberDashboard #memberChecks .check{display:flex!important}
+#page-memberDashboard .memberChecklistEmpty{padding:12px;border:1px dashed var(--line,#dfe6ef);border-radius:10px;color:#71809a;background:#fafbfd}
+</style>
+<script id="memberDashboardChecklistDeliveryV27">
+(function(){
+  'use strict';
+  function esc(v){
+    return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  }
+  function centralTasks(day){
+    const c=window.__umrohCentralConfig?.checklist;
+    const x=c&&(c[String(day)]||c[day]);
+    if(Array.isArray(x?.tasks))return x.tasks.filter(Boolean);
+    if(typeof window.tasksForDay==='function'){
+      const t=window.tasksForDay(day);
+      if(Array.isArray(t)&&t.length)return t.filter(Boolean);
+    }
+    return [];
+  }
+  function renderDashboardChecklist(){
+    if(window.currentRole!=='member'||!window.currentUser)return;
+    const root=document.getElementById('page-memberDashboard');
+    const wrap=document.getElementById('memberChecks');
+    if(!root||!wrap)return;
+    const day=Math.max(1,Number(window.currentUser.day||1));
+    const tasks=centralTasks(day);
+    window.currentUser.checks=window.currentUser.checks||{};
+    window.currentUser.checks[day]=window.currentUser.checks[day]||{};
+    const st=window.currentUser.checks[day];
+    tasks.forEach((_,i)=>{if(typeof st[i]!=='boolean')st[i]=false});
+    const done=tasks.filter((_,i)=>st[i]===true).length;
+    const pct=tasks.length?Math.round(done/tasks.length*100):0;
+    wrap.innerHTML=tasks.length
+      ? tasks.map((t,i)=>'<label class="check"><input type="checkbox" data-dashboard-check="'+i+'" '+(st[i]===true?'checked':'')+'><div><b>'+esc(t)+'</b></div></label>').join('')
+      : '<div class="memberChecklistEmpty">Checklist Hari '+day+' belum berhasil dimuat dari konfigurasi pusat. Refresh halaman untuk mengambil ulang data Supabase.</div>';
+    const k=document.getElementById('mCheck');if(k)k.textContent=pct+'%';
+    const notice=document.getElementById('memberNotice');
+    if(notice)notice.textContent=pct===100?(day<60?'Checklist 100%. Hari berikutnya siap dibuka.':'Program 60 hari selesai!'):'Checklist harus 100% untuk membuka hari berikutnya.';
+    wrap.querySelectorAll('input[data-dashboard-check]').forEach(input=>{
+      input.addEventListener('change',function(){
+        const i=Number(this.dataset.dashboardCheck);
+        if(typeof window.toggleCheck==='function')window.toggleCheck(i,this.checked);
+      });
+    });
+  }
+  const original=window.renderMember;
+  window.renderMember=function(){
+    try{if(typeof original==='function')original.apply(this,arguments)}catch(e){console.warn('dashboard member render',e)}
+    renderDashboardChecklist();
+  };
+  window.__renderDashboardChecklistV27=renderDashboardChecklist;
+  function retry(){
+    if(window.currentRole==='member'){
+      renderDashboardChecklist();
+      setTimeout(renderDashboardChecklist,250);
+      setTimeout(renderDashboardChecklist,1000);
+      setTimeout(renderDashboardChecklist,2000);
+    }
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',retry);
+  else retry();
+})();
+</script>
+</body></html>';
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});
  const a=document.createElement("a");
  a.href=URL.createObjectURL(blob);
