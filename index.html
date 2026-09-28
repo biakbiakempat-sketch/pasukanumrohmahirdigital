@@ -5301,5 +5301,222 @@ setInterval(()=>{
   window.renderAllAdmin=wrapped;
 })();
 </script>
+
+<!-- RELEASE HARDENING V32 - 300 MEMBER SCALE -->
+<script id="releaseHardeningV32">
+(function(){
+  'use strict';
+
+  // The previous V31 patch was inserted into the Excel template string by mistake.
+  // Keep this authoritative copy at the real end of the document.
+  const baseMemberLoad=window.loadMemberCentral;
+  if(typeof baseMemberLoad==='function'&&!baseMemberLoad.__memberViewSyncV32){
+    const renderActiveMemberView=function(){
+      if(typeof currentRole==='undefined'||currentRole!=='member'||!currentUser)return;
+      const active=document.querySelector('.page.active')?.id||'';
+      try{
+        if(active==='page-program'){
+          if(typeof window.__memberChecklistRenderV16==='function')window.__memberChecklistRenderV16();
+          else if(typeof window.renderMember==='function')window.renderMember();
+        }else if(active==='page-activity'){
+          if(typeof window.renderMemberActivity==='function')window.renderMemberActivity();
+          if(typeof window.renderMemberReports==='function')window.renderMemberReports();
+        }else if(active==='page-leads'){
+          if(typeof window.renderMyLeadsTable==='function')window.renderMyLeadsTable();
+          if(typeof window.renderMemberLeadReport==='function')window.renderMemberLeadReport();
+        }else if(active==='page-memberClosing'){
+          if(typeof window.renderMemberClosing==='function')window.renderMemberClosing();
+        }else if(active==='page-memberDashboard'){
+          if(typeof window.renderMember==='function')window.renderMember();
+        }
+      }catch(e){console.warn('V32 member render:',e)}
+    };
+    const wrappedMemberLoad=async function(){
+      const result=await baseMemberLoad.apply(this,arguments);
+      renderActiveMemberView();
+      return result;
+    };
+    wrappedMemberLoad.__memberViewSyncV32=true;
+    window.loadMemberCentral=wrappedMemberLoad;
+  }
+
+  // Client-generated UUIDs make create operations retry-safe:
+  // if a response is lost and the user presses Save again, the same row is updated.
+  const oldSaveLead=window.saveLead;
+  if(typeof oldSaveLead==='function'&&!oldSaveLead.__idempotentV32){
+    const wrapped=async function(){
+      const idEl=document.getElementById('editLeadId');
+      if(idEl&&!idEl.value&&window.crypto?.randomUUID)idEl.value=window.crypto.randomUUID();
+      return oldSaveLead.apply(this,arguments);
+    };
+    wrapped.__idempotentV32=true;
+    window.saveLead=wrapped;
+  }
+
+  const oldSaveClosing=window.saveClosing;
+  if(typeof oldSaveClosing==='function'&&!oldSaveClosing.__idempotentV32){
+    const wrapped=async function(){
+      const idEl=document.getElementById('closingEditId');
+      if(idEl&&!idEl.value&&window.crypto?.randomUUID)idEl.value=window.crypto.randomUUID();
+      return oldSaveClosing.apply(this,arguments);
+    };
+    wrapped.__idempotentV32=true;
+    window.saveClosing=wrapped;
+  }
+
+  // Super Admin gets a small summary for continuous synchronization.
+  // Heavy full snapshots are reserved for explicit report/detail loads.
+  async function adminLightRefresh(){
+    if(typeof currentRole==='undefined'||currentRole!=='admin'||!window.supabaseClient)return;
+    if(window.__adminLightRefreshBusy)return;
+    window.__adminLightRefreshBusy=true;
+    try{
+      const {data,error}=await window.supabaseClient.rpc('admin_dashboard_summary');
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Admin summary gagal dimuat.');
+      const old=Array.isArray(window.members)?window.members:[];
+      const oldMap=new Map(old.map(m=>[String(m.id),m]));
+      const next=(Array.isArray(data.members)?data.members:[]).map(p=>{
+        const prev=oldMap.get(String(p.id))||{};
+        return {
+          ...prev,
+          id:p.id,name:p.name||'',username:p.username||'',wa:p.wa||'',
+          role:p.role||'member',status:p.status||'pending',day:Number(p.day||0),
+          registeredAt:p.registered_at||'-',approvedAt:p.approved_at||null,
+          _summary:{
+            activityRows:Number(p.activity_rows||0),
+            leadRows:Number(p.lead_rows||0),
+            closingRows:Number(p.closing_rows||0),
+            closingOmset:Number(p.closing_omset||0),
+            checklistDays:Number(p.checklist_days||0),
+            latestActivity:p.latest_activity||null,
+            latestChecklist:p.latest_checklist||null
+          },
+          checks:prev.checks||{},sales:prev.sales||{},
+          activityLog:prev.activityLog||[],leads:prev.leads||[],closingData:prev.closingData||[]
+        };
+      });
+      window.members=next;
+      members=next;
+      const active=document.querySelector('.page.active')?.id||'';
+      if(active==='page-members'){
+        if(typeof window.renderMembers==='function')window.renderMembers();
+        if(typeof window.renderApproval==='function')window.renderApproval();
+      }else if(active==='page-adminDashboard'){
+        if(typeof window.renderAllAdmin==='function')window.renderAllAdmin();
+      }
+      window.__adminLastLightSync=Date.now();
+    }catch(e){console.warn('Admin light sync V32:',e)}
+    finally{window.__adminLightRefreshBusy=false}
+  }
+
+  // Use summary counts for KPI/member-list calculations when detailed rows are not loaded.
+  const oldTotalLead=window.totalLead;
+  const oldTotalClosing=window.totalClosing;
+  const oldTotalActivities=window.totalActivities;
+  if(typeof oldTotalLead==='function'&&!oldTotalLead.__summaryV32){
+    const f=function(m){
+      const a=Array.isArray(m?.leads)?m.leads.length:0;
+      return a||Number(m?._summary?.leadRows||0)||Number(oldTotalLead(m)||0);
+    };
+    f.__summaryV32=true;window.totalLead=f;totalLead=f;
+  }
+  if(typeof oldTotalClosing==='function'&&!oldTotalClosing.__summaryV32){
+    const f=function(m){
+      const a=Array.isArray(m?.closingData)?m.closingData.length:0;
+      return a||Number(m?._summary?.closingRows||0)||Number(oldTotalClosing(m)||0);
+    };
+    f.__summaryV32=true;window.totalClosing=f;totalClosing=f;
+  }
+  if(typeof oldTotalActivities==='function'&&!oldTotalActivities.__summaryV32){
+    const f=function(m){
+      if(Array.isArray(m?.activityLog)&&m.activityLog.length)return oldTotalActivities(m);
+      return Number(m?._summary?.activityRows||0)||Number(oldTotalActivities(m)||0);
+    };
+    f.__summaryV32=true;window.totalActivities=f;totalActivities=f;
+  }
+
+  // Replace the overlapping 5-second admin loaders with the lightweight summary.
+  // Explicit CRUD functions still call finalAdminRefresh, which performs a full refresh.
+  const fullAdminRefresh=async function(){
+    if(typeof currentRole==='undefined'||currentRole!=='admin'||!window.supabaseClient)return;
+    if(window.__adminFullRefreshBusy)return;
+    window.__adminFullRefreshBusy=true;
+    try{
+      if(typeof loadAdminCentral==='function')await loadAdminCentral();
+      window.__adminLastFullSync=Date.now();
+    }catch(e){console.warn('Admin full refresh V32:',e)}
+    finally{window.__adminFullRefreshBusy=false}
+  };
+  const periodicAdminRefresh=async function(){
+    if(typeof currentRole==='undefined'||currentRole!=='admin'||document.hidden)return;
+    // Do not replace a just-completed full refresh.
+    if(Date.now()-(window.__adminLastFullSync||0)<5000)return;
+    await adminLightRefresh();
+  };
+  window.adminLightRefreshV32=adminLightRefresh;
+  window.adminFullRefreshV32=fullAdminRefresh;
+  window.adminRefresh=periodicAdminRefresh;
+  if(typeof adminRefresh!=='undefined')adminRefresh=periodicAdminRefresh;
+  window.finalAdminRefresh=periodicAdminRefresh;
+  window.umrohAdminRefreshBridge=periodicAdminRefresh;
+
+  // Existing showPage wrappers now call the light loader. Load the heavy snapshot only
+  // when the admin actually opens a data-heavy report page.
+  const oldShowFinal=window.showPage;
+  if(typeof oldShowFinal==='function'&&!oldShowFinal.__v32HeavyRoute){
+    const wrappedShow=function(page){
+      const result=oldShowFinal.apply(this,arguments);
+      if(currentRole==='admin'&&(page==='activities'||page==='adminLeads'||page==='adminIncome')){
+        setTimeout(function(){fullAdminRefresh()},120);
+      }
+      return result;
+    };
+    wrappedShow.__v32HeavyRoute=true;
+    window.showPage=wrappedShow;
+  }
+
+  // One low-frequency safety sync. Other legacy timers are harmless because adminRefresh
+  // now points to the lightweight path.
+  if(!window.__v32AdminTimer){
+    window.__v32AdminTimer=setInterval(function(){
+      if(currentRole==='admin'&&!document.hidden)periodicAdminRefresh();
+    },15000);
+  }
+
+  // If the member opens a data page, make sure the latest central snapshot is rendered.
+  if(!window.__v32MemberTimer){
+    window.__v32MemberTimer=setInterval(function(){
+      if(currentRole==='member'&&!document.hidden&&typeof loadMemberCentral==='function')loadMemberCentral();
+    },30000);
+  }
+
+  // Expose an explicit per-member audit loader for the Super Admin.
+  window.loadAdminMemberSnapshotV32=async function(id){
+    if(currentRole!=='admin'||!window.supabaseClient)throw new Error('Super Admin belum login.');
+    const {data,error}=await window.supabaseClient.rpc('admin_member_snapshot',{p_member_id:String(id)});
+    if(error)throw error;
+    if(!data?.success)throw new Error(data?.message||'Detail member gagal dimuat.');
+    const p=data.profile||{}, idS=String(p.id);
+    const m={
+      id:p.id,name:p.name||'',username:p.username||'',wa:p.wa||'',role:p.role||'member',
+      status:p.status||'pending',day:Number(p.day||0),
+      registeredAt:p.registered_at||'-',approvedAt:p.approved_at||null,
+      activityLog:(data.activities||[]).map(x=>typeof dbToActivity==='function'?dbToActivity(x):x),
+      leads:(data.leads||[]).map(x=>typeof dbToLead==='function'?dbToLead(x):x),
+      closingData:(data.closings||[]).map(x=>typeof dbToClosing==='function'?dbToClosing(x):x),
+      checks:data.checklists||{},sales:{}
+    };
+    (m.activityLog||[]).forEach(a=>{if(a.day)m.sales[a.day]={...a}});
+    const idx=(window.members||[]).findIndex(x=>String(x.id)===idS);
+    if(idx>=0)window.members[idx]=members[idx]=m;else window.members.push(m);
+    return m;
+  };
+
+  // Initial lightweight sync after this hardening layer is installed.
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(adminLightRefresh,300)});
+  else setTimeout(adminLightRefresh,300);
+})();
+</script>
 </body>
 </html>
