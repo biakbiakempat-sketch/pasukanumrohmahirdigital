@@ -2195,13 +2195,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 })();
 </script>
 <script id="finalMobileLoginFix">(function(){
-  function enforceMenuOrderV25(){
-  ['adminNav','memberNav'].forEach(id=>{
-    const nav=document.getElementById(id);if(!nav)return;
-    const logout=nav.querySelector('.mobileLogout');if(logout)nav.appendChild(logout);
-  });
-}
-function boot(){
+  function boot(){
     const form=document.getElementById("loginForm");
     if(!form||form.dataset.finalLoginFix==="1")return;
     form.dataset.finalLoginFix="1";
@@ -5077,6 +5071,12 @@ document.addEventListener('click',function(e){
   if(item)setTimeout(closeMenus,0);
 },true);
 
+function enforceMenuOrderV25(){
+  ['adminNav','memberNav'].forEach(id=>{
+    const nav=document.getElementById(id);if(!nav)return;
+    const logout=nav.querySelector('.mobileLogout');if(logout)nav.appendChild(logout);
+  });
+}
 function boot(){
   bindMenuClose();
   closeMenus();
