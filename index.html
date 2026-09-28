@@ -2195,7 +2195,13 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 })();
 </script>
 <script id="finalMobileLoginFix">(function(){
-  function boot(){
+  function enforceMenuOrderV25(){
+  ['adminNav','memberNav'].forEach(id=>{
+    const nav=document.getElementById(id);if(!nav)return;
+    const logout=nav.querySelector('.mobileLogout');if(logout)nav.appendChild(logout);
+  });
+}
+function boot(){
     const form=document.getElementById("loginForm");
     if(!form||form.dataset.finalLoginFix==="1")return;
     form.dataset.finalLoginFix="1";
@@ -4967,23 +4973,76 @@ async function adminSyncV25(){
   }
 }
 
+function incomeMembersWithClosingV25(){
+  const seen=new Set(),out=[];
+  (window.members||[]).forEach(m=>{
+    const rows=Array.isArray(m.closingData)?m.closingData:[];
+    if(!rows.length)return;
+    const id=String(m.id||m.username||'');
+    if(!id||seen.has(id))return;
+    seen.add(id);
+    out.push({id,name:String(m.name||m.username||'').trim()||String(m.username||id)});
+  });
+  return out.sort((a,b)=>a.name.localeCompare(b.name,'id',{sensitivity:'base'}));
+}
+function prepareIncomeFiltersV25(){
+  const page=document.getElementById('page-adminIncome');if(!page)return;
+  const field=page.querySelector('#incomeMemberSearch')?.closest('.field');
+  if(field){
+    const old=document.getElementById('incomeMemberSearch');
+    if(old&&old.tagName!=='SELECT'){
+      const cur=old.value||'';
+      const sel=document.createElement('select');
+      sel.id='incomeMemberSearch';sel.className='activityMemberSearch';
+      sel.onchange=()=>renderIncomeMember();
+      const lab=field.querySelector('label');if(lab)lab.textContent='Nama Member';
+      field.replaceChild(sel,old);
+      sel.dataset.v25IncomeSelect='1';sel.dataset.v25Previous=cur;
+    }else if(old){old.onchange=()=>renderIncomeMember();}
+  }
+  const sort=document.getElementById('incomeSort');const sortField=sort?.closest('.field');
+  if(sortField)sortField.remove();
+  const sel=document.getElementById('incomeMemberSearch');if(!sel)return;
+  const current=sel.value||'all',opts=incomeMembersWithClosingV25();
+  sel.innerHTML='<option value="all">SEMUA MEMBER</option>'+
+    opts.map(m=>'<option value="'+esc(String(m.id))+'">'+esc(m.name)+'</option>').join('');
+  sel.value=[...sel.options].some(o=>o.value===current)?current:'all';
+}
 function renderIncomeV25(){
   const body=document.getElementById('incomeRows');if(!body)return;
-  let rows=[];
-  (window.members||[]).forEach(m=>(Array.isArray(m.closingData)?m.closingData:[]).forEach(x=>rows.push({...x,member:m.name||m.username||'',memberId:m.id})));
-  const q=(document.getElementById('incomeMemberSearch')?.value||'').toLowerCase().trim();
+  prepareIncomeFiltersV25();
+  const selected=String(document.getElementById('incomeMemberSearch')?.value||'all');
   const st=document.getElementById('incomeStart')?.value||'',en=document.getElementById('incomeEnd')?.value||'';
-  if(q)rows=rows.filter(x=>String(x.member).toLowerCase().includes(q));
-  if(st)rows=rows.filter(x=>String(x.date||'')>=st);
-  if(en)rows=rows.filter(x=>String(x.date||'')<=en);
-  rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
-  const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0);
-  const pax=rows.reduce((n,x)=>n+Number(x.pax||0),0);
-  const om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
-  const uniq=new Set(rows.map(x=>String(x.memberId)));
+  const seen=new Set(),rows=[];
+  (window.members||[]).forEach(m=>{
+    const memberId=String(m.id||''),member=String(m.name||m.username||memberId);
+    if(selected!=='all'&&memberId!==selected)return;
+    (Array.isArray(m.closingData)?m.closingData:[]).forEach(x=>{
+      const id=String(x.id||'');if(id&&seen.has(id))return;if(id)seen.add(id);
+      const row={...x,member,memberId};
+      if(st&&String(row.date||'')<st)return;if(en&&String(row.date||'')>en)return;
+      rows.push(row);
+    });
+  });
+  rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(a.member||'').localeCompare(String(b.member||''),'id',{sensitivity:'base'}));
+  const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0),pax=rows.reduce((n,x)=>n+Number(x.pax||0),0),om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
+  const summaryMap=new Map();
+  rows.forEach(x=>{
+    const k=String(x.memberId);
+    if(!summaryMap.has(k))summaryMap.set(k,{member:x.member,invoice:0,pax:0,omset:0});
+    const g=summaryMap.get(k);g.invoice+=Number(x.invoice||0);g.pax+=Number(x.pax||0);g.omset+=Number(x.omset||0);
+  });
+  const summary=[...summaryMap.values()].sort((a,b)=>a.member.localeCompare(b.member,'id',{sensitivity:'base'}));
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
-  set('incomeInvoiceTotal',inv);set('incomePaxTotal',pax);set('incomeOmsetTotal','Rp '+money(om));set('incomeMemberTotal',uniq.size);
-  body.innerHTML=rows.length?rows.map(x=>'<tr><td><b>'+esc(x.member)+'</b></td><td>'+esc(x.date)+'</td><td>'+Number(x.invoice||0)+'</td><td>'+esc(x.name)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel)+'</td><td>'+esc(x.package)+'</td><td>Rp '+money(x.omset)+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+  set('incomeInvoiceTotal',inv);set('incomePaxTotal',pax);set('incomeOmsetTotal','Rp '+money(om));set('incomeMemberTotal',summary.length);
+  const summaryBody=document.getElementById('incomeMemberSummaryRows');
+  if(summaryBody)summaryBody.innerHTML=summary.length?summary.map(g=>'<tr><td><b>'+esc(g.member)+'</b></td><td>'+g.invoice+'</td><td>'+g.pax+'</td><td>Rp '+money(g.omset)+'</td></tr>').join(''):'<tr><td colspan="4"><div class="empty">Belum ada member yang mengisi closing.</div></td></tr>';
+  const chart=document.getElementById('incomeBarChart');
+  if(chart){
+    const top=summary.slice().sort((a,b)=>b.omset-a.omset||a.member.localeCompare(b.member,'id',{sensitivity:'base'})).slice(0,10),max=Math.max(1,...top.map(x=>x.omset));
+    chart.innerHTML=top.length?top.map(g=>{const pct=Math.max(4,Math.round(g.omset/max*100));return '<div style="margin:0 0 10px"><div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-bottom:4px"><b>'+esc(g.member)+'</b><span>Rp '+money(g.omset)+'</span></div><div style="height:10px;background:#e8edf4;border-radius:999px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:var(--green);border-radius:999px"></div></div></div>'}).join(''):'<div class="empty">Belum ada data income member.</div>';
+  }
+  body.innerHTML=rows.length?rows.map(x=>'<tr><td><b>'+esc(x.member)+'</b></td><td>'+esc(x.date||'-')+'</td><td>'+Number(x.invoice||0)+'</td><td>'+esc(x.name||'-')+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel||'-')+'</td><td>'+esc(x.package||'-')+'</td><td>Rp '+money(x.omset)+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
 }
 window.renderIncomeV25=renderIncomeV25;
 window.renderIncomeMember=renderIncomeV25;
@@ -5021,20 +5080,21 @@ document.addEventListener('click',function(e){
 function boot(){
   bindMenuClose();
   closeMenus();
-  if(currentRole==='admin')adminSyncV25();
+  setTimeout(()=>{enforceMenuOrderV25();prepareIncomeFiltersV25();},80);
+  if(currentRole==='admin'){enforceMenuOrderV25();adminSyncV25();}
   if(currentRole==='member')setTimeout(renderMemberClosingV25,100);
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 document.addEventListener('visibilitychange',()=>{
   if(!document.hidden){
     bindMenuClose();
-    if(currentRole==='admin')adminSyncV25();
+    if(currentRole==='admin'){enforceMenuOrderV25();adminSyncV25();}
     if(currentRole==='member')renderMemberClosingV25();
   }
 });
 setInterval(()=>{
   if(document.hidden)return;
-  if(currentRole==='admin')adminSyncV25();
+  if(currentRole==='admin'){enforceMenuOrderV25();adminSyncV25();}
   if(currentRole==='member')renderMemberClosingV25();
 },5000);
 })();
