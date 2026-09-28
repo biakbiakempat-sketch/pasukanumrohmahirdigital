@@ -1109,7 +1109,8 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 else setTimeout(startAdminRealtimeV22,700);
 })();
 <\/script>
-</body></html>`;
+
+`;
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
 
@@ -5178,3 +5179,5 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){bindMenuC
 setInterval(()=>{if(document.hidden)return;if(currentRole==='admin')adminSyncV25();if(currentRole==='member')renderMemberClosingV25()},5000);
 })();
 </script>
+</body>
+</html>
