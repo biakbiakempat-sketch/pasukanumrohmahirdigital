@@ -5533,5 +5533,38 @@ setInterval(()=>{
   window.finalAdminRefresh=light;
 })();
 </script>
+
+<!-- RELEASE HARDENING V32C - THROTTLE MEMBER SNAPSHOT -->
+<script id="releaseHardeningV32C">
+(function(){
+  'use strict';
+  const base=window.loadMemberCentral;
+  if(typeof base!=='function'||base.__throttleV32C)return;
+  let last=0,busy=null;
+  const wrapped=async function(){
+    const force=window.__forceMemberCentralReload===true;
+    window.__forceMemberCentralReload=false;
+    const now=Date.now();
+    if(!force&&now-last<30000)return;
+    if(busy)return busy;
+    busy=(async()=>{try{const r=await base.apply(this,arguments);last=Date.now();return r}finally{busy=null}})();
+    return busy;
+  };
+  wrapped.__throttleV32C=true;
+  window.loadMemberCentral=wrapped;
+
+  function forceWrap(name){
+    const fn=window[name];
+    if(typeof fn!=='function'||fn.__forceWrapV32C)return;
+    const w=function(){
+      window.__forceMemberCentralReload=true;
+      return fn.apply(this,arguments);
+    };
+    w.__forceWrapV32C=true;
+    window[name]=w;
+  }
+  ['saveLead','saveActivity','saveClosing','toggleCheck','finishMemberDay'].forEach(forceWrap);
+})();
+</script>
 </body>
 </html>
