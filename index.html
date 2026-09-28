@@ -997,15 +997,15 @@ function downloadExcel(filename,headers,rows){
     return [];
   }
   function renderDashboardChecklist(){
-    if(window.currentRole!=='member'||!window.currentUser)return;
+    if(typeof currentRole==='undefined'||currentRole!=='member'||typeof currentUser==='undefined'||!currentUser)return;
     const root=document.getElementById('page-memberDashboard');
     const wrap=document.getElementById('memberChecks');
     if(!root||!wrap)return;
-    const day=Math.max(1,Number(window.currentUser.day||1));
+    const day=Math.max(1,Number(currentUser.day||1));
     const tasks=centralTasks(day);
-    window.currentUser.checks=window.currentUser.checks||{};
-    window.currentUser.checks[day]=window.currentUser.checks[day]||{};
-    const st=window.currentUser.checks[day];
+    currentUser.checks=currentUser.checks||{};
+    currentUser.checks[day]=currentUser.checks[day]||{};
+    const st=currentUser.checks[day];
     tasks.forEach((_,i)=>{if(typeof st[i]!=='boolean')st[i]=false});
     const done=tasks.filter((_,i)=>st[i]===true).length;
     const pct=tasks.length?Math.round(done/tasks.length*100):0;
@@ -1029,7 +1029,7 @@ function downloadExcel(filename,headers,rows){
   };
   window.__renderDashboardChecklistV27=renderDashboardChecklist;
   function retry(){
-    if(window.currentRole==='member'){
+    if(typeof currentRole!=='undefined'&&currentRole==='member'){
       renderDashboardChecklist();
       setTimeout(renderDashboardChecklist,250);
       setTimeout(renderDashboardChecklist,1000);
