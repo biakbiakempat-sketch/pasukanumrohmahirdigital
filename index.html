@@ -238,7 +238,8 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 <div class="field"><label>Username</label><input id="loginUser" required=""/></div>
 <div class="field"><label>Password</label><input id="loginPass" required="" type="password"/></div>
 <button class="btn" type="submit" style="width:100%">Masuk</button>
-<p class="muted" style="margin-top:12px">Super Admin: <b>mahirdigitalumroh</b></p>
+<button type="button" class="muted" style="display:block;width:100%;border:0;background:transparent;color:#315c9b;font-weight:800;padding:10px 0 2px;cursor:pointer" onclick="window.requestSuperAdminPasswordReset()">🔐 Lupa password Super Admin?</button>
+<p class="muted" style="margin-top:8px">Super Admin: <b>mahirdigitalumroh</b></p>
 </form>
 <form class="hidden" id="regForm">
 <div class="field"><label>Nama Lengkap</label><input id="regName" required=""/></div>
@@ -1302,6 +1303,33 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     }
   }
 
+  window.requestSuperAdminPasswordReset=async function(){
+    const msg=document.getElementById('authMsg');
+    const btn=document.querySelector('#loginForm button[onclick*="requestSuperAdminPasswordReset"]');
+    const show=function(t,ok){
+      if(msg)msg.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+String(t)+'</div>';
+    };
+    if(!window.supabaseClient||!window.supabaseClient.auth){
+      show('Koneksi Supabase belum siap. Refresh halaman lalu coba lagi.');
+      return;
+    }
+    if(btn){btn.disabled=true;btn.textContent='Mengirim link reset...';}
+    try{
+      const redirectTo=location.origin+location.pathname;
+      const {error}=await window.supabaseClient.auth.resetPasswordForEmail(
+        'biakbiakempat@gmail.com',
+        {redirectTo}
+      );
+      if(error)throw error;
+      show('Link reset password sudah dikirim ke email Super Admin. Buka email tersebut lalu buat password baru.',true);
+    }catch(e){
+      console.error('Super Admin password reset:',e);
+      show('Gagal mengirim link reset: '+(e?.message||e));
+    }finally{
+      if(btn){btn.disabled=false;btn.textContent='🔐 Lupa password Super Admin?';}
+    }
+  };
+
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',initRecovery);
   else initRecovery();
 
@@ -2219,37 +2247,19 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
         return false;
       }
       show("Menghubungkan ke Supabase...",true);
-      const controller=new AbortController();
-      const timer=setTimeout(function(){controller.abort()},12000);
       try{
-        const response=await fetch(
-          "https://insciufudobddaqzxzil.supabase.co/auth/v1/token?grant_type=password",
-          {
-            method:"POST",
-            headers:{
-              "apikey":"sb_publishable_hqJ2gxeoNcOt2srRCrS4cw_-tiFy2EP",
-              "Content-Type":"application/json"
-            },
-            body:JSON.stringify({email:"biakbiakempat@gmail.com",password:p}),
-            signal:controller.signal
-          }
-        );
-        let body=null;
-        try{body=await response.json()}catch(_){}
-        if(!response.ok||!body?.access_token||!body?.refresh_token){
-          show(body?.error_description||body?.msg||body?.message||"Username atau password salah.");
+        const {data,error}=await c.auth.signInWithPassword({
+          email:"biakbiakempat@gmail.com",
+          password:p
+        });
+        if(error||!data?.session||!data?.user){
+          show(error?.message==="Invalid login credentials"
+            ?"Password Super Admin tidak cocok. Gunakan menu “Lupa password?” untuk membuat password baru."
+            :(error?.message||"Username atau password salah."));
           return false;
         }
         show("Login Supabase berhasil. Menyiapkan dashboard...",true);
-        const sessionResult=await c.auth.setSession({
-          access_token:body.access_token,
-          refresh_token:body.refresh_token
-        });
-        if(sessionResult?.error){
-          show("Login berhasil, tetapi session aplikasi gagal dibuat: "+sessionResult.error.message);
-          return false;
-        }
-        const user=sessionResult?.data?.user||body?.user;
+        const user=data.user;
         if(!user?.id){show("Login berhasil, tetapi data akun tidak diterima.");return false;}
         currentUser={id:user.id,name:user.user_metadata?.name||"Super Admin",username:"mahirdigitalumroh",roleLabel:"Super Admin",role:"super_admin",status:"approved"};
         currentRole="admin";
