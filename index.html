@@ -3434,8 +3434,7 @@ const oldShow=window.showPage;window.showPage=function(page){const r=typeof oldS
 window.renderMemberClosing=function(){if(currentRole!=='member'||!currentUser)return;const rows=Array.isArray(currentUser.closingData)?currentUser.closingData.slice():[],body=document.getElementById('myClosingRows');if(!body)return;rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));const el=id=>document.getElementById(id),inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0),pax=rows.reduce((n,x)=>n+Number(x.pax||0),0),om=rows.reduce((n,x)=>n+Number(x.omset||0),0);if(el('myClosingInvoices'))el('myClosingInvoices').textContent=inv;if(el('myClosingPax'))el('myClosingPax').textContent=pax;if(el('myClosingOmset'))el('myClosingOmset').textContent='Rp '+om.toLocaleString('id-ID');if(el('myClosingCount'))el('myClosingCount').textContent=rows.length;body.innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.date||'-')+'</td><td><b>'+esc(x.name||'-')+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel||'-')+'</td><td>'+esc(x.package||'-')+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td><td><button class="btnMini" type="button" onclick="editClosing('+JSON.stringify(String(x.id))+')">Edit</button> <button class="btnMini danger" type="button" onclick="deleteClosing('+JSON.stringify(String(x.id))+')">Hapus</button></td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>'};
 window.__finalMemberUiV24=true;
 })();
-</script></body>
-</html>
+</script>
 
 <style id="superAdminActionInteractionFixV3">
 /* V3 — Super Admin actions: explicit button hit-area + delegated handlers.
