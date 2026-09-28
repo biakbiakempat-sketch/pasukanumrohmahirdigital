@@ -2764,15 +2764,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     try{const v=localStorage.getItem(AUTH_KEY);if(v)return JSON.parse(v)}catch(e){}
     return null;
   }
-  function savePage(page){
-    if(currentRole!=='member'&&currentRole!=='admin')return;
-    try{sessionStorage.setItem(PAGE_KEY,String(page||''))}catch(e){}
-    try{localStorage.setItem(PAGE_KEY,String(page||''))}catch(e){}
-  }
-  function readPage(){
-    try{const v=sessionStorage.getItem(PAGE_KEY);if(v)return v}catch(e){}
-    try{return localStorage.getItem(PAGE_KEY)||''}catch(e){return ''}
-  }
+  function savePage(page){if(currentRole!=='member'&&currentRole!=='admin')return;try{sessionStorage.setItem(PAGE_KEY,String(page||''))}catch(e){}try{localStorage.removeItem(PAGE_KEY)}catch(e){}} function readPage(){try{return sessionStorage.getItem(PAGE_KEY)||''}catch(e){return ''}}
 
   const baseShow=window.showPage;
   if(typeof baseShow==='function'&&!baseShow.__crossDeviceV2){
