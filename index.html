@@ -327,7 +327,7 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 </section>
 <section class="page" id="page-adminLeads">
 <div class="title"><div><h2>🎯 Semua Leads</h2><p>Pilih member dan tanggal untuk melihat semua leads. Penambahan lead hanya dilakukan oleh member.</p></div><button class="btn gray" onclick="exportFilteredLeads()">Export Excel</button></div>
-<div class="panel"><div class="adminFilters"><div class="field"><label>Member</label><select id="adminLeadMemberFilter" onchange="renderAdminLeadReport()"><option value="all">DATA MEMBER</option></select></div><div class="field"><label>Tanggal Mulai</label><input id="adminLeadStart" onchange="renderAdminLeadReport()" type="date"/></div><div class="field"><label>Tanggal Akhir</label><input id="adminLeadEnd" onchange="renderAdminLeadReport()" type="date"/></div></div>
+<div class="panel"><div class="adminFilters"><div class="field"><label>Member</label><select id="adminLeadMemberFilter" onchange="renderAdminLeadReport()"><option value="all">SEMUA MEMBER</option></select></div><div class="field"><label>Tanggal Mulai</label><input id="adminLeadStart" onchange="renderAdminLeadReport()" type="date"/></div><div class="field"><label>Tanggal Akhir</label><input id="adminLeadEnd" onchange="renderAdminLeadReport()" type="date"/></div></div>
 <div class="kpi" style="margin-top:15px"><div class="card"><div class="label">TOTAL LEAD</div><div class="num" id="leadTotal">0</div></div><div class="card"><div class="label">HOT</div><div class="num" id="leadHot">0</div></div><div class="card"><div class="label">WARM</div><div class="num" id="leadWarm">0</div></div><div class="card"><div class="label">COLD</div><div class="num" id="leadCold">0</div></div><div class="card"><div class="label">NO RESPON</div><div class="num" id="leadNoResp">0</div></div><div class="card"><div class="label">CLOSING</div><div class="num" id="leadClosing">0</div></div></div></div>
 <div class="panel"><div class="toolbar"><b>Database Semua Lead</b><span class="muted">Tambah lead dilakukan oleh member.</span></div><div class="tableWrap"><table><thead><tr><th>Member</th><th>Tanggal</th><th>Nama</th><th>Kontak</th><th>Sumber</th><th>Respon</th><th>Rencana</th><th>Funnel</th><th>Closing</th><th>Score</th></tr></thead><tbody id="adminLeadRows"></tbody></table></div></div>
 </section>
@@ -1479,15 +1479,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   function enhance(){
     const activityPanel=document.querySelector('#page-activities .adminFilters');
     const leadPanel=document.querySelector('#page-adminLeads .adminFilters');
-    if(leadPanel&&!document.getElementById('adminLeadMemberSearch')){
-      const wrap=document.createElement('div');wrap.className='field';wrap.innerHTML='<label>Cari Nama Member</label><input id="adminLeadMemberSearch" class="activityMemberSearch" placeholder="Ketik nama member..."/>';
-      leadPanel.insertBefore(wrap,leadPanel.firstChild);
-      $('adminLeadMemberSearch').addEventListener('input',function(){
-        const q=this.value.toLowerCase().trim(),sel=$('adminLeadMemberFilter');if(!sel)return;const cur=sel.value;
-        sel.innerHTML='<option value="all">SEMUA MEMBER</option>'+memberRows().filter(m=>m.name.toLowerCase().includes(q)).map(m=>'<option value="'+m.id+'">'+esc2(m.name)+'</option>').join('');
-        if([...sel.options].some(o=>o.value===cur))sel.value=cur;renderAdminLeadReport();
-      });
-    }
     const membersTitle=document.querySelector('#page-members .title p');if(membersTitle)membersTitle.textContent='Kelola seluruh member yang mendaftar, akun, approval, dan progress. Data diurutkan A-Z.';
   }
   const oldRenderMembers=window.renderMembers;
