@@ -4941,7 +4941,7 @@ async function adminSyncV25(){
         status:p.status||'pending',day:Number(p.day||0),
         registeredAt:p.registered_at||'-',approvedAt:p.approved_at||null,
         checks:byK.get(id)||{},sales:{},
-        activityLog:aa,leads:byL.get(id)||[],closingData:byC.get(id)||[]
+        activityLog:aa,leads:(byL.get(id)||[]).map(typeof dbToLead==='function'?dbToLead:(x=>({id:x.id,date:x.lead_date||'',time:x.lead_time||'',name:x.name||'',city:x.city||'',contact:x.contact||'',source:x.source||'',response:x.response||'',plan:x.plan||'',funnel:x.funnel||'',closing:x.closing||'Belum Closing',closingDate:x.closing_date||'',fu1:x.fu1||'',fu1Response:x.fu1_response||'Respon',fu2:x.fu2||'',fu2Response:x.fu2_response||'Respon',fu3:x.fu3||'',fu3Response:x.fu3_response||'Respon',noClose:x.no_close||'',cs:x.cs||'',note:x.note||'',score:Number(x.score||0)}))),closingData:byC.get(id)||[]
       };
     });
 
