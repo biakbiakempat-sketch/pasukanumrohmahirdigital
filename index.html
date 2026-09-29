@@ -973,76 +973,7 @@ function downloadExcel(filename,headers,rows){
    headers.map(h=>'<th>'+xlsEscape(h)+'</th>').join('')+
    '</tr>'+
    rows.map(r=>'<tr>'+r.map(x=>'<td>'+xlsEscape(x)+'</td>').join('')+'</tr>').join('')+
-   '</table>
-<!-- FINAL MEMBER DATA VIEW SYNC V31 -->
-<script id="finalMemberDataViewSyncV31">
-(function(){
-  'use strict';
-  const base=window.loadMemberCentral;
-  if(typeof base!=='function'||base.__memberViewSyncV31)return;
-
-  function renderActiveMemberView(){
-    if(typeof currentRole==='undefined'||currentRole!=='member'||!currentUser)return;
-    const active=document.querySelector('.page.active')?.id||'';
-    try{
-      if(active==='page-program'){
-        if(typeof window.__memberChecklistRenderV16==='function')window.__memberChecklistRenderV16();
-        else if(typeof window.renderMember==='function')window.renderMember();
-      }else if(active==='page-activity'){
-        if(typeof window.renderMemberActivity==='function')window.renderMemberActivity();
-        else if(typeof renderMemberActivity==='function')renderMemberActivity();
-      }else if(active==='page-leads'){
-        if(typeof window.renderMyLeadsTable==='function')window.renderMyLeadsTable();
-        if(typeof window.renderMemberLeadReport==='function')window.renderMemberLeadReport();
-      }else if(active==='page-memberClosing'){
-        if(typeof window.renderMemberClosing==='function')window.renderMemberClosing();
-      }else if(active==='page-memberDashboard'){
-        if(typeof window.renderMember==='function')window.renderMember();
-      }
-    }catch(e){console.warn('Member active view sync V31:',e)}
-  }
-
-  const wrapped=async function(){
-    const result=await base.apply(this,arguments);
-    if(currentRole==='member'&&currentUser){
-      renderActiveMemberView();
-      setTimeout(renderActiveMemberView,80);
-    }
-    return result;
-  };
-  wrapped.__memberViewSyncV31=true;
-  window.loadMemberCentral=wrapped;
-
-  // Prevent accidental double-submit from creating duplicate lead rows.
-  const saveLeadBase=window.saveLead;
-  if(typeof saveLeadBase==='function'&&!saveLeadBase.__dedupeV31){
-    let saving=false;
-    const saveLeadGuard=async function(){
-      if(saving)return;
-      saving=true;
-      try{return await saveLeadBase.apply(this,arguments)}
-      finally{saving=false}
-    };
-    saveLeadGuard.__dedupeV31=true;
-    window.saveLead=saveLeadGuard;
-  }
-
-  // Prevent accidental double-submit from creating overlapping activity writes.
-  const saveActivityBase=window.saveActivity;
-  if(typeof saveActivityBase==='function'&&!saveActivityBase.__dedupeV31){
-    let saving=false;
-    const saveActivityGuard=async function(){
-      if(saving)return;
-      saving=true;
-      try{return await saveActivityBase.apply(this,arguments)}
-      finally{saving=false}
-    };
-    saveActivityGuard.__dedupeV31=true;
-    window.saveActivity=saveActivityGuard;
-  }
-})();
-</script>
-</body></html>';
+   '</table></body></html>';
  const blob=new Blob([html],{type:"application/vnd.ms-excel"});
  const a=document.createElement("a");
  a.href=URL.createObjectURL(blob);
@@ -1050,7 +981,6 @@ function downloadExcel(filename,headers,rows){
  a.click();
  setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
-
 /* PHASE 3 — CENTRAL DATA CLIENT
    Member identity: profiles + short-lived custom session token.
    Shared data: leads, activities, closings, checklist state, program config.
