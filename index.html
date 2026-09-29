@@ -1052,6 +1052,9 @@ function downloadExcel(filename,headers,rows){
       if(typeof renderMember==='function')renderMember();
     }catch(e){console.warn('Central member snapshot:',e)}
   }
+  // Expose the authoritative member loader globally. Later cross-device and scale hardening layers
+  // call window.loadMemberCentral(); without this bridge they silently skipped the Supabase snapshot.
+  window.loadMemberCentral=loadMemberCentral;
 
   async function loadAdminCentral(){
     if(currentRole!=='admin'||!S())return;
