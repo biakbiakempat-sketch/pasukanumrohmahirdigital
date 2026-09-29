@@ -777,7 +777,7 @@ $("activityDate").addEventListener("change",()=>{if(!currentUser)return;const r=
 function renderMembers(){
  const q=($("memberSearch").value||"").toLowerCase();
  const rows=members.filter(m=>(m.name+" "+m.username+" "+m.wa).toLowerCase().includes(q));
- $("memberRows").innerHTML=rows.length?rows.map(m=>`<tr><td><b>${esc(m.name)}</b><br><span class="muted">${esc(m.username)}</span></td><td>${esc(m.wa)}</td><td><span class="status ${m.status==="approved"?"active":"pending"}">${m.status==="approved"?"AKTIF":"PENDING"}</span></td><td>${m.day||0}/60</td><td>${Math.round(((m.day||0)/60)*100)}%</td><td>${totalLead(m)}</td><td>${totalClosing(m)}</td><td><button class="btnMini" onclick="detailMember(${m.id})">Detail</button></td></tr>`).join(""):`<tr><td colspan="8"><div class="empty">Belum ada member yang terdaftar.</div></td></tr>`;
+ $("memberRows").innerHTML=rows.length?rows.map(m=>`<tr><td><b>${esc(m.name)}</b><br><span class="muted">${esc(m.username)}</span></td><td>${esc(m.wa)}</td><td><span class="status ${m.status==="approved"?"active":"pending"}">${m.status==="approved"?"AKTIF":"PENDING"}</span></td><td>${m.day||0}/60</td><td>${(Number(m.day||0)<=1?0:Math.round(((Number(m.day||0)-1)/59)*100))}%</td><td>${totalLead(m)}</td><td>${totalClosing(m)}</td><td><button class="btnMini" onclick="detailMember(${m.id})">Detail</button></td></tr>`).join(""):`<tr><td colspan="8"><div class="empty">Belum ada member yang terdaftar.</div></td></tr>`;
 }
 function renderApproval(){
  const pending=members.filter(m=>m.status==="pending");$("pendingLabel").textContent=pending.length+" pending";
@@ -4589,7 +4589,7 @@ window.renderMembers=function(){
  const q=(document.getElementById('memberSearch')?.value||'').toLowerCase().trim(),rows=(window.members||members||[]).filter(m=>(String(m.name||'')+' '+String(m.username||'')+' '+String(m.wa||'')).toLowerCase().includes(q)).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
  const idArg=id=>JSON.stringify(String(id));
  body.innerHTML=rows.length?rows.map(m=>{
-  const d=Math.max(1,Number(m.day||1)),cp=pct(m,d),dayPct=Math.round(Math.max(0,Math.min(60,Number(m.day||0)))/60*100),id=idArg(m.id);
+  const d=Math.max(1,Number(m.day||1)),cp=pct(m,d),dayPct=(Number(m.day||0)<=1?0:Math.round(((Math.max(0,Math.min(60,Number(m.day||0)))-1)/59)*100)),id=idArg(m.id);
   return '<tr data-member-id="'+esc(m.id)+'" style="cursor:pointer"><td><b>'+esc(m.name)+'</b></td><td>'+esc(m.username)+'</td><td><a target="_blank" href="'+(typeof waUrl==='function'?waUrl(m.wa):'#')+'" onclick="event.stopPropagation()">'+esc(m.wa)+'</a></td><td><span class="status '+(m.status==='approved'?'active':'pending')+'">'+(m.status==='approved'?'AKTIF':'PENDING')+'</span></td><td>'+esc(formatJakartaDateTime(m.registeredAt))+'</td><td>'+Number(m.day||0)+'/60</td><td><b>Hari '+dayPct+'%</b><br><span class="small">Checklist H'+d+': '+cp+'%</span><div class="pctBar"><span style="width:'+cp+'%"></span></div></td><td>'+totalLead(m)+'</td><td>'+totalClosing(m)+'</td><td><button class="btnMini" onclick="event.stopPropagation();window.adminEditMember('+id+')">Edit</button> <button class="btnMini" style="background:#fff0f0;color:#a33" onclick="event.stopPropagation();window.deleteMember('+id+')">Hapus</button></td></tr>';
  }).join(''):'<tr><td colspan="10"><div class="empty">Belum ada member yang terdaftar.</div></td></tr>';
 };
