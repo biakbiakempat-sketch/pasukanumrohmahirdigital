@@ -1754,10 +1754,25 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   function schedule(){return j('schedule',[])}
   function materials(){return j('materials',CENTRAL_DEFAULTS.materials)}
   function rewards(){return j('rewards',CENTRAL_DEFAULTS.rewards)}
+  // AUTHORITATIVE CHECKLIST SOURCE: Supabase program_configs.config_key = "checklist".
+  // Do not use the legacy pasukanUmrohChecklistV9 key for runtime data.
   function checklist(){
-    let c=j(CFG.checklistKey,null); if(c) return c;
-    const c2={}; for(let d=1;d<=60;d++){let base=[]; try{const special=(typeof daySpecific!=='undefined'?(daySpecific[d]||[]):[]); const common=(typeof commonBase!=='undefined'?commonBase:[]); base=d===1?special.slice():[...common.filter(x=>!special.includes(x) && !(special.some(y=>y.includes('5 Story')) && x==='Upload 3–5 Story')),...special];}catch(e){} c2[d]={active:true,tasks:base};}
-    put(CFG.checklistKey,c2); return c2;
+    let c=j('checklist',null);
+    if(c&&typeof c==='object'&&Object.keys(c).length)return c;
+    const c2={};
+    for(let d=1;d<=60;d++){
+      let base=[];
+      try{
+        const special=(typeof daySpecific!=='undefined'?(daySpecific[d]||[]):[]);
+        const common=(typeof commonBase!=='undefined'?commonBase:[]);
+        base=d===1
+          ? special.slice()
+          : [...common.filter(x=>!special.includes(x) && !(special.some(y=>y.includes('5 Story')) && x==='Upload 3–5 Story')),...special];
+      }catch(e){}
+      c2[d]={active:true,tasks:base};
+    }
+    put('checklist',c2);
+    return c2;
   }
   function activeDay(n){return !!checklist()[n]?.active}
   window.tasksForDay=function(day){const c=checklist()[day];return c?c.tasks:[]};
