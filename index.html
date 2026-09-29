@@ -319,7 +319,7 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 <section class="page" id="page-activities">
 <div class="title"><div><h2>📊 Aktivitas Sales</h2><p>Pilih member dan tanggal untuk melihat aktivitas sales.</p></div><button class="btn gray" onclick="exportFilteredActivities()">Export Excel</button></div>
 <div class="panel"><div class="adminFilters">
-<div class="field"><label>Member</label><select id="adminActivityMember" onchange="renderAdminActivityReport()"><option value="all">DATA MEMBER</option></select></div>
+<div class="field"><label>Member</label><select id="adminActivityMember" onchange="renderAdminActivityReport()"><option value="all">SEMUA MEMBER</option></select></div>
 <div class="field"><label>Tanggal Mulai</label><input id="adminActivityStart" onchange="renderAdminActivityReport()" type="date"/></div>
 <div class="field"><label>Tanggal Akhir</label><input id="adminActivityEnd" onchange="renderAdminActivityReport()" type="date"/></div>
 </div><div class="kpi" style="margin-top:15px"><div class="card"><div class="label">JAPRI</div><div class="num" id="actJapri">0</div></div><div class="card"><div class="label">FOLLOW-UP</div><div class="num" id="actFollow">0</div></div><div class="card"><div class="label">PERCAKAPAN</div><div class="num" id="actConv">0</div></div><div class="card"><div class="label">LEAD</div><div class="num" id="actLead">0</div></div><div class="card"><div class="label">OFFER</div><div class="num" id="actOffer">0</div></div><div class="card"><div class="label">CLOSING</div><div class="num" id="actClose">0</div></div><div class="card"><div class="label">REFERRAL</div><div class="num" id="actReferral">0</div></div></div></div>
@@ -1478,15 +1478,6 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 (function(){
   function enhance(){
     const activityPanel=document.querySelector('#page-activities .adminFilters');
-    if(activityPanel&&!document.getElementById('adminActivityMemberSearch')){
-      const wrap=document.createElement('div');wrap.className='field';wrap.innerHTML='<label>Cari Nama Member</label><input id="adminActivityMemberSearch" class="activityMemberSearch" placeholder="Ketik nama member..."/>';
-      activityPanel.insertBefore(wrap,activityPanel.firstChild);
-      $('adminActivityMemberSearch').addEventListener('input',function(){
-        const q=this.value.toLowerCase().trim(),sel=$('adminActivityMember');if(!sel)return;const cur=sel.value;
-        sel.innerHTML='<option value="all">SEMUA MEMBER</option>'+memberRows().filter(m=>m.name.toLowerCase().includes(q)).map(m=>'<option value="'+m.id+'">'+esc2(m.name)+'</option>').join('');
-        if([...sel.options].some(o=>o.value===cur))sel.value=cur;renderAdminActivityReport();
-      });
-    }
     const leadPanel=document.querySelector('#page-adminLeads .adminFilters');
     if(leadPanel&&!document.getElementById('adminLeadMemberSearch')){
       const wrap=document.createElement('div');wrap.className='field';wrap.innerHTML='<label>Cari Nama Member</label><input id="adminLeadMemberSearch" class="activityMemberSearch" placeholder="Ketik nama member..."/>';
