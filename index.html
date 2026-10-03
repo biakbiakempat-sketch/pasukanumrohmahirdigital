@@ -5743,15 +5743,13 @@ setInterval(()=>{
   }
 
   async function loadMaterialsFresh(){
-    const client=sb();
-    if(!client)throw new Error('Koneksi Supabase belum siap.');
-    const {data,error}=await client
-      .from('program_configs')
-      .select('config_key,config_value')
-      .eq('config_key','materials')
-      .maybeSingle();
+    const client=sb(), tok=window.umrohMemberSession?.get?.()||'';
+    if(!client||!tok)throw new Error('Sesi member belum siap.');
+    const {data,error}=await client.rpc('member_dashboard_snapshot',{p_token:tok});
     if(error)throw error;
-    central().materials=Array.isArray(data?.config_value)?clone(data.config_value):[];
+    if(!data?.success)throw new Error(data?.message||'Data member gagal dimuat.');
+    const ms=data?.configs?.materials;
+    central().materials=Array.isArray(ms)?clone(ms):[];
     return central().materials;
   }
 
@@ -5920,24 +5918,40 @@ setInterval(()=>{
     }
   };
 
-  // Member always gets the latest central Materials when its dashboard is rendered.
-  const baseMemberRender=window.renderMember;
-  if(typeof baseMemberRender==='function' && !baseMemberRender.__materialsV1){
-    const wrapped=function(){
-      const r=baseMemberRender.apply(this,arguments);
+  // Member uses the token-based dashboard snapshot, not a direct SELECT on program_configs.
+  // Re-render Materials after the authoritative member snapshot completes.
+  const baseLoadMemberCentral=window.loadMemberCentral;
+  if(typeof baseLoadMemberCentral==='function' && !baseLoadMemberCentral.__materialsV2){
+    const wrappedLoad=async function(){
+      const r=await baseLoadMemberCentral.apply(this,arguments);
       if(currentRole==='member'){
-        loadMaterialsFresh().then(()=>renderMember()).catch(e=>console.warn('Material refresh:',e));
+        await loadMaterialsFresh();
+        renderMember();
       }
       return r;
     };
-    wrapped.__materialsV1=true;
+    wrappedLoad.__materialsV2=true;
+    window.loadMemberCentral=wrappedLoad;
+  }
+
+  // Also keep Materials visible whenever the Member dashboard is rendered.
+  const baseMemberRender=window.renderMember;
+  if(typeof baseMemberRender==='function' && !baseMemberRender.__materialsV2){
+    const wrapped=function(){
+      const r=baseMemberRender.apply(this,arguments);
+      if(currentRole==='member')renderMember();
+      return r;
+    };
+    wrapped.__materialsV2=true;
     window.renderMember=wrapped;
   }
 
   // Initial render for whichever role is active.
-  setTimeout(()=>{
+  setTimeout(async()=>{
     if(currentRole==='admin')renderAdmin();
-    if(currentRole==='member')window.refreshMaterialsFromSupabase();
+    if(currentRole==='member'){
+      try{await loadMaterialsFresh();renderMember()}catch(e){console.warn('Material initial refresh:',e)}
+    }
   },350);
 
 })();
