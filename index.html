@@ -298,7 +298,7 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 <div class="content">
 <section class="page active" id="page-adminDashboard"><div class="title"><div><h2>Dashboard Super Admin</h2><p>Satu pusat kendali seluruh sistem.</p></div></div><div class="kpi"><div class="card stat"><div class="icon">👥</div><div><div class="label">MEMBER</div><div class="num" id="aTotal">0</div></div></div><div class="card stat"><div class="icon">🟢</div><div><div class="label">AKTIF</div><div class="num" id="aActive">0</div></div></div><div class="card stat"><div class="icon">🎯</div><div><div class="label">LEAD</div><div class="num" id="aLead">0</div></div></div><div class="card stat"><div class="icon">🤝</div><div><div class="label">CLOSING</div><div class="num" id="aClosing">0</div></div></div><div class="card stat"><div class="icon">🏆</div><div><div class="label">HARI 60</div><div class="num" id="aDay60">0</div></div></div></div>
 <div class="two"><div class="panel"><div class="toolbar"><div><h3 style="margin:0">📊 Aktivitas Pasukan</h3><p class="muted" style="margin:4px 0">Menampilkan pendaftar sesuai jumlah dan urutan yang dipilih.</p></div><button class="btnMini" onclick="showPage('members')">DATA MEMBER</button></div><div class="tableWrap"><table class="adminProgressTable"><thead><tr><th>Nama</th><th>Daftar</th><th>Status</th><th>Hari</th><th>Progress</th></tr></thead><tbody id="dashActivityRows"></tbody></table></div><div id="dashActivityControls" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)"></div></div></div>
-<div class="two"><div class="panel"><h3>🏆 Milestone</h3><div id="dashMilestones"></div></div><div class="panel"><h3>⚠ Perlu Perhatian</h3><p class="muted">Member dengan progress di bawah 10%.</p><div class="empty" id="dashAttention">Belum ada member di bawah 10%.</div></div></div>
+<div class="two"><div class="panel"><h3>🏆 Milestone</h3><div id="dashMilestones"></div></div><div class="panel"><div class="toolbar" style="margin-bottom:8px"><div><h3 style="margin:0">⚠ Perlu Perhatian</h3><p class="muted" style="margin:4px 0">Member dengan progress di bawah 10% yang perlu ditindaklanjuti.</p></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><label class="muted" for="dashAttentionLimit">Tampilkan</label><select id="dashAttentionLimit" style="min-width:145px"><option value="30">30 peserta</option><option value="60">60 peserta</option><option value="100">100 peserta</option><option value="all">Semua peserta</option></select></div></div><div class="tableWrap"><table class="adminProgressTable"><thead><tr><th>No</th><th>Nama</th><th>Hari</th><th>Progress</th><th>Status</th><th>WhatsApp</th></tr></thead><tbody id="dashAttention"></tbody></table></div></div></div>
 <div class="panel"><div class="toolbar"><div><h3 style="margin:0">📍 Progress Member</h3><p class="muted" style="margin:4px 0">Horizontal = persentase (5% per garis), vertikal = hari program.</p></div></div><div class="scatterWrap"><div class="scatter" id="adminScatter"></div></div></div>
 <div class="panel infoBarPanel"><div class="toolbar"><div><h3 style="margin:0">📢 Info Bar</h3><p class="muted" style="margin:4px 0">Informasi berjalan yang dikelola dari menu Info Bar &amp; Pop Up.</p></div></div><div class="infoBar infoBarBottom"><div class="infoTrack" id="infoTrackAdmin"></div></div></div>
 </section>
@@ -1822,6 +1822,45 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   // State khusus blok ini agar tidak ikut memengaruhi menu/fitur lain.
   window.__adminActivityView={limit:20,sort:'latest'};
 
+  // PERLU PERHATIAN ONLY — isolated state for the dashboard attention table.
+  // This block does not alter Aktivitas Pasukan, Data Member, or other dashboard features.
+  window.__adminAttentionView={limit:30};
+
+  function adminAttentionRows(){
+    const state=window.__adminAttentionView;
+    const rows=(members||[]).filter(m=>progressOf(m)<10).slice();
+    rows.sort((a,b)=>{
+      const pa=progressOf(a),pb=progressOf(b);
+      if(pa!==pb)return pa-pb;
+      return String(a.name||'').localeCompare(String(b.name||''));
+    });
+    return state.limit==='all'?rows:rows.slice(0,Number(state.limit)||30);
+  }
+
+  function attentionWaUrl(m){
+    const name=String(m?.name||'Member').trim()||'Member';
+    const greeting='Assalamualaikum '+name+', kami dari Tim Pasukan Umroh Mahir Digital. Kami melihat Anda belum mengisi minimal form yang diperlukan di dashboard. Mohon segera melengkapi form agar progress program Anda dapat berjalan. Terima kasih.';
+    return waUrl(m?.wa)+'?text='+encodeURIComponent(greeting);
+  }
+
+  function renderAdminAttentionOnly(){
+    const body=$('dashAttention');if(!body)return;
+    const select=$('dashAttentionLimit');
+    const state=window.__adminAttentionView;
+    if(select){
+      select.value=String(state.limit);
+      select.onchange=function(){
+        const v=this.value;
+        state.limit=v==='all'?'all':([30,60,100].includes(Number(v))?Number(v):30);
+        renderAdminAttentionOnly();
+      };
+    }
+    const rows=adminAttentionRows();
+    body.innerHTML=rows.length
+      ?rows.map((m,i)=>'<tr><td>'+String(i+1)+'</td><td><b>'+esc2(m.name)+'</b></td><td>'+String(m.day||0)+'/60</td><td><b>'+String(progressOf(m))+'%</b><div class="pctBar"><span style="width:'+String(progressOf(m))+'%"></span></div></td><td>'+(m.status==='approved'?'AKTIF':'PENDING')+'</td><td><a class="btnMini" target="_blank" rel="noopener" href="'+attentionWaUrl(m)+'">WhatsApp</a></td></tr>').join('')
+      :'<tr><td colspan="6"><div class="empty">Belum ada member dengan progress di bawah 10%.</div></td></tr>';
+  }
+
   function adminActivityRows(){
     const state=window.__adminActivityView;
     const rows=(members||[]).slice();
@@ -1890,7 +1929,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     $('aTotal').textContent=members.length;$('aActive').textContent=active;$('aLead').textContent=x.lead;$('aClosing').textContent=x.closing;$('aDay60').textContent=members.filter(m=>Number(m.day||0)>=60).length;
     renderAdminActivityOnly();
     $('dashMilestones').innerHTML=milestoneHtml();
-    const att=members.filter(m=>progressOf(m)<10);$('dashAttention').innerHTML=att.length?att.map(m=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)"><div><b>${esc2(m.name)}</b><br><span class="muted">${progressOf(m)}% • Hari ${m.day||0}</span></div><a class="btnMini" target="_blank" href="${waUrl(m.wa)}">WhatsApp</a></div>`).join(''):'<div class="empty">Belum ada member di bawah 10%.</div>';
+    renderAdminAttentionOnly();
     renderScatter();renderInfoBars();
   };
 
