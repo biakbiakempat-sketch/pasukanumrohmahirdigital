@@ -5944,7 +5944,9 @@ setInterval(()=>{
 
   window.refreshMaterialsFromSupabase=async function(){
     try{
-      await loadMaterialsFresh();
+      const fresh=await loadMaterialsFresh();
+      // Materi Member must render directly from the fresh Supabase payload.
+      central().materials=Array.isArray(fresh)?clone(fresh):[];
       renderMember();
       return true;
     }catch(e){
@@ -5952,6 +5954,16 @@ setInterval(()=>{
       return false;
     }
   };
+
+  // MATERIALS ONLY: one extra post-load sync for mobile/browser cache cases.
+  if(!window.__materialsMemberLoadSyncV4){
+    window.__materialsMemberLoadSyncV4=true;
+    window.addEventListener('load',function(){
+      if(currentRole==='member'){
+        setTimeout(function(){window.refreshMaterialsFromSupabase()},500);
+      }
+    });
+  }
 
   // Member reads Materials from the same authoritative Supabase snapshot.
   const baseLoadMemberCentral=window.loadMemberCentral;
