@@ -5585,7 +5585,7 @@ setInterval(()=>{
       p_travel:travel,p_package:pkg,p_omset:omset,p_closing_date:date
     });
     if(error)throw error; if(!data?.success)throw new Error(data?.message||'Closing gagal disimpan.');
-    await freshMemberSnapshot(); resetClosingForm(); renderMember(); alert('Data closing berhasil disimpan.'); return true;
+    await freshMemberSnapshot(); resetClosingForm(); renderMemberClosing(); alert('Data closing berhasil disimpan.'); return true;
   };
 
   window.deleteClosing=async function(id){
@@ -5594,7 +5594,7 @@ setInterval(()=>{
     const client=window.supabaseClient,t=window.umrohMemberSession?.get?.()||'';if(!client||!t)throw new Error('Sesi member belum siap.');
     const {data,error}=await client.rpc('member_closing_delete',{p_token:t,p_id:String(id)});
     if(error)throw error; if(!data?.success)throw new Error(data?.message||'Closing gagal dihapus.');
-    await freshMemberSnapshot(); renderMember(); return true;
+    await freshMemberSnapshot(); renderMemberClosing(); return true;
   };
 
   window.renderMyLeadsTable=function(){
