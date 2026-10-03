@@ -5807,7 +5807,7 @@ setInterval(()=>{
       return '<div class="materialAdminCard"><h4>'+esc(m.name)+'</h4><p>'+esc(m.desc||'')+'</p>'+
         '<div class="linkBtns">'+linkHtml+'</div><div class="actions">'+
         '<button class="btnMini" type="button" onclick="editMaterialPrompt('+(Number(m.id)||0)+')">Edit Materi</button>'+
-        '<button class="btnMini" type="button" onclick="addMaterialLinkPrompt('+(Number(m.id)||0)+')">'+(multi?'+ Link Kolaborasi':'+ Link')+'</button>'+
+        '<button class="btnMini" type="button" onclick="addMaterialLinkPrompt('+(Number(m.id)||0)+')">'+(multi?'+ Link Kolaborasi':(String(m.name||'').trim().toUpperCase()==='ROLEPLAY'?'+ Link Roleplay':'+ Link'))+'</button>'+
         '<button class="btnMini" type="button" onclick="deleteMaterial('+(Number(m.id)||0)+')">Hapus Materi</button>'+
         '</div></div>';
     }).join('') || '<div class="empty">Belum ada materi.</div>';
