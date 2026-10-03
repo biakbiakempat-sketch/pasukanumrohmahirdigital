@@ -5755,11 +5755,11 @@ setInterval(()=>{
     if(currentRole!=='admin')throw new Error('Hanya Super Admin yang dapat mengubah Materi.');
     const client=sb();
     if(!client)throw new Error('Koneksi Supabase belum siap.');
-    const {data,error}=await client.from('program_configs')
-      .select('config_value')
-      .eq('config_key','materials')
-      .maybeSingle();
+    const {data,error}=await client.rpc('admin_config_get_v2',{
+      p_config_key:'materials'
+    });
     if(error)throw error;
+    if(!data?.success)throw new Error(data?.message||'Materi gagal dimuat dari Supabase.');
     const ms=Array.isArray(data?.config_value)?clone(data.config_value):[];
     central().materials=ms;
     return ms;
