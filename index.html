@@ -2428,7 +2428,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     const rows=currentUser?.closingData||[],body=$('myClosingRows');if(!body)return;
     body.innerHTML=rows.length?rows.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(x=>{
       const id=JSON.stringify(String(x.id));
-      return '<tr><td>'+esc(x.date)+'</td><td><b>'+esc(x.name)+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel)+'</td><td>'+esc(x.package)+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td><td><button type="button" class="btnMini" onclick="window.editClosing('+id+')">Edit</button> <button type="button" class="btnMini danger" onclick="window.deleteClosing('+id+')">Hapus</button></td></tr>'
+      return '<tr><td>'+esc(x.date)+'</td><td><b>'+esc(x.name)+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel)+'</td><td>'+esc(x.package)+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td><td><button type="button" class="btnMini" data-closing-action="edit" data-closing-id="+esc(String(x.id))+">Edit</button> <button type="button" class="btnMini danger" data-closing-action="delete" data-closing-id="+esc(String(x.id))+">Hapus</button></td></tr>'
     }).join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
   };
 
@@ -5065,6 +5065,21 @@ function renderMemberClosingV25(){
   body.innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.date||'-')+'</td><td><b>'+esc(x.name||'-')+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel||'-')+'</td><td>'+esc(x.package||'-')+'</td><td>Rp '+money(x.omset)+'</td><td>'+ (typeof editClosing==='function'?'<button class="btnMini" type="button" onclick="editClosing('+JSON.stringify(String(x.id))+')">Edit</button> ':'') + (typeof deleteClosing==='function'?'<button class="btnMini danger" type="button" onclick="deleteClosing('+JSON.stringify(String(x.id))+')">Hapus</button>':'')+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
 }
 window.renderMemberClosing=renderMemberClosingV25;
+
+// Use delegated handlers with data attributes. This avoids broken inline onclick
+// when a UUID contains quotes or is embedded inside a quoted HTML attribute.
+if(!window.__closingActionDelegatedV1){
+  document.addEventListener('click',function(e){
+    const btn=e.target?.closest?.('#myClosingRows [data-closing-action]');
+    if(!btn)return;
+    e.preventDefault();e.stopPropagation();
+    const id=btn.getAttribute('data-closing-id')||'';
+    const action=btn.getAttribute('data-closing-action');
+    if(action==='edit'&&typeof window.editClosing==='function')window.editClosing(id);
+    if(action==='delete'&&typeof window.deleteClosing==='function')window.deleteClosing(id);
+  },true);
+  window.__closingActionDelegatedV1=true;
+}
 
 const oldShow=window.showPage;
 window.showPage=function(page){
