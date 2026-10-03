@@ -5754,45 +5754,38 @@ setInterval(()=>{
   }
 
   function renderAdmin(){
-    const wrap=el('adminMaterialsWrap');
-    if(!wrap)return;
+    const wrap=el('adminMaterialsWrap'); if(!wrap)return;
     const ms=materialsLocal();
     wrap.innerHTML=ms.map(m=>{
       const links=Array.isArray(m.links)?m.links:[];
-      return '<div class="materialAdminCard">'+
-        '<h4>'+esc(m.name)+'</h4>'+
-        '<p>'+esc(m.desc||'')+'</p>'+
-        '<div class="linkBtns">'+
-        (links.length?links.map((l,i)=>
-          '<span style="display:inline-flex;gap:4px;align-items:center">'+
-          '<a target="_blank" rel="noopener" href="'+esc(l.url)+'">🔗 '+esc(l.name||('Link '+(i+1)))+'</a>'+
-          '<button class="btnMini" type="button" onclick="editMaterialLinkPrompt('+(Number(m.id)||0)+','+i+')">Edit Link</button>'+
-          '<button class="btnMini" type="button" onclick="deleteMaterialLink('+(Number(m.id)||0)+','+i+')">Hapus Link</button>'+
-          '</span>'
-        ).join(''):'<span class="muted">Belum ada link.</span>')+
-        '</div>'+
-        '<div class="actions">'+
+      const multi=['KONTEN BRAND','PRODUK KNOWLEDGE BRAND'].includes(String(m.name||'').trim().toUpperCase());
+      const linkHtml=links.length?links.map((l,i)=>
+        '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0">'+
+        '<a target="_blank" rel="noopener" href="'+esc(l.url)+'">🔗 '+esc(l.name||((multi?'Kolaborasi ':'Link ')+(i+1)))+'</a>'+
+        '<button class="btnMini" type="button" onclick="editMaterialLinkPrompt('+(Number(m.id)||0)+','+i+')">Edit Link</button>'+
+        '<button class="btnMini" type="button" onclick="deleteMaterialLink('+(Number(m.id)||0)+','+i+')">Hapus Link</button>'+
+        '</div>').join('')
+        :'<span class="muted">'+(multi?'Belum ada link kolaborasi.':'Belum ada link.')+'</span>';
+      return '<div class="materialAdminCard"><h4>'+esc(m.name)+'</h4><p>'+esc(m.desc||'')+'</p>'+
+        '<div class="linkBtns">'+linkHtml+'</div><div class="actions">'+
         '<button class="btnMini" type="button" onclick="editMaterialPrompt('+(Number(m.id)||0)+')">Edit Materi</button>'+
-        '<button class="btnMini" type="button" onclick="addMaterialLinkPrompt('+(Number(m.id)||0)+')">+ Link</button>'+
+        '<button class="btnMini" type="button" onclick="addMaterialLinkPrompt('+(Number(m.id)||0)+')">'+(multi?'+ Link Kolaborasi':'+ Link')+'</button>'+
         '<button class="btnMini" type="button" onclick="deleteMaterial('+(Number(m.id)||0)+')">Hapus Materi</button>'+
         '</div></div>';
     }).join('') || '<div class="empty">Belum ada materi.</div>';
   }
 
   function renderMember(){
-    const wrap=el('memberMaterialsWrap');
-    if(!wrap)return;
+    const wrap=el('memberMaterialsWrap'); if(!wrap)return;
     const ms=materialsLocal();
     wrap.innerHTML=ms.map(m=>{
       const links=Array.isArray(m.links)?m.links:[];
-      return '<div class="materialAdminCard">'+
-        '<h4>'+esc(m.name)+'</h4>'+
-        '<p>'+esc(m.desc||'')+'</p>'+
-        '<div class="linkBtns">'+
-        (links.length?links.map((l,i)=>
-          '<a target="_blank" rel="noopener" href="'+esc(l.url)+'">🔗 '+esc(l.name||('Link '+(i+1)))+'</a>'
-        ).join(''):'<span class="muted">Belum ada link.</span>')+
-        '</div></div>';
+      const multi=['KONTEN BRAND','PRODUK KNOWLEDGE BRAND'].includes(String(m.name||'').trim().toUpperCase());
+      const linkHtml=links.length?links.map((l,i)=>
+        '<a target="_blank" rel="noopener" href="'+esc(l.url)+'">🔗 '+esc(l.name||((multi?'Kolaborasi ':'Link ')+(i+1)))+'</a>'
+      ).join(''):'<span class="muted">'+(multi?'Belum ada link kolaborasi.':'Belum ada link.')+'</span>';
+      return '<div class="materialAdminCard"><h4>'+esc(m.name)+'</h4><p>'+esc(m.desc||'')+'</p>'+
+        '<div class="linkBtns">'+linkHtml+'</div></div>';
     }).join('') || '<div class="empty">Belum ada materi.</div>';
   }
 
