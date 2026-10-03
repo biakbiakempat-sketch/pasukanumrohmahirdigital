@@ -2428,7 +2428,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     const rows=currentUser?.closingData||[],body=$('myClosingRows');if(!body)return;
     body.innerHTML=rows.length?rows.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(x=>{
       const id=JSON.stringify(String(x.id));
-      return '<tr><td>'+esc(x.date)+'</td><td><b>'+esc(x.name)+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel)+'</td><td>'+esc(x.package)+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td><td><button type="button" class="btnMini" data-closing-action="edit" data-closing-id="+esc(String(x.id))+">Edit</button> <button type="button" class="btnMini danger" data-closing-action="delete" data-closing-id="+esc(String(x.id))+">Hapus</button></td></tr>'
+      return '<tr><td>'+esc(x.date)+'</td><td><b>'+esc(x.name)+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel)+'</td><td>'+esc(x.package)+'</td><td>Rp '+Number(x.omset||0).toLocaleString('id-ID')+'</td><td><button type="button" class="btnMini" data-closing-action="edit" data-closing-id="'+esc(String(x.id))+'">Edit</button> <button type="button" class="btnMini danger" data-closing-action="delete" data-closing-id="'+esc(String(x.id))+'">Hapus</button></td></tr>'
     }).join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
   };
 
