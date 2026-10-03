@@ -5536,6 +5536,67 @@ setInterval(()=>{
     if(el)el.value=v??'';
   }
 
+  function leadPayload(id){
+    return {
+      p_token:token(),p_id:id,
+      p_lead_date:val('lDate')||isoToday(),p_lead_time:val('lTime')||null,
+      p_name:val('lName').trim(),p_city:val('lCity').trim(),p_contact:val('lContact').trim(),
+      p_source:resolvedLeadSource(),p_response:val('lResponse'),p_plan:resolvedLeadPlan(),
+      p_funnel:val('lFunnel'),p_closing:val('lClosing'),p_closing_date:val('lClosingDate')||null,
+      p_fu1:val('lFu1')||null,p_fu1_response:val('lFu1Response')||null,
+      p_fu2:val('lFu2')||null,p_fu2_response:val('lFu2Response')||null,
+      p_fu3:val('lFu3')||null,p_fu3_response:val('lFu3Response')||null,
+      p_no_close:val('lNoClose').trim(),p_cs:val('lCs').trim(),
+      p_note:val('lNote').trim(),p_score:Number(document.getElementById('lScore')?.value||0)||0
+    };
+  }
+
+  window.saveLead=async function(){
+    if(currentRole!=='member'||!currentUser)throw new Error('Sesi member belum siap.');
+    const name=val('lName').trim(),contact=val('lContact').trim();
+    if(!name||!contact){alert('Nama dan kontak wajib diisi.');return false}
+    const client=sb(),t=token();if(!client||!t)throw new Error('Sesi member belum siap.');
+    const hidden=document.getElementById('editLeadId'),id=hidden?.value||window.crypto?.randomUUID?.();
+    if(!id)throw new Error('ID Lead tidak dapat dibuat.'); if(hidden)hidden.value=id;
+    const {data,error}=await client.rpc('member_lead_upsert',leadPayload(id));
+    if(error)throw error; if(!data?.success)throw new Error(data?.message||'Lead gagal disimpan.');
+    await freshMemberSnapshot(); resetLeadForm(); renderMember(); alert('Lead berhasil disimpan.'); return true;
+  };
+
+  window.deleteLead=async function(id){
+    if(currentRole!=='member'||!currentUser)return false;
+    if(!confirm('Hapus lead ini?'))return false;
+    const client=sb(),t=token();if(!client||!t)throw new Error('Sesi member belum siap.');
+    const {data,error}=await client.rpc('member_lead_delete',{p_token:t,p_id:String(id)});
+    if(error)throw error; if(!data?.success)throw new Error(data?.message||'Lead gagal dihapus.');
+    await freshMemberSnapshot(); renderMember(); return true;
+  };
+
+  window.saveClosing=async function(){
+    if(currentRole!=='member'||!currentUser)throw new Error('Sesi member belum siap.');
+    const name=val('cName').trim(),travel=val('cTravel').trim(),pkg=val('cPackage').trim(),date=val('cDate');
+    const invoice=Number(val('cInvoice'))||0,pax=Number(val('cPax'))||0,omset=Number(val('cOmset'))||0;
+    if(!name||!travel||!pkg||!date||invoice<1||pax<1||omset<0){alert('Lengkapi data closing dengan benar.');return false}
+    const client=sb(),t=token();if(!client||!t)throw new Error('Sesi member belum siap.');
+    const hidden=document.getElementById('closingEditId'),id=hidden?.value||window.crypto?.randomUUID?.();
+    if(!id)throw new Error('ID Closing tidak dapat dibuat.'); if(hidden)hidden.value=id;
+    const {data,error}=await client.rpc('member_closing_upsert',{
+      p_token:t,p_id:id,p_closing_name:name,p_invoice:invoice,p_pax:pax,
+      p_travel:travel,p_package:pkg,p_omset:omset,p_closing_date:date
+    });
+    if(error)throw error; if(!data?.success)throw new Error(data?.message||'Closing gagal disimpan.');
+    await freshMemberSnapshot(); resetClosingForm(); renderMember(); alert('Data closing berhasil disimpan.'); return true;
+  };
+
+  window.deleteClosing=async function(id){
+    if(currentRole!=='member'||!currentUser)return false;
+    if(!confirm('Hapus data closing ini?'))return false;
+    const client=sb(),t=token();if(!client||!t)throw new Error('Sesi member belum siap.');
+    const {data,error}=await client.rpc('member_closing_delete',{p_token:t,p_id:String(id)});
+    if(error)throw error; if(!data?.success)throw new Error(data?.message||'Closing gagal dihapus.');
+    await freshMemberSnapshot(); renderMember(); return true;
+  };
+
   window.renderMyLeadsTable=function(){
     if(typeof currentRole==='undefined'||currentRole!=='member'||!currentUser)return;
     const body=document.getElementById('myLeadRows');
