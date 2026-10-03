@@ -5513,41 +5513,140 @@ setInterval(()=>{
 <script id="memberCrudActionHardeningV34">
 (function(){
   'use strict';
-  // One member-only delegated handler for Lead and Closing; no inline UUID JavaScript.
-  // Read the central snapshot before Edit to avoid editing stale cross-device data.
-  let busy=false;
-  async function freshMemberData(){
-    if(!window.supabaseClient||!window.umrohMemberSession?.get?.())throw new Error('Sesi member tidak tersedia.');
+
+  // AUTHORITATIVE MEMBER LEADS/CLOSING CRUD.
+  // Scope: Leads + Closing only. No checklist/activity/member-registration code here.
+
+  let actionBusy=false;
+
+  async function freshMemberSnapshot(){
+    if(typeof currentRole==='undefined'||currentRole!=='member')throw new Error('Akses member tidak tersedia.');
+    if(!window.supabaseClient)throw new Error('Koneksi Supabase belum siap.');
     window.__forceMemberCentralReload=true;
-    if(typeof window.loadMemberCentral!=='function')throw new Error('Sinkronisasi member tidak tersedia.');
+    if(typeof window.loadMemberCentral!=='function')throw new Error('Sinkronisasi data member tidak tersedia.');
     await window.loadMemberCentral();
   }
+
+  function val(id){
+    const el=document.getElementById(id);
+    return el?el.value:'';
+  }
+  function setVal(id,v){
+    const el=document.getElementById(id);
+    if(el)el.value=v??'';
+  }
+
+  window.renderMyLeadsTable=function(){
+    if(typeof currentRole==='undefined'||currentRole!=='member'||!currentUser)return;
+    const body=document.getElementById('myLeadRows');
+    if(!body)return;
+    const rows=Array.isArray(currentUser.leads)?currentUser.leads.slice():[];
+    rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+    body.innerHTML=rows.length
+      ? rows.map(l=>{
+          const id=String(l.id||'');
+          return '<tr><td>'+esc(l.date||'-')+'</td><td><b>'+esc(l.name||'')+'</b></td><td>'+esc(l.contact||'')+'</td><td>'+esc(l.source||'')+'</td><td>'+esc(l.response||'')+'</td><td>'+esc(l.plan||'')+'</td><td>'+esc(l.funnel||'')+'</td><td>'+esc(l.closing||'')+'</td><td><button type="button" class="btnMini" data-lead-action="edit" data-lead-id="'+esc(id)+'">Edit</button> <button type="button" class="btnMini" style="background:#fff0f0;color:#a33" data-lead-action="delete" data-lead-id="'+esc(id)+'">Hapus</button></td></tr>';
+        }).join('')
+      : '<tr><td colspan="9"><div class="empty">Belum ada lead. Klik "+ Lead Baru" untuk mulai.</div></td></tr>';
+  };
+
+  window.renderMemberClosing=function(){
+    if(typeof currentRole==='undefined'||currentRole!=='member'||!currentUser)return;
+    const body=document.getElementById('myClosingRows');
+    if(!body)return;
+    const rows=Array.isArray(currentUser.closingData)?currentUser.closingData.slice():[];
+    rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+    const inv=rows.reduce((n,x)=>n+Number(x.invoice||0),0);
+    const pax=rows.reduce((n,x)=>n+Number(x.pax||0),0);
+    const om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
+    const put=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v};
+    put('myClosingInvoices',inv);
+    put('myClosingPax',pax);
+    put('myClosingOmset','Rp '+money(om));
+    put('myClosingCount',rows.length);
+    body.innerHTML=rows.length
+      ? rows.map(x=>'<tr><td>'+esc(x.date||'-')+'</td><td><b>'+esc(x.name||'')+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel||'')+'</td><td>'+esc(x.package||'')+'</td><td>Rp '+money(x.omset||0)+'</td><td><button type="button" class="btnMini" data-closing-action="edit" data-closing-id="'+esc(String(x.id||''))+'">Edit</button> <button type="button" class="btnMini danger" data-closing-action="delete" data-closing-id="'+esc(String(x.id||''))+'">Hapus</button></td></tr>').join('')
+      : '<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+  };
+
+  // Edit reads only from the freshly synchronized central snapshot.
+  window.editLead=function(id){
+    const l=(currentUser&&Array.isArray(currentUser.leads)?currentUser.leads:[]).find(x=>String(x.id)===String(id));
+    if(!l)throw new Error('Lead tidak ditemukan pada data pusat.');
+    showPage('leads');
+    setVal('editLeadId',l.id);
+    setVal('lDate',l.date||isoToday());
+    setVal('lTime',l.time||'');
+    setVal('lName',l.name||'');
+    setVal('lCity',l.city||'');
+    setVal('lContact',l.contact||'');
+    setVal('lSource',['WhatsApp Organik','Instagram Organik','Facebook Organik','TikTok Organik','Referral','Website','Event'].includes(l.source)?l.source:'Lainnya');
+    setVal('lSourceOther',document.getElementById('lSource')?.value==='Lainnya'?(l.source||''):'');
+    setVal('lResponse',l.response||'Hot');
+    setVal('lPlan',['Oktober 2026','November 2026','Desember 2026','Januari 2027','Awal Ramadhan 1448 H','Umrah Ramadhan 1448 H','Itikaf 1448 H','Syawal 1448 H','Maret 2027','Daftar Haji'].includes(l.plan)?l.plan:'Lainnya');
+    setVal('lPlanOther',document.getElementById('lPlan')?.value==='Lainnya'?(l.plan||''):'');
+    setVal('lFunnel',l.funnel||'Greeting');
+    setVal('lClosing',l.closing||'Belum Closing');
+    setVal('lClosingDate',l.closingDate||'');
+    setVal('lFu1',l.fu1||'');
+    setVal('lFu1Response',l.fu1Response||'Respon');
+    setVal('lFu2',l.fu2||'');
+    setVal('lFu2Response',l.fu2Response||'Respon');
+    setVal('lFu3',l.fu3||'');
+    setVal('lFu3Response',l.fu3Response||'Respon');
+    setVal('lNoClose',l.noClose||'');
+    setVal('lCs',currentUser.name||'');
+    setVal('lNote',l.note||'');
+    const title=document.getElementById('leadFormTitle');if(title)title.textContent='Edit Lead';
+    try{toggleLeadOtherFields()}catch(_){}
+  };
+
+  window.editClosing=function(id){
+    const x=(currentUser&&Array.isArray(currentUser.closingData)?currentUser.closingData:[]).find(v=>String(v.id)===String(id));
+    if(!x)throw new Error('Closing tidak ditemukan pada data pusat.');
+    showPage('memberClosing');
+    setVal('closingEditId',x.id);
+    setVal('cDate',x.date||isoToday());
+    setVal('cName',x.name||'');
+    setVal('cInvoice',x.invoice??1);
+    setVal('cPax',x.pax??1);
+    setVal('cTravel',x.travel||'');
+    setVal('cPackage',x.package||'');
+    setVal('cOmset',x.omset??0);
+    const title=document.getElementById('closingFormTitle');if(title)title.textContent='Edit Closing';
+  };
+
   document.addEventListener('click',async function(e){
     const btn=e.target?.closest?.('#myLeadRows [data-lead-action],#myClosingRows [data-closing-action]');
-    if(!btn||currentRole!=='member')return;
-    e.preventDefault();e.stopImmediatePropagation();
-    if(busy)return;
-    const lead=btn.hasAttribute('data-lead-action');
-    const action=btn.getAttribute(lead?'data-lead-action':'data-closing-action');
-    const id=btn.getAttribute(lead?'data-lead-id':'data-closing-id');
+    if(!btn||typeof currentRole==='undefined'||currentRole!=='member')return;
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if(actionBusy)return;
+
+    const isLead=btn.hasAttribute('data-lead-action');
+    const action=btn.getAttribute(isLead?'data-lead-action':'data-closing-action');
+    const id=btn.getAttribute(isLead?'data-lead-id':'data-closing-id');
     if(!id||!['edit','delete'].includes(action))return;
-    busy=true;btn.disabled=true;
+
+    actionBusy=true;
     try{
       if(action==='edit'){
-        await freshMemberData();
-        const rows=lead?currentUser?.leads:currentUser?.closingData;
-        if(!Array.isArray(rows)||!rows.some(x=>String(x.id)===id)){
-          throw new Error('Data sudah berubah atau dihapus di perangkat lain. Muat ulang halaman.');
-        }
-        if(lead)window.editLead(id);else window.editClosing(id);
+        await freshMemberSnapshot();
+        if(isLead)window.editLead(id);
+        else window.editClosing(id);
       }else{
-        if(lead)await window.deleteLead(id);else await window.deleteClosing(id);
+        if(isLead)await window.deleteLead(id);
+        else await window.deleteClosing(id);
       }
     }catch(err){
-      console.error('Member Lead/Closing action:',err);
-      alert('Tidak dapat membuka data: '+(err?.message||err));
-    }finally{busy=false;if(btn.isConnected)btn.disabled=false;}
+      console.error('Leads/Closing CRUD:',err);
+      alert((err&&err.message)?err.message:'Aksi Leads/Closing gagal.');
+    }finally{
+      actionBusy=false;
+    }
   },true);
+
 })();
 </script>
 </body>
