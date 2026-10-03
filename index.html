@@ -5527,9 +5527,6 @@ setInterval(()=>{
     await window.loadMemberCentral();
   }
 
-  const token=()=>window.umrohMemberSession?.get?.()||'';
-  const sb=()=>window.supabaseClient||null;
-
   function val(id){
     const el=document.getElementById(id);
     return el?el.value:'';
@@ -5541,7 +5538,7 @@ setInterval(()=>{
 
   function leadPayload(id){
     return {
-      p_token:token(),p_id:id,
+      p_token:(window.umrohMemberSession?.get?.()||''),p_id:id,
       p_lead_date:val('lDate')||isoToday(),p_lead_time:val('lTime')||null,
       p_name:val('lName').trim(),p_city:val('lCity').trim(),p_contact:val('lContact').trim(),
       p_source:resolvedLeadSource(),p_response:val('lResponse'),p_plan:resolvedLeadPlan(),
@@ -5558,7 +5555,7 @@ setInterval(()=>{
     if(currentRole!=='member'||!currentUser)throw new Error('Sesi member belum siap.');
     const name=val('lName').trim(),contact=val('lContact').trim();
     if(!name||!contact){alert('Nama dan kontak wajib diisi.');return false}
-    const client=sb(),t=token();if(!client||!t)throw new Error('Sesi member belum siap.');
+    const client=window.supabaseClient,t=window.umrohMemberSession?.get?.()||'';if(!client||!t)throw new Error('Sesi member belum siap.');
     const hidden=document.getElementById('editLeadId'),id=hidden?.value||window.crypto?.randomUUID?.();
     if(!id)throw new Error('ID Lead tidak dapat dibuat.'); if(hidden)hidden.value=id;
     const {data,error}=await client.rpc('member_lead_upsert',leadPayload(id));
@@ -5569,7 +5566,7 @@ setInterval(()=>{
   window.deleteLead=async function(id){
     if(currentRole!=='member'||!currentUser)return false;
     if(!confirm('Hapus lead ini?'))return false;
-    const client=sb(),t=token();if(!client||!t)throw new Error('Sesi member belum siap.');
+    const client=window.supabaseClient,t=window.umrohMemberSession?.get?.()||'';if(!client||!t)throw new Error('Sesi member belum siap.');
     const {data,error}=await client.rpc('member_lead_delete',{p_token:t,p_id:String(id)});
     if(error)throw error; if(!data?.success)throw new Error(data?.message||'Lead gagal dihapus.');
     await freshMemberSnapshot(); renderMember(); return true;
@@ -5580,7 +5577,7 @@ setInterval(()=>{
     const name=val('cName').trim(),travel=val('cTravel').trim(),pkg=val('cPackage').trim(),date=val('cDate');
     const invoice=Number(val('cInvoice'))||0,pax=Number(val('cPax'))||0,omset=Number(val('cOmset'))||0;
     if(!name||!travel||!pkg||!date||invoice<1||pax<1||omset<0){alert('Lengkapi data closing dengan benar.');return false}
-    const client=sb(),t=token();if(!client||!t)throw new Error('Sesi member belum siap.');
+    const client=window.supabaseClient,t=window.umrohMemberSession?.get?.()||'';if(!client||!t)throw new Error('Sesi member belum siap.');
     const hidden=document.getElementById('closingEditId'),id=hidden?.value||window.crypto?.randomUUID?.();
     if(!id)throw new Error('ID Closing tidak dapat dibuat.'); if(hidden)hidden.value=id;
     const {data,error}=await client.rpc('member_closing_upsert',{
@@ -5594,7 +5591,7 @@ setInterval(()=>{
   window.deleteClosing=async function(id){
     if(currentRole!=='member'||!currentUser)return false;
     if(!confirm('Hapus data closing ini?'))return false;
-    const client=sb(),t=token();if(!client||!t)throw new Error('Sesi member belum siap.');
+    const client=window.supabaseClient,t=window.umrohMemberSession?.get?.()||'';if(!client||!t)throw new Error('Sesi member belum siap.');
     const {data,error}=await client.rpc('member_closing_delete',{p_token:t,p_id:String(id)});
     if(error)throw error; if(!data?.success)throw new Error(data?.message||'Closing gagal dihapus.');
     await freshMemberSnapshot(); renderMember(); return true;
