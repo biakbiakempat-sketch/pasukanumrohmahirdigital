@@ -5969,6 +5969,37 @@ setInterval(()=>{
     }
   },350);
 
+
+  // MATERIALS ONLY — force a fresh Supabase read whenever Member opens Materi.
+  // This intentionally does not touch checklist, leads, closing, or other pages.
+  const previousShowPageForMaterials=window.showPage;
+  window.showPage=function(page){
+    const result=typeof previousShowPageForMaterials==='function'
+      ?previousShowPageForMaterials.apply(this,arguments):undefined;
+    if(page==='materials' && currentRole==='member'){
+      setTimeout(async function(){
+        try{
+          await window.refreshMaterialsFromSupabase();
+        }catch(e){
+          console.warn('Materials page refresh:',e);
+        }
+      },80);
+    }
+    return result;
+  };
+
+  // Also refresh after returning to the browser/app while Materi is open.
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden && currentRole==='member' && document.getElementById('page-materials')?.classList.contains('active')){
+      setTimeout(()=>window.refreshMaterialsFromSupabase(),80);
+    }
+  });
+
+  window.addEventListener('pageshow',function(){
+    if(currentRole==='member' && document.getElementById('page-materials')?.classList.contains('active')){
+      setTimeout(()=>window.refreshMaterialsFromSupabase(),80);
+    }
+  });
 })();
 </script>
 </body>
