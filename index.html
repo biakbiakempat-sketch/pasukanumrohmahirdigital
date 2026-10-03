@@ -5066,20 +5066,7 @@ function renderMemberClosingV25(){
 }
 window.renderMemberClosing=renderMemberClosingV25;
 
-// Use delegated handlers with data attributes. This avoids broken inline onclick
-// when a UUID contains quotes or is embedded inside a quoted HTML attribute.
-if(!window.__closingActionDelegatedV1){
-  document.addEventListener('click',function(e){
-    const btn=e.target?.closest?.('#myClosingRows [data-closing-action]');
-    if(!btn)return;
-    e.preventDefault();e.stopPropagation();
-    const id=btn.getAttribute('data-closing-id')||'';
-    const action=btn.getAttribute('data-closing-action');
-    if(action==='edit'&&typeof window.editClosing==='function')window.editClosing(id);
-    if(action==='delete'&&typeof window.deleteClosing==='function')window.deleteClosing(id);
-  },true);
-  window.__closingActionDelegatedV1=true;
-}
+// Closing actions are handled by the single memberCrudActionHardeningV34 listener.
 
 const oldShow=window.showPage;
 window.showPage=function(page){
@@ -5526,32 +5513,41 @@ setInterval(()=>{
 <script id="memberCrudActionHardeningV34">
 (function(){
   'use strict';
-  function bindMemberCrudActions(){
-    if(!window.__memberCrudActionDelegatedV34){
-      document.addEventListener('click',function(e){
-        const closing=e.target?.closest?.('#myClosingRows [data-closing-action]');
-        if(closing){
-          e.preventDefault();e.stopPropagation();
-          const id=closing.getAttribute('data-closing-id')||'';
-          const action=closing.getAttribute('data-closing-action');
-          if(action==='edit'&&typeof window.editClosing==='function')window.editClosing(id);
-          else if(action==='delete'&&typeof window.deleteClosing==='function')window.deleteClosing(id);
-          return;
-        }
-        const lead=e.target?.closest?.('#myLeadRows [data-lead-action]');
-        if(lead){
-          e.preventDefault();e.stopPropagation();
-          const id=lead.getAttribute('data-lead-id')||'';
-          const action=lead.getAttribute('data-lead-action');
-          if(action==='edit'&&typeof window.editLead==='function')window.editLead(id);
-          else if(action==='delete'&&typeof window.deleteLead==='function')window.deleteLead(id);
-        }
-      },true);
-      window.__memberCrudActionDelegatedV34=true;
-    }
+  // One member-only delegated handler for Lead and Closing; no inline UUID JavaScript.
+  // Read the central snapshot before Edit to avoid editing stale cross-device data.
+  let busy=false;
+  async function freshMemberData(){
+    if(!window.supabaseClient||!window.umrohMemberSession?.get?.())throw new Error('Sesi member tidak tersedia.');
+    window.__forceMemberCentralReload=true;
+    if(typeof window.loadMemberCentral!=='function')throw new Error('Sinkronisasi member tidak tersedia.');
+    await window.loadMemberCentral();
   }
-  bindMemberCrudActions();
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bindMemberCrudActions);
+  document.addEventListener('click',async function(e){
+    const btn=e.target?.closest?.('#myLeadRows [data-lead-action],#myClosingRows [data-closing-action]');
+    if(!btn||currentRole!=='member')return;
+    e.preventDefault();e.stopImmediatePropagation();
+    if(busy)return;
+    const lead=btn.hasAttribute('data-lead-action');
+    const action=btn.getAttribute(lead?'data-lead-action':'data-closing-action');
+    const id=btn.getAttribute(lead?'data-lead-id':'data-closing-id');
+    if(!id||!['edit','delete'].includes(action))return;
+    busy=true;btn.disabled=true;
+    try{
+      if(action==='edit'){
+        await freshMemberData();
+        const rows=lead?currentUser?.leads:currentUser?.closingData;
+        if(!Array.isArray(rows)||!rows.some(x=>String(x.id)===id)){
+          throw new Error('Data sudah berubah atau dihapus di perangkat lain. Muat ulang halaman.');
+        }
+        if(lead)window.editLead(id);else window.editClosing(id);
+      }else{
+        if(lead)await window.deleteLead(id);else await window.deleteClosing(id);
+      }
+    }catch(err){
+      console.error('Member Lead/Closing action:',err);
+      alert('Tidak dapat membuka data: '+(err?.message||err));
+    }finally{busy=false;if(btn.isConnected)btn.disabled=false;}
+  },true);
 })();
 </script>
 </body>
