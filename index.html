@@ -2997,6 +2997,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   const $m=id=>document.getElementById(id);
   const escM=v=>typeof esc2==='function'?esc2(v):String(v??'');
   const safeId=v=>JSON.stringify(String(v??''));
+  const memberList=()=>Array.isArray(members)?members:(Array.isArray(window.members)?window.members:[]);
 
   async function adminRequired(){
     if(currentRole!=='admin'||!S()) throw new Error('Super Admin belum login.');
@@ -3005,7 +3006,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   window.adminEditMember=async function(id){
     try{
       await adminRequired();
-      const m=(window.members||members||[]).find(x=>String(x.id)===String(id));
+      const m=memberList().find(x=>String(x.id)===String(id));
       if(!m){alert('Member tidak ditemukan.');return}
       $m('memberModalTitle').textContent='Edit Member';
       $m('editMemberId').value=String(m.id);
@@ -3097,7 +3098,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 
   window.renderMembers=function(){
     const q=($m('memberSearch')?.value||'').toLowerCase().trim();
-    const rows=(window.members||members||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')))
+    const rows=memberList().slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')))
       .filter(m=>(String(m.name||'')+' '+String(m.username||'')+' '+String(m.wa||'')).toLowerCase().includes(q));
     const body=$m('memberRows');if(!body)return;
     body.innerHTML=rows.length?rows.map(m=>{
@@ -3119,7 +3120,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 
   window.renderApproval=function(){
     const list=$m('approvalList');if(!list)return;
-    const p=(window.members||members||[]).filter(m=>m.status==='pending');
+    const p=memberList().filter(m=>m.status==='pending');
     $m('pendingLabel').textContent=p.length+' pending';
     list.className=p.length?'':'empty';
     list.innerHTML=p.length?p.map(m=>{
