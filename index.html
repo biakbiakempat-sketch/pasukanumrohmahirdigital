@@ -3006,8 +3006,19 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   window.adminEditMember=async function(id){
     try{
       await adminRequired();
-      const m=memberList().find(x=>String(x.id)===String(id));
-      if(!m){alert('Member tidak ditemukan.');return}
+      const wanted=String(id??'').trim();
+      if(!wanted){alert('ID member tidak ditemukan.');return}
+
+      // Authoritative source: ask Supabase for the current member list.
+      // Do not depend on any legacy/local members array for Edit.
+      const snap=await S().rpc('admin_dashboard_summary');
+      if(snap.error)throw snap.error;
+      if(!snap.data?.success)throw new Error(snap.data?.message||'Data member gagal dimuat.');
+      const rows=Array.isArray(snap.data.members)?snap.data.members:[];
+      const m=rows.find(x=>String(x.id)===wanted);
+      if(!m){alert('Member tidak ditemukan di database.');return}
+
+      window.__editingMemberAdmin=m;
       $m('memberModalTitle').textContent='Edit Member';
       $m('editMemberId').value=String(m.id);
       $m('newName').value=m.name||'';
@@ -3016,9 +3027,8 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
       $m('newWa').value=m.wa||'';
       $m('newPassword').value='';
       $m('modalBack').classList.add('show');
-    }catch(e){console.error('Admin edit member:',e);alert(e?.message||e)}
+    }catch(e){console.error('Admin edit member:',e);alert('Gagal membuka data member: '+(e?.message||e))}
   };
-
   window.openModal=function(id){
     if(id!==undefined&&id!==null&&String(id)!==''){
       return window.adminEditMember(id);
@@ -3044,23 +3054,25 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
       if(!name||!username||!wa){alert('Nama, username, dan WhatsApp wajib diisi.');return}
       if(!id&&!password){alert('Password wajib diisi untuk member baru.');return}
 
+      const editing=window.__editingMemberAdmin||{};
       const r=await S().rpc('admin_member_upsert',{
         p_id:id||null,
         p_name:name,
         p_username:username,
         p_wa:wa,
         p_password:password||null,
-        p_status:id ? ((window.members||members).find(x=>String(x.id)===id)?.status||'approved') : 'approved',
-        p_day:id ? Number((window.members||members).find(x=>String(x.id)===id)?.day||0) : 1
+        p_status:id ? (editing.status||'approved') : 'approved',
+        p_day:id ? Number(editing.day||0) : 1
       });
       if(r.error)throw r.error;
       if(!r.data?.success)throw new Error(r.data?.message||'Gagal menyimpan member.');
+      window.__editingMemberAdmin=null;
       if(typeof closeModal==='function')closeModal();
       if(typeof window.finalAdminRefresh==='function')await window.finalAdminRefresh();
+      else if(typeof window.adminLightRefreshV32==='function')await window.adminLightRefreshV32();
       alert('Data member berhasil disimpan ke database.');
     }catch(e){console.error('Admin member save:',e);alert('Gagal menyimpan member: '+(e?.message||e))}
   };
-
   window.approveMember=async function(id){
     try{
       await adminRequired();
