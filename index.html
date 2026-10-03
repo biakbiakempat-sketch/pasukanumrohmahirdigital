@@ -1666,7 +1666,10 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
       const c=window.supabaseClient;
       if(!c)throw new Error('Koneksi Supabase belum siap.');
       if(currentRole==='admin'){
-        const {data,error}=await c.rpc('admin_config_save',{p_config_key:key,p_config_value:value});
+        // MATERI ONLY: never use the legacy config RPC; it can hit the protected
+        // program_configs table through the old path. Materi uses the V2 admin RPC.
+        const rpcName=key==='materials'?'admin_config_save_v2':'admin_config_save';
+        const {data,error}=await c.rpc(rpcName,{p_config_key:key,p_config_value:value});
         if(error)throw error;
         if(!data?.success)throw new Error(data?.message||'Gagal menyimpan konfigurasi.');
       }else{
