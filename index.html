@@ -3006,8 +3006,17 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   window.adminEditMember=async function(id){
     try{
       await adminRequired();
+      // Some legacy renderers invoke adminEditMember without forwarding the UUID.
+      // Recover it from the actual clicked button/row before querying Supabase.
+      if(!id || String(id)==='undefined' || String(id)==='null'){
+        const ev=window.event;
+        const target=ev?.currentTarget||ev?.target;
+        const btn=target?.closest?.('[data-id]');
+        const row=target?.closest?.('tr[data-member-id]');
+        id=btn?.getAttribute?.('data-id')||row?.getAttribute?.('data-member-id')||'';
+      }
       const wanted=String(id??'').trim();
-      if(!wanted){alert('ID member tidak ditemukan.');return}
+      if(!wanted){alert('ID member tidak ditemukan dari tombol Edit.');return}
 
       // Authoritative source: ask Supabase for the current member list.
       // Do not depend on any legacy/local members array for Edit.
