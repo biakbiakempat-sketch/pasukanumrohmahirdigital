@@ -2367,6 +2367,9 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   window.editLead=function(id){
     const l=(currentUser?.leads||[]).find(x=>String(x.id)===String(id));
     if(!l){if(typeof oldEditLead==='function')return oldEditLead(id);return}
+    // Navigate first because showPage('leads') resets the blank lead form.
+    // Populating after navigation preserves the selected record for editing.
+    showPage('leads');
     $('editLeadId').value=l.id;$('lDate').value=l.date||isoToday();$('lTime').value=l.time||'';
     $('lName').value=l.name||'';$('lCity').value=l.city||'';$('lContact').value=l.contact||'';
     $('lSource').value=['WhatsApp Organik','Instagram Organik','Facebook Organik','TikTok Organik','Referral','Website','Event'].includes(l.source)?l.source:'Lainnya';
@@ -2378,7 +2381,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     $('lFu1').value=l.fu1||'';$('lFu1Response').value=l.fu1Response||'Respon';$('lFu2').value=l.fu2||'';$('lFu2Response').value=l.fu2Response||'Respon';
     $('lFu3').value=l.fu3||'';$('lFu3Response').value=l.fu3Response||'Respon';$('lNoClose').value=l.noClose||'';
     $('lCs').value=currentUser.name||'';$('lNote').value=l.note||'';$('leadFormTitle').textContent='Edit Lead';
-    try{toggleLeadOtherFields()}catch(e){} showPage('leads');
+    try{toggleLeadOtherFields()}catch(e){}
   };
 
   window.saveClosing=async function(){
