@@ -2358,8 +2358,8 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
   window.renderMyLeadsTable=function(){
     const rows=currentUser?.leads||[],body=$('myLeadRows');if(!body)return;
     body.innerHTML=rows.length?rows.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(l=>{
-      const id=JSON.stringify(String(l.id));
-      return '<tr><td>'+esc(l.date)+'</td><td><b>'+esc(l.name)+'</b></td><td>'+esc(l.contact)+'</td><td>'+esc(l.source)+'</td><td>'+esc(l.response)+'</td><td>'+esc(l.plan)+'</td><td>'+esc(l.funnel)+'</td><td>'+esc(l.closing)+'</td><td><button class="btnMini" onclick="editLead('+id+')">Edit</button> <button class="btnMini" style="background:#fff0f0;color:#a33" onclick="deleteLead('+id+')">Hapus</button></td></tr>'
+      const id=String(l.id||'');
+      return '<tr><td>'+esc(l.date)+'</td><td><b>'+esc(l.name)+'</b></td><td>'+esc(l.contact)+'</td><td>'+esc(l.source)+'</td><td>'+esc(l.response)+'</td><td>'+esc(l.plan)+'</td><td>'+esc(l.funnel)+'</td><td>'+esc(l.closing)+'</td><td><button type="button" class="btnMini" data-lead-action="edit" data-lead-id="'+esc(id)+'">Edit</button> <button type="button" class="btnMini" style="background:#fff0f0;color:#a33" data-lead-action="delete" data-lead-id="'+esc(id)+'">Hapus</button></td></tr>'
     }).join(''):'<tr><td colspan="9"><div class="empty">Belum ada lead. Klik "+ Lead Baru" untuk mulai.</div></td></tr>';
   };
 
@@ -5062,7 +5062,7 @@ function renderMemberClosingV25(){
   const om=rows.reduce((n,x)=>n+Number(x.omset||0),0);
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
   set('myClosingInvoices',inv);set('myClosingPax',pax);set('myClosingOmset','Rp '+money(om));set('myClosingCount',rows.length);
-  body.innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.date||'-')+'</td><td><b>'+esc(x.name||'-')+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel||'-')+'</td><td>'+esc(x.package||'-')+'</td><td>Rp '+money(x.omset)+'</td><td>'+ (typeof editClosing==='function'?'<button class="btnMini" type="button" onclick="editClosing('+JSON.stringify(String(x.id))+')">Edit</button> ':'') + (typeof deleteClosing==='function'?'<button class="btnMini danger" type="button" onclick="deleteClosing('+JSON.stringify(String(x.id))+')">Hapus</button>':'')+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
+  body.innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.date||'-')+'</td><td><b>'+esc(x.name||'-')+'</b></td><td>'+Number(x.invoice||0)+'</td><td>'+Number(x.pax||0)+'</td><td>'+esc(x.travel||'-')+'</td><td>'+esc(x.package||'-')+'</td><td>Rp '+money(x.omset)+'</td><td>'+ (typeof editClosing==='function'?'<button class="btnMini" type="button" data-closing-action="edit" data-closing-id="'+esc(String(x.id))+'">Edit</button> ':'') + (typeof deleteClosing==='function'?'<button class="btnMini danger" type="button" data-closing-action="delete" data-closing-id="'+esc(String(x.id))+'">Hapus</button>':'')+'</td></tr>').join(''):'<tr><td colspan="8"><div class="empty">Belum ada data closing.</div></td></tr>';
 }
 window.renderMemberClosing=renderMemberClosingV25;
 
@@ -5520,6 +5520,38 @@ setInterval(()=>{
     window[name]=w;
   }
   ['saveLead','saveActivity','saveClosing','toggleCheck','finishMemberDay'].forEach(forceWrap);
+})();
+</script>
+<!-- FINAL MEMBER CRUD ACTION HARDENING V34 -->
+<script id="memberCrudActionHardeningV34">
+(function(){
+  'use strict';
+  function bindMemberCrudActions(){
+    if(!window.__memberCrudActionDelegatedV34){
+      document.addEventListener('click',function(e){
+        const closing=e.target?.closest?.('#myClosingRows [data-closing-action]');
+        if(closing){
+          e.preventDefault();e.stopPropagation();
+          const id=closing.getAttribute('data-closing-id')||'';
+          const action=closing.getAttribute('data-closing-action');
+          if(action==='edit'&&typeof window.editClosing==='function')window.editClosing(id);
+          else if(action==='delete'&&typeof window.deleteClosing==='function')window.deleteClosing(id);
+          return;
+        }
+        const lead=e.target?.closest?.('#myLeadRows [data-lead-action]');
+        if(lead){
+          e.preventDefault();e.stopPropagation();
+          const id=lead.getAttribute('data-lead-id')||'';
+          const action=lead.getAttribute('data-lead-action');
+          if(action==='edit'&&typeof window.editLead==='function')window.editLead(id);
+          else if(action==='delete'&&typeof window.deleteLead==='function')window.deleteLead(id);
+        }
+      },true);
+      window.__memberCrudActionDelegatedV34=true;
+    }
+  }
+  bindMemberCrudActions();
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bindMemberCrudActions);
 })();
 </script>
 </body>
