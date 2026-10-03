@@ -5527,6 +5527,9 @@ setInterval(()=>{
     await window.loadMemberCentral();
   }
 
+  const token=()=>window.umrohMemberSession?.get?.()||'';
+  const sb=()=>window.supabaseClient||null;
+
   function val(id){
     const el=document.getElementById(id);
     return el?el.value:'';
