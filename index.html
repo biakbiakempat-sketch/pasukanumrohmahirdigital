@@ -5710,5 +5710,237 @@ setInterval(()=>{
 
 })();
 </script>
+
+<!-- FINAL MATERIALS AUTHORITATIVE CRUD V1 -->
+<script id="finalMaterialsAuthoritativeV1">
+(function(){
+  'use strict';
+
+  const sb=()=>window.supabaseClient||null;
+  const central=()=>window.__umrohCentralConfig||(window.__umrohCentralConfig={});
+  const clone=v=>{try{return JSON.parse(JSON.stringify(v))}catch(e){return v}};
+  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  const el=id=>document.getElementById(id);
+
+  function materialsLocal(){
+    const v=central().materials;
+    return Array.isArray(v)?clone(v):[];
+  }
+
+  async function saveMaterials(ms){
+    if(currentRole!=='admin')throw new Error('Hanya Super Admin yang dapat mengubah Materi.');
+    const client=sb();
+    if(!client)throw new Error('Koneksi Supabase belum siap.');
+    const value=clone(ms);
+    const {data,error}=await client.rpc('admin_config_save_v2',{
+      p_config_key:'materials',
+      p_config_value:value
+    });
+    if(error)throw error;
+    if(!data?.success)throw new Error(data?.message||'Materi gagal disimpan ke Supabase.');
+    central().materials=value;
+    return value;
+  }
+
+  async function loadMaterialsFresh(){
+    const client=sb();
+    if(!client)throw new Error('Koneksi Supabase belum siap.');
+    const {data,error}=await client
+      .from('program_configs')
+      .select('config_key,config_value')
+      .eq('config_key','materials')
+      .maybeSingle();
+    if(error)throw error;
+    central().materials=Array.isArray(data?.config_value)?clone(data.config_value):[];
+    return central().materials;
+  }
+
+  function renderAdmin(){
+    const wrap=el('adminMaterialsWrap');
+    if(!wrap)return;
+    const ms=materialsLocal();
+    wrap.innerHTML=ms.map(m=>{
+      const links=Array.isArray(m.links)?m.links:[];
+      return '<div class="materialAdminCard">'+
+        '<h4>'+esc(m.name)+'</h4>'+
+        '<p>'+esc(m.desc||'')+'</p>'+
+        '<div class="linkBtns">'+
+        (links.length?links.map((l,i)=>
+          '<span style="display:inline-flex;gap:4px;align-items:center">'+
+          '<a target="_blank" rel="noopener" href="'+esc(l.url)+'">🔗 '+esc(l.name||('Link '+(i+1)))+'</a>'+
+          '<button class="btnMini" type="button" onclick="editMaterialLinkPrompt('+JSON.stringify(String(m.id))+','+i+')">Edit Link</button>'+
+          '<button class="btnMini" type="button" onclick="deleteMaterialLink('+JSON.stringify(String(m.id))+','+i+')">Hapus Link</button>'+
+          '</span>'
+        ).join(''):'<span class="muted">Belum ada link.</span>')+
+        '</div>'+
+        '<div class="actions">'+
+        '<button class="btnMini" type="button" onclick="editMaterialPrompt('+JSON.stringify(String(m.id))+')">Edit Materi</button>'+
+        '<button class="btnMini" type="button" onclick="addMaterialLinkPrompt('+JSON.stringify(String(m.id))+')">+ Link</button>'+
+        '<button class="btnMini" type="button" onclick="deleteMaterial('+JSON.stringify(String(m.id))+')">Hapus Materi</button>'+
+        '</div></div>';
+    }).join('') || '<div class="empty">Belum ada materi.</div>';
+  }
+
+  function renderMember(){
+    const wrap=el('memberMaterialsWrap');
+    if(!wrap)return;
+    const ms=materialsLocal();
+    wrap.innerHTML=ms.map(m=>{
+      const links=Array.isArray(m.links)?m.links:[];
+      return '<div class="materialAdminCard">'+
+        '<h4>'+esc(m.name)+'</h4>'+
+        '<p>'+esc(m.desc||'')+'</p>'+
+        '<div class="linkBtns">'+
+        (links.length?links.map((l,i)=>
+          '<a target="_blank" rel="noopener" href="'+esc(l.url)+'">🔗 '+esc(l.name||('Link '+(i+1)))+'</a>'
+        ).join(''):'<span class="muted">Belum ada link.</span>')+
+        '</div></div>';
+    }).join('') || '<div class="empty">Belum ada materi.</div>';
+  }
+
+  window.renderAdminMaterials=renderAdmin;
+  window.renderMemberMaterials=renderMember;
+
+  window.addMaterialPrompt=async function(){
+    const name=prompt('Nama materi:');
+    if(name===null||!name.trim())return;
+    const desc=prompt('Deskripsi:');
+    if(desc===null)return;
+    const ms=materialsLocal();
+    ms.push({id:String(Date.now()),name:name.trim(),desc:desc.trim(),links:[]});
+    try{
+      await saveMaterials(ms);
+      renderAdmin();
+      alert('Materi berhasil disimpan ke Supabase.');
+    }catch(e){
+      console.error('Material add:',e);
+      alert('Gagal menyimpan materi: '+(e?.message||e));
+    }
+  };
+
+  window.editMaterialPrompt=async function(id){
+    const ms=materialsLocal();
+    const m=ms.find(x=>String(x.id)===String(id));
+    if(!m){alert('Materi tidak ditemukan.');return;}
+    const name=prompt('Nama materi:',m.name||'');
+    if(name===null)return;
+    const desc=prompt('Deskripsi:',m.desc||'');
+    if(desc===null)return;
+    m.name=name.trim();
+    m.desc=desc.trim();
+    try{
+      await saveMaterials(ms);
+      renderAdmin();
+      alert('Materi berhasil diperbarui di Supabase.');
+    }catch(e){
+      console.error('Material edit:',e);
+      alert('Gagal memperbarui materi: '+(e?.message||e));
+    }
+  };
+
+  window.addMaterialLinkPrompt=async function(id){
+    const ms=materialsLocal();
+    const m=ms.find(x=>String(x.id)===String(id));
+    if(!m){alert('Materi tidak ditemukan.');return;}
+    const name=prompt('Nama button/link:');
+    if(name===null||!name.trim())return;
+    const url=prompt('URL (YouTube / Google Drive / lainnya):');
+    if(url===null||!url.trim())return;
+    m.links=Array.isArray(m.links)?m.links:[];
+    m.links.push({name:name.trim(),url:url.trim()});
+    try{
+      await saveMaterials(ms);
+      renderAdmin();
+      alert('Link berhasil disimpan ke Supabase.');
+    }catch(e){
+      console.error('Material link add:',e);
+      alert('Gagal menyimpan link: '+(e?.message||e));
+    }
+  };
+
+  window.editMaterialLinkPrompt=async function(id,i){
+    const ms=materialsLocal();
+    const m=ms.find(x=>String(x.id)===String(id));
+    const l=m?.links?.[Number(i)];
+    if(!m||!l){alert('Link tidak ditemukan.');return;}
+    const name=prompt('Nama button/link:',l.name||'');
+    if(name===null)return;
+    const url=prompt('URL:',l.url||'');
+    if(url===null)return;
+    l.name=name.trim();
+    l.url=url.trim();
+    try{
+      await saveMaterials(ms);
+      renderAdmin();
+      alert('Link berhasil diperbarui di Supabase.');
+    }catch(e){
+      console.error('Material link edit:',e);
+      alert('Gagal memperbarui link: '+(e?.message||e));
+    }
+  };
+
+  window.deleteMaterial=async function(id){
+    if(!confirm('Hapus materi ini?'))return;
+    const ms=materialsLocal().filter(x=>String(x.id)!==String(id));
+    try{
+      await saveMaterials(ms);
+      renderAdmin();
+      alert('Materi berhasil dihapus dari Supabase.');
+    }catch(e){
+      console.error('Material delete:',e);
+      alert('Gagal menghapus materi: '+(e?.message||e));
+    }
+  };
+
+  window.deleteMaterialLink=async function(id,i){
+    if(!confirm('Hapus link ini?'))return;
+    const ms=materialsLocal();
+    const m=ms.find(x=>String(x.id)===String(id));
+    if(!m)return;
+    m.links=Array.isArray(m.links)?m.links:[];
+    m.links.splice(Number(i),1);
+    try{
+      await saveMaterials(ms);
+      renderAdmin();
+      alert('Link berhasil dihapus dari Supabase.');
+    }catch(e){
+      console.error('Material link delete:',e);
+      alert('Gagal menghapus link: '+(e?.message||e));
+    }
+  };
+
+  window.refreshMaterialsFromSupabase=async function(){
+    try{
+      await loadMaterialsFresh();
+      renderMember();
+      return true;
+    }catch(e){
+      console.warn('Material member sync:',e);
+      return false;
+    }
+  };
+
+  // Member always gets the latest central Materials when its dashboard is rendered.
+  const baseMemberRender=window.renderMember;
+  if(typeof baseMemberRender==='function' && !baseMemberRender.__materialsV1){
+    const wrapped=function(){
+      const r=baseMemberRender.apply(this,arguments);
+      if(currentRole==='member'){
+        loadMaterialsFresh().then(()=>renderMember()).catch(e=>console.warn('Material refresh:',e));
+      }
+      return r;
+    };
+    wrapped.__materialsV1=true;
+    window.renderMember=wrapped;
+  }
+
+  // Initial render for whichever role is active.
+  setTimeout(()=>{
+    if(currentRole==='admin')renderAdmin();
+    if(currentRole==='member')window.refreshMaterialsFromSupabase();
+  },350);
+
+})();
+</script>
 </body>
 </html>
