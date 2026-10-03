@@ -5768,15 +5768,15 @@ setInterval(()=>{
         (links.length?links.map((l,i)=>
           '<span style="display:inline-flex;gap:4px;align-items:center">'+
           '<a target="_blank" rel="noopener" href="'+esc(l.url)+'">🔗 '+esc(l.name||('Link '+(i+1)))+'</a>'+
-          '<button class="btnMini" type="button" onclick="editMaterialLinkPrompt('+JSON.stringify(String(m.id))+','+i+')">Edit Link</button>'+
-          '<button class="btnMini" type="button" onclick="deleteMaterialLink('+JSON.stringify(String(m.id))+','+i+')">Hapus Link</button>'+
+          '<button class="btnMini" type="button" onclick="editMaterialLinkPrompt('+(Number(m.id)||0)+','+i+')">Edit Link</button>'+
+          '<button class="btnMini" type="button" onclick="deleteMaterialLink('+(Number(m.id)||0)+','+i+')">Hapus Link</button>'+
           '</span>'
         ).join(''):'<span class="muted">Belum ada link.</span>')+
         '</div>'+
         '<div class="actions">'+
-        '<button class="btnMini" type="button" onclick="editMaterialPrompt('+JSON.stringify(String(m.id))+')">Edit Materi</button>'+
-        '<button class="btnMini" type="button" onclick="addMaterialLinkPrompt('+JSON.stringify(String(m.id))+')">+ Link</button>'+
-        '<button class="btnMini" type="button" onclick="deleteMaterial('+JSON.stringify(String(m.id))+')">Hapus Materi</button>'+
+        '<button class="btnMini" type="button" onclick="editMaterialPrompt('+(Number(m.id)||0)+')">Edit Materi</button>'+
+        '<button class="btnMini" type="button" onclick="addMaterialLinkPrompt('+(Number(m.id)||0)+')">+ Link</button>'+
+        '<button class="btnMini" type="button" onclick="deleteMaterial('+(Number(m.id)||0)+')">Hapus Materi</button>'+
         '</div></div>';
     }).join('') || '<div class="empty">Belum ada materi.</div>';
   }
