@@ -6181,5 +6181,93 @@ setInterval(()=>{
   });
 })();
 </script>
+<script id="memberLoginRuntimeFixV37">
+(function(){
+  'use strict';
+  // Auth runtime compatibility only. No Materi/Checklist/data writes.
+  if(typeof window.saveAuthSession!=='function'){
+    window.saveAuthSession=function(){
+      try{
+        const role=(typeof currentRole!=='undefined')?currentRole:null;
+        const user=(typeof currentUser!=='undefined'&&currentUser)?currentUser:null;
+        const v=JSON.stringify({
+          role:role,
+          userId:user?.id||null,
+          username:user?.username||"",
+          at:Date.now()
+        });
+        sessionStorage.setItem('pasukanUmrohAuthSessionV2',v);
+        localStorage.setItem('pasukanUmrohAuthSessionV2',v);
+      }catch(e){console.warn('Auth session save:',e)}
+    };
+  }
+
+  const form=document.getElementById('loginForm');
+  if(!form)return;
+
+  form.addEventListener('submit',async function(e){
+    const u=(document.getElementById('loginUser')?.value||'').trim();
+    if(u==='mahirdigitalumroh')return;
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
+
+    const p=document.getElementById('loginPass')?.value||'';
+    const msgEl=document.getElementById('authMsg');
+    const show=(t,ok)=>{if(msgEl)msgEl.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+(typeof escHtml==='function'?escHtml(t):t)+'</div>'};
+    if(!u||!p){show('Username dan password wajib diisi.');return false}
+
+    const c=window.supabaseClient;
+    if(!c){show('Koneksi database belum siap. Refresh halaman lalu coba lagi.');return false}
+
+    try{
+      show('Sedang memverifikasi login...',true);
+      const {data,error}=await c.rpc('member_login',{p_username:u,p_password:p});
+      if(error)throw error;
+
+      if(!data?.success){
+        show(data?.message||(
+          data?.status==='pending'
+            ?'Akun masih menunggu approval Super Admin.'
+            :data?.status==='rejected'
+              ?'Pendaftaran member ditolak.'
+              :'Username atau password salah.'
+        ));
+        return false;
+      }
+
+      const pr=data.profile||{};
+      if(window.umrohMemberSession?.set)window.umrohMemberSession.set(data.token||'');
+      currentUser={
+        id:pr.id,
+        name:pr.name||'',
+        username:pr.username||u,
+        wa:pr.wa||'',
+        role:pr.role||'member',
+        status:pr.status||'approved',
+        day:Number(pr.day||1),
+        checks:{},
+        sales:{},
+        activityLog:[],
+        leads:[],
+        registeredAt:pr.registered_at||'',
+        approvedAt:pr.approved_at||null
+      };
+      currentRole='member';
+      members=[currentUser];
+
+      window.saveAuthSession();
+
+      if(typeof enterApp==='function')enterApp();
+      if(typeof showPage==='function')showPage('memberDashboard');
+      setTimeout(()=>{try{if(typeof showActivePopup==='function')showActivePopup(true)}catch(_){}},180);
+    }catch(err){
+      console.error('Member login V37:',err);
+      show('Login gagal: '+(err?.message||'koneksi database bermasalah'));
+    }
+    return false;
+  },true);
+})();
+</script>
 </body>
 </html>
