@@ -1681,6 +1681,12 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     }
   }
   const put=(k,v)=>{
+    // Materi is intentionally excluded from generic config writes.
+    // It can only be changed through the explicit Super Admin Materi UI.
+    if(k==='materials'){
+      console.warn('Materi protected: generic config write blocked.');
+      return cloneCfg(centralConfig.materials);
+    }
     centralConfig[k]=cloneCfg(v);
     syncCentralConfig(k,centralConfig[k]);
     return centralConfig[k];
@@ -1703,7 +1709,8 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     await loadCentralConfig();
     const defaults={
       settings:CENTRAL_DEFAULTS.settings,
-      materials:CENTRAL_DEFAULTS.materials,
+      // MATERI IS AUTHORITATIVE DATA: never seed, reset, or overwrite it from code.
+      // Changes to Materi may only come from the explicit Super Admin Materi actions.
       rewards:CENTRAL_DEFAULTS.rewards,
       schedule:[],
       info_bars:[],
