@@ -4505,6 +4505,29 @@ window.__finalMemberUiV24=true;
     const name=prompt('Nama materi:',m.name);if(name===null)return;const desc=prompt('Deskripsi:',m.desc||'');if(desc===null)return;m.name=name;m.desc=desc;
     try{await adminSave('materials',ms);renderAdminMaterials()}catch(e){alert('Gagal menyimpan materi: '+(e?.message||e))}
   };
+  window.saveRoleplayLink=async function(id){
+    const input=el('roleplayUrl_'+String(id));
+    const url=String(input?.value||'').trim();
+    if(!url){alert('Link Roleplay wajib diisi.');return;}
+    try{
+      const ms=await loadMaterialsAdminFresh();
+      const m=ms.find(x=>String(x.id)===String(id));
+      if(!m){alert('Materi Roleplay tidak ditemukan.');return;}
+      m.links=Array.isArray(m.links)?m.links:[];
+      if(m.links.length){
+        m.links[0]={name:m.links[0].name||'Link Roleplay',url};
+      }else{
+        m.links.push({name:'Link Roleplay',url});
+      }
+      await saveMaterials(ms);
+      renderAdmin();
+      alert('Link Roleplay berhasil disimpan ke Supabase.');
+    }catch(e){
+      console.error('Roleplay link save:',e);
+      alert('Gagal menyimpan Link Roleplay: '+(e?.message||e));
+    }
+  };
+
   window.addMaterialLinkPrompt=async function(id){
     const ms=Array.isArray(C().materials)?cp(C().materials):[],m=ms.find(x=>Number(x.id)===Number(id));if(!m)return;
     const name=prompt('Nama button/link:');if(!name)return;const url=prompt('URL:');if(!url)return;m.links=m.links||[];m.links.push({name,url});
@@ -5912,10 +5935,19 @@ setInterval(()=>{
         '<button class="btnMini" type="button" onclick="deleteMaterialLink('+(Number(m.id)||0)+','+i+')">Hapus Link</button>'+
         '</div>').join('')
         :'<span class="muted">'+(multi?'Belum ada link kolaborasi.':'Belum ada link.')+'</span>';
+      const isRoleplay=String(m.name||'').trim().toUpperCase()==='ROLEPLAY';
+      const roleplayLink=links[0]?.url||'';
+      const roleplayForm=isRoleplay
+        ? '<div style="margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fafbff">'+
+          '<div class="small" style="margin-bottom:6px"><b>Link Roleplay</b> — wajib disediakan jika materi sudah siap.</div>'+
+          '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+          '<input id="roleplayUrl_'+esc(String(m.id))+'" value="'+esc(roleplayLink)+'" placeholder="https://..." style="flex:1;min-width:240px">'+
+          '<button class="btnMini" type="button" onclick="saveRoleplayLink(\''+esc(String(m.id))+'\')">Simpan Link</button>'+
+          '</div></div>' : '';
       return '<div class="materialAdminCard"><h4>'+esc(m.name)+'</h4><p>'+esc(m.desc||'')+'</p>'+
-        '<div class="linkBtns">'+linkHtml+'</div><div class="actions">'+
+        '<div class="linkBtns">'+linkHtml+'</div>'+roleplayForm+'<div class="actions">'+
         '<button class="btnMini" type="button" onclick="editMaterialPrompt('+(Number(m.id)||0)+')">Edit Materi</button>'+
-        '<button class="btnMini" type="button" onclick="addMaterialLinkPrompt('+(Number(m.id)||0)+')">'+(multi?'+ Link Kolaborasi':(String(m.name||'').trim().toUpperCase()==='ROLEPLAY'?'+ Link Roleplay':'+ Link'))+'</button>'+
+        (isRoleplay?'':'<button class="btnMini" type="button" onclick="addMaterialLinkPrompt('+(Number(m.id)||0)+')">'+(multi?'+ Link Kolaborasi':'+ Link')+'</button>')+
         '<button class="btnMini" type="button" onclick="deleteMaterial('+(Number(m.id)||0)+')">Hapus Materi</button>'+
         '</div></div>';
     }).join('') || '<div class="empty">Belum ada materi.</div>';
@@ -5930,8 +5962,10 @@ setInterval(()=>{
       const linkHtml=links.length?links.map((l,i)=>
         '<a target="_blank" rel="noopener" href="'+esc(l.url)+'">🔗 '+esc(l.name||((multi?'Kolaborasi ':'Link ')+(i+1)))+'</a>'
       ).join(''):'<span class="muted">'+(multi?'Belum ada link kolaborasi.':'Belum ada link.')+'</span>';
+      const isRoleplay=String(m.name||'').trim().toUpperCase()==='ROLEPLAY';
+      const roleplayEmpty=isRoleplay&&!links.length?'<span class="muted">🔗 Link Roleplay belum tersedia. Silakan cek kembali setelah Super Admin menyimpannya.</span>':'';
       return '<div class="materialAdminCard"><h4>'+esc(m.name)+'</h4><p>'+esc(m.desc||'')+'</p>'+
-        '<div class="linkBtns">'+linkHtml+'</div></div>';
+        '<div class="linkBtns">'+(roleplayEmpty||linkHtml)+'</div></div>';
     }).join('') || '<div class="empty">Belum ada materi.</div>';
   }
 
