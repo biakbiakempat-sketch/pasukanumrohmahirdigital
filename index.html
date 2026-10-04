@@ -6269,5 +6269,52 @@ setInterval(()=>{
   },true);
 })();
 </script>
+<script id="adminMaterialsLoadHardeningV38">
+(function(){
+  'use strict';
+  // MATERI READ ONLY HARDENING: never changes Materi data and never touches Checklist.
+  async function refreshAdminMaterialsV38(){
+    if(typeof currentRole==='undefined'||currentRole!=='admin')return false;
+    const client=window.supabaseClient||null;
+    const wrap=document.getElementById('adminMaterialsWrap');
+    if(!client||!wrap)return false;
+    try{
+      // Make sure the Supabase Auth session is available before the SECURITY DEFINER RPC.
+      if(client.auth?.getSession)await client.auth.getSession();
+      const {data,error}=await client.rpc('admin_config_get_v2',{p_config_key:'materials'});
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Materi gagal dimuat.');
+      const ms=Array.isArray(data.config_value)?data.config_value:[];
+      window.__umrohCentralConfig=window.__umrohCentralConfig||{};
+      window.__umrohCentralConfig.materials=JSON.parse(JSON.stringify(ms));
+      if(typeof window.renderAdminMaterials==='function')window.renderAdminMaterials();
+      return true;
+    }catch(e){
+      console.warn('Admin Materi V38:',e);
+      return false;
+    }
+  }
+
+  window.refreshAdminMaterialsV38=refreshAdminMaterialsV38;
+
+  // Initial retries cover Auth/session hydration after login.
+  [300,900,1800].forEach(function(delay){
+    setTimeout(function(){refreshAdminMaterialsV38()},delay);
+  });
+
+  // Always refresh from Supabase when Super Admin opens Materi.
+  const previousShowPageV38=window.showPage;
+  window.showPage=function(page){
+    const result=typeof previousShowPageV38==='function'
+      ?previousShowPageV38.apply(this,arguments):undefined;
+    if(page==='adminMaterials'&&typeof currentRole!=='undefined'&&currentRole==='admin'){
+      [80,500,1200].forEach(function(delay){
+        setTimeout(function(){refreshAdminMaterialsV38()},delay);
+      });
+    }
+    return result;
+  };
+})();
+</script>
 </body>
 </html>
