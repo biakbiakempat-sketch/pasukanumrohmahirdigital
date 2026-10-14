@@ -6385,5 +6385,121 @@ setInterval(()=>{
   }
 })();
 </script>
+<style id="adminMemberPaginationResponsiveV1">
+#page-members #memberPagination{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 2px 2px}
+#page-members #memberPagination .mp-info{font-size:12px;color:#64748b}
+#page-members #memberPagination .mp-actions{display:flex;align-items:center;gap:8px}
+#page-members #memberPagination button{border:1px solid #dbe3ef;background:#fff;color:#17316b;border-radius:8px;padding:8px 13px;font-weight:700;cursor:pointer}
+#page-members #memberPagination button:disabled{opacity:.4;cursor:not-allowed}
+#page-members .tableWrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+#page-members .tableWrap table{width:100%;min-width:900px}
+@media(max-width:700px){
+  #page-members #memberPagination{align-items:stretch;flex-direction:column}
+  #page-members #memberPagination .mp-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}
+  #page-members #memberPagination button{min-height:42px}
+  #page-members .tableWrap{overflow:visible}
+  #page-members .tableWrap table{min-width:0;width:100%;border-collapse:separate;border-spacing:0}
+  #page-members .tableWrap thead{display:none}
+  #page-members .tableWrap tbody,#page-members .tableWrap tr,#page-members .tableWrap td{display:block;width:100%;box-sizing:border-box}
+  #page-members .tableWrap tr[data-member-id]{border:1px solid #e1e8f2;border-radius:12px;margin:0 0 12px;padding:8px 12px;background:#fff}
+  #page-members .tableWrap td{display:grid;grid-template-columns:minmax(90px,34%) minmax(0,1fr);gap:10px;align-items:start;padding:8px 0;border-bottom:1px solid #eef2f7;overflow-wrap:anywhere}
+  #page-members .tableWrap td:last-child{border-bottom:0}
+  #page-members .tableWrap td:before{content:attr(data-label);font-size:11px;font-weight:800;color:#64748b}
+  #page-members .tableWrap td .pctBar{max-width:100%;min-width:0}
+  #page-members .tableWrap td button{margin:2px 4px 2px 0}
+  #page-members .tableWrap td[colspan]:before{content:none}
+}
+</style>
+<script id="adminMemberPaginationResponsiveV1">
+(function(){
+  'use strict';
+  const PAGE_SIZE=20;
+  let page=1;
+  let lastQuery='';
+  const $=id=>document.getElementById(id);
+  const body=()=> $('memberRows');
+  const search=()=>String($('memberSearch')?.value||'').trim().toLowerCase();
+
+  function ensureControls(){
+    const pageRoot=$('page-members');
+    const tableWrap=pageRoot?.querySelector('.tableWrap');
+    if(!tableWrap)return null;
+    let nav=$('memberPagination');
+    if(!nav){
+      nav=document.createElement('div');
+      nav.id='memberPagination';
+      nav.innerHTML='<div class="mp-info" aria-live="polite"></div><div class="mp-actions"><button type="button" data-mp="prev">PREVIOUS</button><button type="button" data-mp="next">NEXT</button></div>';
+      tableWrap.insertAdjacentElement('afterend',nav);
+      nav.addEventListener('click',function(e){
+        const b=e.target.closest('button[data-mp]');if(!b)return;
+        if(b.dataset.mp==='prev'&&page>1)page--;
+        if(b.dataset.mp==='next'&&page<Math.ceil(filteredRows().length/PAGE_SIZE))page++;
+        paint();
+      });
+    }
+    return nav;
+  }
+
+  function filteredRows(){
+    const b=body();if(!b)return [];
+    return Array.from(b.querySelectorAll('tr')).filter(tr=>!tr.querySelector('td[colspan]'));
+  }
+
+  function labelCells(){
+    const table=$('page-members')?.querySelector('.tableWrap table');
+    if(!table)return;
+    const labels=Array.from(table.querySelectorAll('thead th')).map(th=>th.textContent.trim());
+    table.querySelectorAll('tbody tr').forEach(tr=>{
+      Array.from(tr.children).forEach((td,i)=>{
+        if(td.tagName==='TD'&&labels[i])td.setAttribute('data-label',labels[i]);
+      });
+    });
+  }
+
+  function paint(){
+    const rows=filteredRows();
+    const q=search();
+    if(q!==lastQuery){lastQuery=q;page=1}
+    const pages=Math.max(1,Math.ceil(rows.length/PAGE_SIZE));
+    if(page>pages)page=pages;
+    const start=rows.length?(page-1)*PAGE_SIZE:0;
+    rows.forEach((tr,i)=>{tr.style.display=(i>=start&&i<start+PAGE_SIZE)?'':'none'});
+    labelCells();
+    const nav=ensureControls();if(!nav)return;
+    const info=nav.querySelector('.mp-info');
+    const prev=nav.querySelector('[data-mp="prev"]');
+    const next=nav.querySelector('[data-mp="next"]');
+    if(info)info.textContent=rows.length
+      ?'Menampilkan '+(start+1)+'–'+Math.min(start+PAGE_SIZE,rows.length)+' dari '+rows.length+' member • Halaman '+page+'/'+pages
+      :'Tidak ada member yang cocok.';
+    if(prev)prev.disabled=page<=1;
+    if(next)next.disabled=page>=pages;
+  }
+
+  const baseRender=window.renderMembers;
+  if(typeof baseRender==='function'&&!baseRender.__memberPaginationV1){
+    const wrapped=function(){
+      const q=search();
+      if(q!==lastQuery){lastQuery=q;page=1}
+      const result=baseRender.apply(this,arguments);
+      paint();
+      return result;
+    };
+    wrapped.__memberPaginationV1=true;
+    window.renderMembers=wrapped;
+  }
+
+  const input=$('memberSearch');
+  if(input)input.addEventListener('input',function(){page=1;lastQuery=search();setTimeout(paint,0)});
+
+  // Reapply after asynchronous admin refreshes which may replace table rows.
+  const tableBody=body();
+  if(tableBody&&typeof MutationObserver!=='undefined'){
+    new MutationObserver(()=>setTimeout(paint,0)).observe(tableBody,{childList:true});
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(paint,100));
+  else setTimeout(paint,100);
+})();
+</script>
 </body>
 </html>
