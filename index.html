@@ -6501,5 +6501,64 @@ setInterval(()=>{
   else setTimeout(paint,100);
 })();
 </script>
+<script id="adminMemberWhatsAppCheckinV1">
+(function(){
+  'use strict';
+  // Scope strictly to the WhatsApp number link in Super Admin > DATA MEMBER.
+  // No data writes; no changes to other menus, Materi, or Checklist.
+  const page=()=>document.getElementById('page-members');
+  function normalizePhone(raw){
+    let n=String(raw||'').replace(/\D/g,'');
+    if(n.startsWith('0'))n='62'+n.slice(1);
+    else if(n.startsWith('8'))n='62'+n;
+    if(!n.startsWith('62'))return '';
+    if(n.length<10||n.length>15)return '';
+    return n;
+  }
+  function messageFor(name){
+    const who=String(name||'Bapak/Ibu').trim()||'Bapak/Ibu';
+    return 'Assalamu’alaikum '+who+', apa kabar? Semoga selalu sehat dan dimudahkan dalam ikhtiar umrohnya. Saya mau cek kabar sekaligus memastikan, apakah ada kesulitan saat mengisi atau menggunakan Dashboard Pasukan Umroh Mahir Digital? Kalau ada kendala, silakan kabari saya ya. InsyaAllah kami bantu.';
+  }
+  function prepareLinks(){
+    const root=page();if(!root)return;
+    root.querySelectorAll('.tableWrap tbody tr').forEach(tr=>{
+      const link=tr.querySelector('a');
+      if(!link)return;
+      const phone=normalizePhone(link.textContent||link.getAttribute('href'));
+      const name=tr.querySelector('td')?.innerText?.trim()||'Bapak/Ibu';
+      if(!phone)return;
+      link.href='https://wa.me/'+phone+'?text='+encodeURIComponent(messageFor(name));
+      link.target='_blank';
+      link.rel='noopener noreferrer';
+      link.title='Hubungi member via WhatsApp';
+      link.style.cursor='pointer';
+    });
+  }
+  document.addEventListener('click',function(e){
+    const root=page();
+    const link=e.target.closest('#page-members .tableWrap tbody a');
+    if(!root||!link)return;
+    const tr=link.closest('tr');
+    const phone=normalizePhone(link.textContent||link.getAttribute('href'));
+    if(!phone){
+      e.preventDefault();e.stopImmediatePropagation();
+      alert('Nomor WhatsApp member belum valid. Periksa nomor yang tersimpan di DATA MEMBER.');
+      return;
+    }
+    const name=tr?.querySelector('td')?.innerText?.trim()||'Bapak/Ibu';
+    const url='https://wa.me/'+phone+'?text='+encodeURIComponent(messageFor(name));
+    link.href=url;link.target='_blank';link.rel='noopener noreferrer';
+    e.preventDefault();e.stopImmediatePropagation();
+    window.open(url,'_blank','noopener,noreferrer');
+  },true);
+  const root=page();
+  if(root&&typeof MutationObserver!=='undefined'){
+    new MutationObserver(prepareLinks).observe(root,{subtree:true,childList:true});
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',prepareLinks);
+  else prepareLinks();
+  setTimeout(prepareLinks,500);
+})();
+</script>
 </body>
 </html>
