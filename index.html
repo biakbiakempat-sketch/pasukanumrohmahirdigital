@@ -286,7 +286,7 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 <div class="navItem" data-page="materials">📚  Materi</div>
 <div class="navItem" data-page="profile">👤  Profil Saya</div>
 <div class="navItem mobileLogout" onclick="logout()">↪ &nbsp; Logout</div></div>
-<div class="hidden" id="adminNav"><div class="navItem" data-page="adminDashboard">⌂  Dashboard Admin</div><div class="navItem" data-page="members">👥  DATA MEMBER</div><div class="navItem" data-page="adminProgram">☑  Program 60 Hari</div><div class="navItem" data-page="checklists">☷  Checklist &amp; SOP</div><div class="navItem" data-page="activities">📊  Aktivitas Sales</div><div class="navItem" data-page="adminLeads">🎯  DATA LEADS</div><div class="navItem" data-page="rewards">🏆  Reward &amp; Benefit</div><div class="navItem" data-page="adminMaterials">📚  Materi</div><div class="navItem" data-page="schedule">🗓  Jadwal &amp; Webinar</div><div class="navItem" data-page="infoPopup">📢  Info Bar &amp; Pop Up</div><div class="navItem" data-page="settings">⚙  Pengaturan</div><div class="navItem mobileLogout" onclick="logout()">↪ &nbsp; Logout</div></div>
+<div class="hidden" id="adminNav"><div class="navItem" data-page="adminDashboard">⌂  Dashboard Admin</div><div class="navItem" data-page="members">👥  DATA MEMBER</div><div class="navItem" data-page="followupWhatsapp">🟢 Follow Up Whatsapp Member</div><div class="navItem" data-page="adminProgram">☑  Program 60 Hari</div><div class="navItem" data-page="checklists">☷  Checklist &amp; SOP</div><div class="navItem" data-page="activities">📊  Aktivitas Sales</div><div class="navItem" data-page="adminLeads">🎯  DATA LEADS</div><div class="navItem" data-page="rewards">🏆  Reward &amp; Benefit</div><div class="navItem" data-page="adminMaterials">📚  Materi</div><div class="navItem" data-page="schedule">🗓  Jadwal &amp; Webinar</div><div class="navItem" data-page="infoPopup">📢  Info Bar &amp; Pop Up</div><div class="navItem" data-page="settings">⚙  Pengaturan</div><div class="navItem mobileLogout" onclick="logout()">↪ &nbsp; Logout</div></div>
 <div class="sep"></div>
 </aside>
 <main class="main">
@@ -306,6 +306,22 @@ linear-gradient(90deg,transparent 0 13%,rgba(255,255,255,.28) 13% 14%,transparen
 <div class="title"><div><h2>👥 DATA MEMBER</h2><p>Kelola seluruh member yang mendaftar, akun, approval, dan progress.</p></div><button class="btn" onclick="openModal()">+ Tambah Member</button></div>
 <div class="panel"><div class="toolbar"><b>Database Member</b><input class="search" id="memberSearch" oninput="renderMembers()" placeholder="Cari nama / username / WhatsApp..."/></div><div class="tableWrap"><table><thead><tr><th>Nama</th><th>Username</th><th>WhatsApp</th><th>Status</th><th>Daftar</th><th>Hari</th><th>Progress</th><th>Lead</th><th>Closing</th><th>Aksi</th></tr></thead><tbody id="memberRows"></tbody></table></div></div>
 <div class="panel" style="margin-top:14px"><div class="toolbar"><div><h3 style="margin:0">Approval Member</h3><p class="muted" style="margin:4px 0 0">Approval menjadi bagian dari DATA MEMBER.</p></div><span class="pill" id="pendingLabel">0 pending</span></div><div class="empty" id="approvalList">Belum ada pendaftaran.</div></div>
+</section>
+
+<section class="page" id="page-followupWhatsapp">
+  <div class="title"><div><h2>🟢 Follow Up Whatsapp Member</h2><p>Riwayat Super Admin menghubungi member melalui WhatsApp dari DATA MEMBER atau Perlu Perhatian.</p></div></div>
+  <div class="panel">
+    <div class="adminFilters">
+      <div class="field"><label for="followupMemberSearch">Cari Nama Member</label><input id="followupMemberSearch" type="search" placeholder="Ketik nama member..."/></div>
+      <div class="field"><label for="followupStartDate">Tanggal Awal</label><input id="followupStartDate" type="date"/></div>
+      <div class="field"><label for="followupEndDate">Tanggal Akhir</label><input id="followupEndDate" type="date"/></div>
+      <div class="field" style="display:flex;align-items:end"><button type="button" class="btn gray" id="followupReset">Reset Filter</button></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="toolbar"><b>Riwayat Follow Up</b><span class="muted" id="followupSummary">Memuat data...</span></div>
+    <div class="tableWrap" style="max-width:100%;overflow-x:auto"><table class="adminProgressTable" style="width:100%;min-width:520px"><thead><tr><th>Nama Member</th><th>Tanda Follow Up</th></tr></thead><tbody id="followupRows"><tr><td colspan="2"><div class="empty">Memuat data follow up...</div></td></tr></tbody></table></div>
+  </div>
 </section>
 
 <section class="page" id="page-adminProgram">
@@ -1864,7 +1880,7 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
     }
     const rows=adminAttentionRows();
     body.innerHTML=rows.length
-      ?rows.map((m,i)=>'<tr><td>'+String(i+1)+'</td><td><b>'+esc2(m.name)+'</b></td><td>'+String(m.day||0)+'/60</td><td><b>'+String(progressOf(m))+'%</b><div class="pctBar"><span style="width:'+String(progressOf(m))+'%"></span></div></td><td>'+(m.status==='approved'?'AKTIF':'PENDING')+'</td><td><a class="btnMini" target="_blank" rel="noopener" href="'+attentionWaUrl(m)+'">WhatsApp</a></td></tr>').join('')
+      ?rows.map((m,i)=>'<tr data-member-id="'+esc2(m.id)+'" data-member-name="'+esc2(m.name)+'" data-followup-source="perlu_perhatian"><td>'+String(i+1)+'</td><td><b>'+esc2(m.name)+'</b></td><td>'+String(m.day||0)+'/60</td><td><b>'+String(progressOf(m))+'%</b><div class="pctBar"><span style="width:'+String(progressOf(m))+'%"></span></div></td><td>'+(m.status==='approved'?'AKTIF':'PENDING')+'</td><td><a class="btnMini" target="_blank" rel="noopener" href="'+attentionWaUrl(m)+'">WhatsApp</a></td></tr>').join('')
       :'<tr><td colspan="6"><div class="empty">Belum ada member dengan progress di bawah 10%.</div></td></tr>';
   }
 
@@ -6548,6 +6564,7 @@ setInterval(()=>{
     const name=tr?.querySelector('td')?.innerText?.trim()||'Bapak/Ibu';
     const url='https://wa.me/'+phone+'?text='+encodeURIComponent(messageFor(name));
     link.href=url;link.target='_blank';link.rel='noopener noreferrer';
+    try{if(typeof window.trackWhatsappFollowupV1==='function')window.trackWhatsappFollowupV1(tr?.dataset.memberId||'',name,'data_member')}catch(err){console.warn('Follow-up tracking:',err)}
     e.preventDefault();e.stopImmediatePropagation();
     window.open(url,'_blank','noopener,noreferrer');
   },true);
@@ -6558,6 +6575,129 @@ setInterval(()=>{
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',prepareLinks);
   else prepareLinks();
   setTimeout(prepareLinks,500);
+})();
+</script>
+<script id="followupWhatsappMemberFeatureV1">
+(function(){
+  'use strict';
+  const $=id=>document.getElementById(id);
+  const client=()=>window.supabaseClient||null;
+  let loadSeq=0;
+  let debounceHandle=null;
+
+  function escapeHtml(v){
+    return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function formatJakarta(iso){
+    try{return new Intl.DateTimeFormat('id-ID',{timeZone:'Asia/Jakarta',dateStyle:'medium',timeStyle:'short'}).format(new Date(iso))}
+    catch(_){return String(iso||'')}
+  }
+  window.trackWhatsappFollowupV1=async function(memberId,memberName,source){
+    const id=String(memberId||'').trim();
+    if(!id)return false;
+    const c=client();if(!c?.rpc)return false;
+    try{
+      const {data,error}=await c.rpc('log_member_whatsapp_followup',{
+        p_member_id:id,
+        p_member_name:String(memberName||'Member'),
+        p_source:source==='perlu_perhatian'?'perlu_perhatian':'data_member'
+      });
+      if(error)throw error;
+      if(!data?.success)throw new Error(data?.message||'Follow-up tidak tersimpan');
+      if($('page-followupWhatsapp')?.classList.contains('active'))loadFollowups();
+      return true;
+    }catch(err){
+      console.error('Follow Up Whatsapp Member:',err);
+      return false;
+    }
+  };
+
+  async function loadFollowups(){
+    const request=++loadSeq;
+    const rowsEl=$('followupRows'),summary=$('followupSummary');
+    if(!rowsEl)return;
+    rowsEl.innerHTML='<tr><td colspan="2"><div class="empty">Memuat data follow up...</div></td></tr>';
+    if(summary)summary.textContent='Memuat data...';
+    const c=client();
+    if(!c?.rpc){
+      rowsEl.innerHTML='<tr><td colspan="2"><div class="empty">Koneksi Supabase belum siap. Coba buka menu ini lagi.</div></td></tr>';
+      if(summary)summary.textContent='Gagal memuat';
+      return;
+    }
+    try{
+      const {data,error}=await c.rpc('get_member_whatsapp_followups',{
+        p_search:$('followupMemberSearch')?.value?.trim()||'',
+        p_start_date:$('followupStartDate')?.value||null,
+        p_end_date:$('followupEndDate')?.value||null
+      });
+      if(error)throw error;
+      if(request!==loadSeq)return;
+      const items=Array.isArray(data?.followups)?data.followups:[];
+      const grouped=new Map();
+      items.forEach(item=>{
+        const key=String(item.member_id||item.member_name);
+        if(!grouped.has(key))grouped.set(key,{member_id:item.member_id,name:item.member_name,events:[]});
+        grouped.get(key).events.push(item);
+      });
+      const list=Array.from(grouped.values()).sort((a,b)=>a.name.localeCompare(b.name,'id'));
+      if(summary)summary.textContent=items.length+' follow up • '+list.length+' member';
+      rowsEl.innerHTML=list.length?list.map(m=>{
+        const pills=m.events.slice().sort((a,b)=>Number(a.sequence_no)-Number(b.sequence_no)).map(ev=>{
+          const source=ev.source==='perlu_perhatian'?'Perlu Perhatian':'Data Member';
+          return '<span class="followup-mark" title="'+escapeHtml(formatJakarta(ev.created_at)+' • '+source)+'">'+Number(ev.sequence_no)+'x<small>'+escapeHtml(formatJakarta(ev.created_at))+'</small></span>';
+        }).join('');
+        return '<tr><td><b>'+escapeHtml(m.name)+'</b></td><td><div class="followup-marks">'+pills+'</div></td></tr>';
+      }).join(''):'<tr><td colspan="2"><div class="empty">Belum ada follow up untuk filter ini.</div></td></tr>';
+    }catch(err){
+      console.error('Load follow-up history:',err);
+      if(request!==loadSeq)return;
+      rowsEl.innerHTML='<tr><td colspan="2"><div class="empty">Gagal memuat riwayat follow up. Silakan coba lagi.</div></td></tr>';
+      if(summary)summary.textContent='Gagal memuat data';
+    }
+  }
+  window.loadWhatsappMemberFollowupsV1=loadFollowups;
+
+  // Count a click from Dashboard Admin > Perlu Perhatian, without blocking the WhatsApp link.
+  document.addEventListener('click',function(e){
+    const link=e.target.closest('#page-adminDashboard #dashAttention a[href*="wa.me/"]');
+    if(!link)return;
+    const row=link.closest('tr');
+    if(!row)return;
+    const id=row.dataset.memberId||'';
+    const name=row.dataset.memberName||row.querySelector('td:nth-child(2)')?.innerText?.trim()||'Member';
+    window.trackWhatsappFollowupV1(id,name,'perlu_perhatian');
+  },true);
+
+  // Search/date filters only affect this feature.
+  $('followupMemberSearch')?.addEventListener('input',function(){
+    clearTimeout(debounceHandle);debounceHandle=setTimeout(loadFollowups,250);
+  });
+  $('followupStartDate')?.addEventListener('change',loadFollowups);
+  $('followupEndDate')?.addEventListener('change',loadFollowups);
+  $('followupReset')?.addEventListener('click',function(){
+    if($('followupMemberSearch'))$('followupMemberSearch').value='';
+    if($('followupStartDate'))$('followupStartDate').value='';
+    if($('followupEndDate'))$('followupEndDate').value='';
+    loadFollowups();
+  });
+
+  const baseShowPage=window.showPage;
+  if(typeof baseShowPage==='function'&&!baseShowPage.__followupWhatsappV1){
+    const wrappedShowPage=function(page){
+      const result=baseShowPage.apply(this,arguments);
+      if(page==='followupWhatsapp'&&typeof currentRole!=='undefined'&&currentRole==='admin'){
+        setTimeout(loadFollowups,0);
+      }
+      return result;
+    };
+    wrappedShowPage.__followupWhatsappV1=true;
+    window.showPage=wrappedShowPage;
+  }
+
+  const style=document.createElement('style');
+  style.id='followupWhatsappMemberStylesV1';
+  style.textContent='#page-followupWhatsapp .followup-marks{display:flex;gap:7px;flex-wrap:wrap;align-items:center}#page-followupWhatsapp .followup-mark{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:44px;padding:7px 9px;border-radius:9px;background:#dcfce7;color:#166534;border:1px solid #86efac;font-weight:800;font-size:13px}#page-followupWhatsapp .followup-mark small{font-size:9px;font-weight:500;white-space:nowrap;color:#166534}@media(max-width:700px){#page-followupWhatsapp .adminFilters{display:grid;grid-template-columns:1fr!important;gap:10px}#page-followupWhatsapp .field{min-width:0;width:100%}#page-followupWhatsapp .tableWrap table{min-width:0!important}#page-followupWhatsapp .followup-mark small{white-space:normal}}';
+  document.head.appendChild(style);
 })();
 </script>
 </body>
