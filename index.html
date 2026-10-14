@@ -6316,5 +6316,74 @@ setInterval(()=>{
   };
 })();
 </script>
+<script id="checklistAccordionPersistenceV1">
+(function(){
+  'use strict';
+  // UI-only fix for Super Admin Checklist & SOP accordion.
+  // Preserve the expanded day across periodic admin re-renders.
+  // Does not read/write or alter checklist task data.
+  let expandedDay=null;
+  const root=()=>document.getElementById('checklistAdmin');
+
+  function visibleExpandedDay(){
+    const open=root()?.querySelector('.daySopCard.open');
+    if(!open)return null;
+    const m=(open.id||'').match(/^sop-day-(\d+)$/);
+    return m?Number(m[1]):null;
+  }
+
+  const baseRender=window.renderChecklistAdmin;
+  if(typeof baseRender==='function'&&!baseRender.__accordionPersistenceV1){
+    const wrappedRender=function(){
+      const before=visibleExpandedDay();
+      if(before!==null)expandedDay=before;
+      const result=baseRender.apply(this,arguments);
+      const cards=root()?.querySelectorAll('.daySopCard');
+      if(cards){
+        cards.forEach(card=>card.classList.remove('open'));
+        if(expandedDay!==null){
+          const target=document.getElementById('sop-day-'+expandedDay);
+          if(target)target.classList.add('open');
+        }else{
+          const first=document.getElementById('sop-day-1');
+          if(first)first.classList.add('open');
+          expandedDay=1;
+        }
+      }
+      return result;
+    };
+    wrappedRender.__accordionPersistenceV1=true;
+    window.renderChecklistAdmin=wrappedRender;
+  }
+
+  const baseToggle=window.toggleSopDay;
+  if(typeof baseToggle==='function'&&!baseToggle.__accordionPersistenceV1){
+    const wrappedToggle=function(day){
+      const target=document.getElementById('sop-day-'+Number(day));
+      if(!target)return;
+      const wasOpen=target.classList.contains('open');
+      root()?.querySelectorAll('.daySopCard.open').forEach(card=>card.classList.remove('open'));
+      if(!wasOpen){
+        target.classList.add('open');
+        expandedDay=Number(day);
+      }else{
+        expandedDay=null;
+      }
+    };
+    wrappedToggle.__accordionPersistenceV1=true;
+    window.toggleSopDay=wrappedToggle;
+  }
+
+  // Capture current accordion state before background refreshes.
+  const observerRoot=root();
+  if(observerRoot&&typeof MutationObserver!=='undefined'){
+    const observer=new MutationObserver(function(){
+      const d=visibleExpandedDay();
+      if(d!==null)expandedDay=d;
+    });
+    observer.observe(observerRoot,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+  }
+})();
+</script>
 </body>
 </html>
